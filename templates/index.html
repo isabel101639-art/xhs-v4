@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小红书任务管理系统 - 福瑞医科</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root { --xhs-red: #ff2442; --rugu-color: #e74c3c; --fibro-color: #ff9500; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; background: #f5f5f5; min-height: 100vh; }
+        .navbar { background: linear-gradient(135deg, var(--xhs-red) 0%, #ff6b6b 100%); }
+        .hero-section { background: linear-gradient(135deg, var(--xhs-red) 0%, #ff6b6b 100%); color: white; padding: 30px 0; }
+        .section-title { font-size: 18px; font-weight: 600; margin: 25px 0 15px; padding: 10px 15px; border-radius: 8px; }
+        .rugu-section { background: #fee; border-left: 4px solid var(--rugu-color); }
+        .fibro-section { background: #fff3e0; border-left: 4px solid var(--fibro-color); }
+        .topic-card { background: white; border-radius: 10px; padding: 14px; margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+        .topic-title { font-size: 14px; font-weight: 600; color: #333; margin-bottom: 8px; line-height: 1.4; }
+        .quota-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; }
+        .quota-active { background: #ff2442; color: white; }
+        .quota-full { background: #999; color: white; }
+        .btn-register { background: #ff2442; color: white; border: none; border-radius: 18px; padding: 7px 14px; font-size: 12px; text-decoration: none; display: inline-block; }
+        .btn-register:hover { background: #e02038; color: white; }
+        .info-box { padding: 8px 10px; border-radius: 6px; margin-bottom: 6px; font-size: 11px; line-height: 1.5; }
+        .tag-box { background: #e3f2fd; border-left: 3px solid #2196f3; }
+        .guide-box { background: #e8f5e9; border-left: 3px solid #4caf50; }
+        .example-box { background: #fff8e1; border-left: 3px solid #ffc107; }
+        .ref-box { background: #fce4ec; border-left: 3px solid #e91e63; }
+        .ref-link { color: #2196f3; text-decoration: none; display: block; margin: 3px 0; font-size: 11px; }
+        .ref-link:hover { text-decoration: underline; }
+        .group-tag { background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-size: 10px; color: #666; }
+        .ref-links-box { background: #f8f9fa; border-radius: 6px; padding: 8px; margin-top: 8px; }
+        .ref-link-btn { display: block; padding: 4px 8px; margin: 2px 0; background: #fff; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; color: #e91e63; text-decoration: none; }
+        .ref-link-btn:hover { background: #ffeef2; }
+    
+        /* MOBILE_PATCH */
+        @media (max-width: 768px) {
+            .container { padding-left: 12px; padding-right: 12px; }
+            .navbar .container { align-items: flex-start; }
+            .navbar-nav { flex-wrap: wrap; row-gap: 2px; }
+            .nav-link { padding: 4px 6px !important; margin-left: 0 !important; font-size: 12px; }
+            .hero-section { padding: 16px 0; }
+            .hero-section h4 { font-size: 18px; }
+            .section-title { font-size: 16px; margin: 14px 0 10px; padding: 8px 10px; }
+            .topic-card { padding: 12px; margin-bottom: 10px; }
+            .topic-title { font-size: 13px; }
+            .info-box { font-size: 12px; }
+            .btn-register { width: auto; min-width: 86px; text-align: center; }
+        }
+
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/"><i class="bi bi-bookmark-heart-fill"></i> 福瑞医科</a>
+            <ul class="navbar-nav ms-auto d-flex flex-row">
+                <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-collection"></i> 话题广场</a></li>
+                <li class="nav-item"><a class="nav-link ms-3" href="/my_registration"><i class="bi bi-person-check"></i> 我的报名</a></li>
+                <li class="nav-item"><a class="nav-link ms-3" href="/data_analysis"><i class="bi bi-bar-chart"></i> 数据分析</a></li>
+                <li class="nav-item"><a class="nav-link ms-3" href="/automation_center"><i class="bi bi-lightning-charge"></i> 自动化中心</a></li>
+                <li class="nav-item"><a class="nav-link ms-3" href="/activity"><i class="bi bi-calendar-event"></i> 活动管理</a></li>
+                <li class="nav-item"><a class="nav-link ms-3" href="/admin"><i class="bi bi-gear"></i> 后台</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    {% if activity %}
+    <div class="hero-section">
+        <div class="container text-center">
+            <h4>{{ activity.title }}</h4>
+            <p class="mb-0 opacity-75">{{ activity.description }}</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- 复方鳖甲软肝片 -->
+        <h5 class="section-title rugu-section" style="color: var(--rugu-color);">
+            <i class="bi bi-capsule"></i> 复方鳖甲软肝片话题
+        </h5>
+        <div class="row">
+            {% for topic in activity.topics[:18] %}
+            <div class="col-md-4">
+                <div class="topic-card">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="group-tag">话题{{ loop.index }}</span>
+                        {% if topic.filled >= topic.quota %}
+                        <span class="quota-badge quota-full">已报满</span>
+                        {% else %}
+                        <span class="quota-badge quota-active">报名中</span>
+                        {% endif %}
+                    </div>
+                    <div class="topic-title">{{ topic.topic_name }}</div>
+                    <div class="info-box tag-box"><strong>话题标签：</strong><br>{{ topic.keywords }}</div>
+                    <div class="info-box guide-box"><strong>撰写说明：</strong><br>{{ topic.direction }}</div>
+                    <!-- 参考笔记链接放在一键报名旁边 -->
+                    {% if topic.reference_link %}
+                    <div class="ref-links-box">
+                        <strong style="font-size:11px;">参考笔记：</strong>
+                        {% set links = topic.reference_link.split() %}
+                        {% set link_count = links|length %}
+                        {% for link in links %}
+                            {% if 'http' in link %}
+                            <a href="{{ link }}" target="_blank" class="ref-link-btn">📎 参考{{ loop.index }}</a>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <span class="text-muted" style="font-size: 11px;">名额: {{ topic.filled }}/{{ topic.quota }}</span>
+                        {% if topic.filled < topic.quota %}
+                        <a href="/topic/{{ topic.id }}" class="btn-register">一键报名</a>
+                        {% else %}
+                        <button class="btn btn-secondary btn-sm" disabled style="font-size: 11px; padding: 4px 10px;">已报满</button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- FibroScan -->
+        <h5 class="section-title fibro-section" style="color: var(--fibro-color);">
+            <i class="bi bi-heart-pulse"></i> FibroScan体检话题
+        </h5>
+        <div class="row">
+            {% for topic in activity.topics[18:] %}
+            <div class="col-md-4">
+                <div class="topic-card">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="group-tag">话题{{ loop.index + 18 }}</span>
+                        {% if topic.filled >= topic.quota %}
+                        <span class="quota-badge quota-full">已报满</span>
+                        {% else %}
+                        <span class="quota-badge quota-active" style="background: var(--fibro-color);">报名中</span>
+                        {% endif %}
+                    </div>
+                    <div class="topic-title">{{ topic.topic_name }}</div>
+                    <div class="info-box tag-box"><strong>话题标签：</strong><br>{{ topic.keywords }}</div>
+                    <div class="info-box guide-box"><strong>撰写说明：</strong><br>{{ topic.direction }}</div>
+                    {% if topic.reference_link %}
+                    <div class="ref-links-box">
+                        <strong style="font-size:11px;">参考笔记：</strong>
+                        {% set links = topic.reference_link.split() %}
+                        {% for link in links %}
+                            {% if 'http' in link %}
+                            <a href="{{ link }}" target="_blank" class="ref-link-btn">📎 参考{{ loop.index }}</a>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <span class="text-muted" style="font-size: 11px;">名额: {{ topic.filled }}/{{ topic.quota }}</span>
+                        {% if topic.filled < topic.quota %}
+                        <a href="/topic/{{ topic.id }}" class="btn-register" style="background: var(--fibro-color);">一键报名</a>
+                        {% else %}
+                        <button class="btn btn-secondary btn-sm" disabled style="font-size: 11px; padding: 4px 10px;">已报满</button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <footer class="text-center py-4 mt-4 text-muted">
+        <p class="mb-0"><i class="bi bi-heart-fill text-danger"></i> 福瑞医科小红书任务管理系统</p>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>话题详情 - 福瑞医科小红书任务</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root { --xhs-red: #ff2442; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; background: #fff7f8; }
+        .navbar { background: linear-gradient(135deg, var(--xhs-red) 0%, #ff6b6b 100%); }
+        .btn-xhs { background: var(--xhs-red); color: white; border: none; border-radius: 25px; }
+        .card { border: none; border-radius: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+        .info-label { color: #666; font-size: 14px; }
+        .info-value { color: #333; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="/">← 返回首页</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="card p-4 mb-4">
+            <h4 class="mb-3">{{ topic.topic_name }}</h4>
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <span class="info-label">组号：</span>
+                    <span class="info-value">{{ topic.group_num }}</span>
+                </div>
+                <div class="col-md-6">
+                    <span class="info-label">报名状态：</span>
+                    {% if topic.filled >= topic.quota %}
+                    <span class="badge bg-secondary">已报满</span>
+                    {% else %}
+                    <span class="badge bg-danger">报名中</span>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <span class="info-label">关键词：</span>
+                <span class="info-value">{{ topic.keywords }}</span>
+            </div>
+            
+            <div class="mb-3">
+                <span class="info-label">撰写方向：</span>
+                <span class="info-value">{{ topic.direction }}</span>
+            </div>
+            
+            <div class="mb-3">
+                <span class="info-label">剩余名额：</span>
+                <span class="info-value text-danger">{{ topic.quota - topic.filled }}/{{ topic.quota }}</span>
+            </div>
+        </div>
+
+        {% if topic.filled < topic.quota %}
+        <div class="card p-4">
+            <h5 class="mb-4"><i class="bi bi-pencil-square"></i> 一键报名</h5>
+            <form id="registerForm">
+                <input type="hidden" name="topic_id" value="{{ topic.id }}">
+                <input type="hidden" name="topic_name" value="{{ topic.topic_name }}">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">选择组号 *</label>
+                        <select name="group_num" class="form-select" required>
+                            <option value="">请选择组号</option>
+                            <option value="第一组">第一组</option>
+                            <option value="第二组">第二组</option>
+                            <option value="第三组">第三组</option>
+                            <option value="第四组">第四组</option>
+                            <option value="第五组">第五组</option>
+                            <option value="第六组">第六组</option>
+                            <option value="第七组">第七组</option>
+                            <option value="第八组">第八组</option>
+                            <option value="第九组">第九组</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">姓名 *</label>
+                        <input type="text" name="name" class="form-control" required>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">联系方式 *</label>
+                        <input type="tel" id="phoneInput" name="phone" class="form-control" required>
+                        <small id="phoneHint" class="text-muted"></small>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">小红书账号 *</label>
+                    <input type="text" id="xhsInput" name="xhs_account" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-xhs w-100 py-2">立即报名</button>
+            </form>
+        </div>
+        {% else %}
+        <div class="alert alert-secondary">该话题名额已满，看看其他话题吧</div>
+        {% endif %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const phoneInput = document.getElementById('phoneInput');
+        const xhsInput = document.getElementById('xhsInput');
+        const phoneHint = document.getElementById('phoneHint');
+
+        phoneInput?.addEventListener('blur', async () => {
+            const phone = (phoneInput.value || '').trim();
+            if (!phone) {
+                phoneHint.textContent = '';
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/profile_by_phone?phone=' + encodeURIComponent(phone));
+                const result = await res.json();
+                if (result.success && result.found && result.profile) {
+                    if (!xhsInput.value.trim()) {
+                        xhsInput.value = result.profile.xhs_account || '';
+                    }
+                    phoneHint.textContent = result.profile.xhs_account ? '已自动带出该手机号历史小红书账号' : '';
+                } else {
+                    phoneHint.textContent = '';
+                }
+            } catch (e) {
+                phoneHint.textContent = '';
+            }
+        });
+
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            
+            const res = await fetch('/api/register', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
+            
+            if (result.success) {
+                // 跳转到报名成功页面，包含一键生成文案功能
+                location.href = '/register_success/' + result.registration_id;
+            } else {
+                alert(result.message);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的报名 - 福瑞医科小红书任务</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root { --xhs-red: #ff2442; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; background: #fff7f8; }
+        .navbar { background: linear-gradient(135deg, var(--xhs-red) 0%, #ff6b6b 100%); }
+        .btn-xhs { background: var(--xhs-red); color: white; border: none; border-radius: 25px; }
+        .card { border: none; border-radius: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+        .platform-grid .platform-card { border-radius: 10px; padding: 8px 10px; font-size: 12px; border: 1px solid transparent; }
+        .platform-card .p-title { font-weight: 700; margin-bottom: 4px; font-size: 12px; }
+        .platform-card .p-metric { line-height: 1.5; color: #333; }
+        .platform-xhs { background: #fff1f3; border-color: #ffc2cc; }
+        .platform-dy { background: #eef7ff; border-color: #c5e1ff; }
+        .platform-video { background: #f2fff5; border-color: #c9f2d3; }
+        .platform-weibo { background: #fff9ec; border-color: #ffe3a8; }
+    
+        /* MOBILE_PATCH */
+        @media (max-width: 768px) {
+            .container { padding-left: 12px; padding-right: 12px; }
+            .card { padding: 14px !important; }
+            .table { font-size: 13px; }
+            .btn { margin-top: 6px; }
+            .platform-grid .platform-card { font-size: 11px; }
+        }
+
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="/">← 返回首页</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="card p-4 mb-4">
+            <h4 class="mb-4">查询我的报名</h4>
+            <form method="POST">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">组号</label>
+                        <select name="group_num" class="form-select" required>
+                            <option value="">请选择组号</option>
+                            <option value="第一组">第一组</option>
+                            <option value="第二组">第二组</option>
+                            <option value="第三组">第三组</option>
+                            <option value="第四组">第四组</option>
+                            <option value="第五组">第五组</option>
+                            <option value="第六组">第六组</option>
+                            <option value="第七组">第七组</option>
+                            <option value="第八组">第八组</option>
+                            <option value="第九组">第九组</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">姓名</label>
+                        <input type="text" name="name" class="form-control" required>
+                    </div>
+                    <div class="col-md-4 mb-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-xhs w-100">查询</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-warning">{{ error }}</div>
+        {% endif %}
+
+        <!-- 多条报名记录显示列表 -->
+        {% if registrations %}
+        <div class="card p-4">
+            <h5 class="mb-3">您的报名记录（共{{ registrations|length }}条）</h5>
+            {% for reg in registrations %}
+            <div class="border rounded p-3 mb-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6>{{ reg.topic.topic_name }}</h6>
+                        <p class="mb-1 text-muted">
+                            <small>组号：{{ reg.group_num }} | 小红书：{{ reg.xhs_account }}</small>
+                        </p>
+                        {% if reg.submission %}
+                        <div class="platform-grid mt-2">
+                            <div class="row g-2 mb-2">
+                                <div class="col-md-6">
+                                    <div class="platform-card platform-xhs">
+                                        <div class="p-title">小红书</div>
+                                        <div class="p-metric">传播量：{{ reg.submission.xhs_views or 0 }} ｜ 点赞量：{{ reg.submission.xhs_likes or 0 }}</div>
+                                        <div class="p-metric">收藏量：{{ reg.submission.xhs_favorites or 0 }} ｜ 评论量：{{ reg.submission.xhs_comments or 0 }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="platform-card platform-dy">
+                                        <div class="p-title">抖音</div>
+                                        <div class="p-metric">传播量：{{ reg.submission.douyin_views or 0 }} ｜ 点赞量：{{ reg.submission.douyin_likes or 0 }}</div>
+                                        <div class="p-metric">收藏量：{{ reg.submission.douyin_favorites or 0 }} ｜ 评论量：{{ reg.submission.douyin_comments or 0 }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <div class="platform-card platform-video">
+                                        <div class="p-title">视频号</div>
+                                        <div class="p-metric">传播量：{{ reg.submission.video_views or 0 }} ｜ 点赞量：{{ reg.submission.video_likes or 0 }}</div>
+                                        <div class="p-metric">收藏量：{{ reg.submission.video_favorites or 0 }} ｜ 评论量：{{ reg.submission.video_comments or 0 }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="platform-card platform-weibo">
+                                        <div class="p-title">微博</div>
+                                        <div class="p-metric">传播量：{{ reg.submission.weibo_views or 0 }} ｜ 点赞量：{{ reg.submission.weibo_likes or 0 }}</div>
+                                        <div class="p-metric">收藏量：{{ reg.submission.weibo_favorites or 0 }} ｜ 评论量：{{ reg.submission.weibo_comments or 0 }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div>
+                        {% if reg.submission and reg.submission.xhs_link %}
+                        <span class="badge bg-success">已提交</span>
+                        <a href="{{ reg.submission.xhs_link }}" target="_blank" class="btn btn-sm btn-outline-primary ms-2">查看链接</a>
+                        <button type="button" class="btn btn-sm btn-primary ms-2"
+                                onclick="openUpdateDataModal({{ reg.id }}, {
+                                    xhs_views: {{ reg.submission.xhs_views or 0 }}, xhs_likes: {{ reg.submission.xhs_likes or 0 }}, xhs_favorites: {{ reg.submission.xhs_favorites or 0 }}, xhs_comments: {{ reg.submission.xhs_comments or 0 }},
+                                    douyin_views: {{ reg.submission.douyin_views or 0 }}, douyin_likes: {{ reg.submission.douyin_likes or 0 }}, douyin_favorites: {{ reg.submission.douyin_favorites or 0 }}, douyin_comments: {{ reg.submission.douyin_comments or 0 }},
+                                    video_views: {{ reg.submission.video_views or 0 }}, video_likes: {{ reg.submission.video_likes or 0 }}, video_favorites: {{ reg.submission.video_favorites or 0 }}, video_comments: {{ reg.submission.video_comments or 0 }},
+                                    weibo_views: {{ reg.submission.weibo_views or 0 }}, weibo_likes: {{ reg.submission.weibo_likes or 0 }}, weibo_favorites: {{ reg.submission.weibo_favorites or 0 }}, weibo_comments: {{ reg.submission.weibo_comments or 0 }}
+                                })">更新数据</button>
+                        {% else %}
+                        <span class="badge bg-secondary">待提交</span>
+                        <a href="{{ reg.submission.xhs_link if reg.submission and reg.submission.xhs_link else ('/topic/' ~ reg.topic_id) }}" target="_blank" class="btn btn-sm btn-xhs ms-2">查看详情</a>
+<button type="button" class="btn btn-sm btn-primary ms-2"
+onclick='openUpdateDataModal({{ reg.id }}, {
+xhs_link: {{ (reg.submission.xhs_link or "")|tojson if reg.submission else '""' }},
+douyin_link: {{ (reg.submission.douyin_link or "")|tojson if reg.submission else '""' }},
+video_link: {{ (reg.submission.video_link or "")|tojson if reg.submission else '""' }},
+weibo_link: {{ (reg.submission.weibo_link or "")|tojson if reg.submission else '""' }},
+xhs_views: {{ reg.submission.xhs_views or 0 if reg.submission else 0 }},
+xhs_likes: {{ reg.submission.xhs_likes or 0 if reg.submission else 0 }},
+xhs_favorites: {{ reg.submission.xhs_favorites or 0 if reg.submission else 0 }},
+xhs_comments: {{ reg.submission.xhs_comments or 0 if reg.submission else 0 }},
+douyin_views: {{ reg.submission.douyin_views or 0 if reg.submission else 0 }},
+douyin_likes: {{ reg.submission.douyin_likes or 0 if reg.submission else 0 }},
+douyin_favorites: {{ reg.submission.douyin_favorites or 0 if reg.submission else 0 }},
+douyin_comments: {{ reg.submission.douyin_comments or 0 if reg.submission else 0 }},
+video_views: {{ reg.submission.video_views or 0 if reg.submission else 0 }},
+video_likes: {{ reg.submission.video_likes or 0 if reg.submission else 0 }},
+video_favorites: {{ reg.submission.video_favorites or 0 if reg.submission else 0 }},
+video_comments: {{ reg.submission.video_comments or 0 if reg.submission else 0 }},
+weibo_views: {{ reg.submission.weibo_views or 0 if reg.submission else 0 }},
+weibo_likes: {{ reg.submission.weibo_likes or 0 if reg.submission else 0 }},
+weibo_favorites: {{ reg.submission.weibo_favorites or 0 if reg.submission else 0 }},
+weibo_comments: {{ reg.submission.weibo_comments or 0 if reg.submission else 0 }}
+})'>更新数据</button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if false and registration %}
+        <div class="card p-4">
+            <h5 class="mb-3">报名信息</h5>
+            <table class="table">
+                <tr><th>话题</th><td>{{ registration.topic.topic_name }}</td></tr>
+                <tr><th>组号</th><td>{{ registration.group_num }}</td></tr>
+                <tr><th>姓名</th><td>{{ registration.name }}</td></tr>
+                <tr><th>小红书账号</th><td>{{ registration.xhs_account }}</td></tr>
+                <tr><th>报名状态</th>
+                    <td>
+                        {% if registration.status == 'registered' %}
+                        <span class="badge bg-warning">已报名待发布</span>
+                        {% else %}
+                        <span class="badge bg-success">已发布</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            </table>
+
+            {% if registration.submission %}
+            <h5 class="mt-4 mb-3">提交数据（多平台）</h5>
+            <div class="table-responsive">
+                <table class="table table-bordered align-middle">
+                    <thead>
+                        <tr>
+                            <th>平台</th>
+                            <th>链接</th>
+                            <th>传播量</th>
+                            <th>点赞量</th>
+                            <th>收藏量</th>
+                            <th>评论量</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>小红书</td>
+                            <td><a href="{{ registration.submission.xhs_link }}" target="_blank">查看链接</a></td>
+                            <td>{{ registration.submission.xhs_views or 0 }}</td>
+                            <td>{{ registration.submission.xhs_likes or 0 }}</td>
+                            <td>{{ registration.submission.xhs_favorites or 0 }}</td>
+                            <td>{{ registration.submission.xhs_comments or 0 }}</td>
+                        </tr>
+                        <tr>
+                            <td>抖音</td>
+                            <td><a href="{{ registration.submission.douyin_link }}" target="_blank">查看链接</a></td>
+                            <td>{{ registration.submission.douyin_views or 0 }}</td>
+                            <td>{{ registration.submission.douyin_likes or 0 }}</td>
+                            <td>{{ registration.submission.douyin_favorites or 0 }}</td>
+                            <td>{{ registration.submission.douyin_comments or 0 }}</td>
+                        </tr>
+                        <tr>
+                            <td>视频号</td>
+                            <td><a href="{{ registration.submission.video_link }}" target="_blank">查看链接</a></td>
+                            <td>{{ registration.submission.video_views or 0 }}</td>
+                            <td>{{ registration.submission.video_likes or 0 }}</td>
+                            <td>{{ registration.submission.video_favorites or 0 }}</td>
+                            <td>{{ registration.submission.video_comments or 0 }}</td>
+                        </tr>
+                        <tr>
+                            <td>微博</td>
+                            <td><a href="{{ registration.submission.weibo_link }}" target="_blank">查看链接</a></td>
+                            <td>{{ registration.submission.weibo_views or 0 }}</td>
+                            <td>{{ registration.submission.weibo_likes or 0 }}</td>
+                            <td>{{ registration.submission.weibo_favorites or 0 }}</td>
+                            <td>{{ registration.submission.weibo_comments or 0 }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <button class="btn btn-xhs mt-3" data-bs-toggle="modal" data-bs-target="#submitModal">
+                提交数据
+            </button>
+            {% endif %}
+        </div>
+
+        <!-- 提交数据弹窗 -->
+        <div class="modal fade" id="submitModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">提交数据（可分平台）</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <form id="submitForm">
+                        <div class="modal-body">
+                            <input type="hidden" name="registration_id" value="{{ registration.id }}">
+
+                            <h6 class="text-danger">小红书</h6>
+                            <input type="url" name="xhs_link" class="form-control mb-2" placeholder="小红书链接">
+                            <div class="row g-2 mb-3 align-items-end">
+                                <div class="col"><label class="form-label small mb-1">传播量</label><input type="number" name="xhs_views" class="form-control" min="0" value="0" placeholder="传播量"></div>
+                                <div class="col"><label class="form-label small mb-1">点赞量</label><input type="number" name="xhs_likes" class="form-control" min="0" value="0" placeholder="点赞量"></div>
+                                <div class="col"><label class="form-label small mb-1">收藏量</label><input type="number" name="xhs_favorites" class="form-control" min="0" value="0" placeholder="收藏量"></div>
+                                <div class="col"><label class="form-label small mb-1">评论量</label><input type="number" name="xhs_comments" class="form-control" min="0" value="0" placeholder="评论量"></div>
+                            </div>
+
+                            <h6>抖音</h6>
+                            <input type="url" name="douyin_link" class="form-control mb-2" placeholder="抖音链接">
+                            <div class="row g-2 mb-3 align-items-end">
+                                <div class="col"><label class="form-label small mb-1">传播量</label><input type="number" name="douyin_views" class="form-control" min="0" value="0" placeholder="传播量"></div>
+                                <div class="col"><label class="form-label small mb-1">点赞量</label><input type="number" name="douyin_likes" class="form-control" min="0" value="0" placeholder="点赞量"></div>
+                                <div class="col"><label class="form-label small mb-1">收藏量</label><input type="number" name="douyin_favorites" class="form-control" min="0" value="0" placeholder="收藏量"></div>
+                                <div class="col"><label class="form-label small mb-1">评论量</label><input type="number" name="douyin_comments" class="form-control" min="0" value="0" placeholder="评论量"></div>
+                            </div>
+
+                            <h6>视频号</h6>
+                            <input type="url" name="video_link" class="form-control mb-2" placeholder="视频号链接">
+                            <div class="row g-2 mb-3 align-items-end">
+                                <div class="col"><label class="form-label small mb-1">传播量</label><input type="number" name="video_views" class="form-control" min="0" value="0" placeholder="传播量"></div>
+                                <div class="col"><label class="form-label small mb-1">点赞量</label><input type="number" name="video_likes" class="form-control" min="0" value="0" placeholder="点赞量"></div>
+                                <div class="col"><label class="form-label small mb-1">收藏量</label><input type="number" name="video_favorites" class="form-control" min="0" value="0" placeholder="收藏量"></div>
+                                <div class="col"><label class="form-label small mb-1">评论量</label><input type="number" name="video_comments" class="form-control" min="0" value="0" placeholder="评论量"></div>
+                            </div>
+
+                            <h6>微博</h6>
+                            <input type="url" name="weibo_link" class="form-control mb-2" placeholder="微博链接">
+                            <div class="row g-2 mb-3 align-items-end">
+                                <div class="col"><label class="form-label small mb-1">传播量</label><input type="number" name="weibo_views" class="form-control" min="0" value="0" placeholder="传播量"></div>
+                                <div class="col"><label class="form-label small mb-1">点赞量</label><input type="number" name="weibo_likes" class="form-control" min="0" value="0" placeholder="点赞量"></div>
+                                <div class="col"><label class="form-label small mb-1">收藏量</label><input type="number" name="weibo_favorites" class="form-control" min="0" value="0" placeholder="收藏量"></div>
+                                <div class="col"><label class="form-label small mb-1">评论量</label><input type="number" name="weibo_comments" class="form-control" min="0" value="0" placeholder="评论量"></div>
+                            </div>
+                        </div>
+                        <div class="border rounded p-3 mb-2">
+                        <h6 class="mb-2">可选补充（用于自动识别内容类型）</h6>
+                        <div class="mb-2"><input type="text" class="form-control" id="u_note_title" placeholder="笔记标题（可选）"></div>
+                        <div><textarea class="form-control" id="u_note_content" rows="3" placeholder="可粘贴正文，帮助系统分析哪类内容效果最好"></textarea></div>
+                    </div>
+                    <div class="modal-footer">
+                            <button type="submit" class="btn btn-xhs">提交</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- 更新数据弹窗（仅更新数据，不改链接） -->
+    <div class="modal fade" id="updateDataModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">更新数据（支持修改各平台链接）</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="updateDataForm">
+                    <div class="modal-body">
+                        <input type="hidden" id="update_registration_id">
+                        <div class="row g-2 mb-3">
+                            <div class="col-12"><strong>小红书</strong></div>
+ <div class="col-12"><label class="form-label small">链接</label><input type="url" class="form-control" id="u_xhs_link" placeholder="https://..."></div>
+                            <div class="col-md-3"><label class="form-label small">传播量</label><input type="number" class="form-control" id="u_xhs_views" min="0" value="0"></div>
+                            <div class="col-md-3"><label class="form-label small">点赞量</label><input type="number" class="form-control" id="u_xhs_likes" min="0" value="0"></div>
+                            <div class="col-md-3"><label class="form-label small">收藏量</label><input type="number" class="form-control" id="u_xhs_favorites" min="0" value="0"></div>
+                            <div class="col-md-3"><label class="form-label small">评论量</label><input type="number" class="form-control" id="u_xhs_comments" min="0" value="0"></div>
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-12"><strong>抖音</strong></div>
+ <div class="col-12"><label class="form-label small">链接</label><input type="url" class="form-control" id="u_douyin_link" placeholder="https://..."></div>
+                            <div class="col-md-3"><label class="form-label small">传播量</label><input type="number" class="form-control" id="u_douyin_views" min="0" value="0"></div>
+                            <div class="col-md-3"><label class="form-label small">点赞量</label><input type="number" class="form-control" id="u_douyin_likes" min="0" value="0"></div>
+                            <div class="col-md-3"><label class="form-label small">收藏量</label><input type="number" class="form-control" id="u_douyin_favorites" min="0" value="0"></div>
+                            <div class="col-md-3"><label class="form-label small">评论量</label><input type="number" class="form-control" id="u_douyin_comments" min="0" value="0"></div>
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-12"><strong>视频号</strong></div>
+ <div class="col-12"><label class="form-label small">链接</label><input type="url" class="form-control" id="u_video_link" placeholder="https://..."></div>
+                            <div class="col-md-3"><label class="form-label small">传播量</label><input type="number" class="form-control" id="u_video_views" min="0" value="0"></div>
+                            <div class="col-md-3"><label class="form-label small">点赞量</label><input type="number" class="form-control" id="u_video_likes" min="0" value="0"></div>
+                            <div class="col-md-3"><label class="form-label small">收藏量</label><input type="number" class="form-control" id="u_video_favorites" min="0" value="0"></div>
+                            <div class="col-md-3"><label class="form-label small">评论量</label><input type="number" class="form-control" id="u_video_comments" min="0" value="0"></div>
+                        </div>
+                        <div class="row g-2 mb-1">
+                            <div class="col-12"><strong>微博</strong></div>
+ <div class="col-12"><label class="form-label small">链接</label><input type="url" class="form-control" id="u_weibo_link" placeholder="https://..."></div>
+                            <div class="col-md-3"><label class="form-label small">传播量</label><input type="number" class="form-control" id="u_weibo_views" min="0" value="0"></div>
+                            <div class="col-md-3"><label class="form-label small">点赞量</label><input type="number" class="form-control" id="u_weibo_likes" min="0" value="0"></div>
+                            <div class="col-md-3"><label class="form-label small">收藏量</label><input type="number" class="form-control" id="u_weibo_favorites" min="0" value="0"></div>
+                            <div class="col-md-3"><label class="form-label small">评论量</label><input type="number" class="form-control" id="u_weibo_comments" min="0" value="0"></div>
+                        </div>
+                    </div>
+                    <div class="border rounded p-3 mb-2">
+                        <h6 class="mb-2">可选补充（用于自动识别内容类型）</h6>
+                        <div class="mb-2"><input type="text" class="form-control" id="u_note_title" placeholder="笔记标题（可选）"></div>
+                        <div><textarea class="form-control" id="u_note_content" rows="3" placeholder="可粘贴正文，帮助系统分析哪类内容效果最好"></textarea></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-primary">保存更新</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let updateModal;
+        function openUpdateDataModal(regId, metrics) {
+            document.getElementById('update_registration_id').value = regId;
+            const fields = ['xhs_link','douyin_link','video_link','weibo_link','xhs_views','xhs_likes','xhs_favorites','xhs_comments','douyin_views','douyin_likes','douyin_favorites','douyin_comments','video_views','video_likes','video_favorites','video_comments','weibo_views','weibo_likes','weibo_favorites','weibo_comments'];
+            fields.forEach(k => {
+                const el = document.getElementById('u_' + k);
+                if (el) el.value = (metrics && metrics[k] != null) ? metrics[k] : 0;
+            });
+            if (!updateModal) updateModal = new bootstrap.Modal(document.getElementById('updateDataModal'));
+            updateModal.show();
+        }
+
+        document.getElementById('updateDataForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                registration_id: parseInt(document.getElementById('update_registration_id').value),
+ xhs_link: (document.getElementById('u_xhs_link').value || '').trim(),
+ douyin_link: (document.getElementById('u_douyin_link').value || '').trim(),
+ video_link: (document.getElementById('u_video_link').value || '').trim(),
+ weibo_link: (document.getElementById('u_weibo_link').value || '').trim(),
+                xhs_views: parseInt(document.getElementById('u_xhs_views').value || 0),
+                xhs_likes: parseInt(document.getElementById('u_xhs_likes').value || 0),
+                xhs_favorites: parseInt(document.getElementById('u_xhs_favorites').value || 0),
+                xhs_comments: parseInt(document.getElementById('u_xhs_comments').value || 0),
+                douyin_views: parseInt(document.getElementById('u_douyin_views').value || 0),
+                douyin_likes: parseInt(document.getElementById('u_douyin_likes').value || 0),
+                douyin_favorites: parseInt(document.getElementById('u_douyin_favorites').value || 0),
+                douyin_comments: parseInt(document.getElementById('u_douyin_comments').value || 0),
+                video_views: parseInt(document.getElementById('u_video_views').value || 0),
+                video_likes: parseInt(document.getElementById('u_video_likes').value || 0),
+                video_favorites: parseInt(document.getElementById('u_video_favorites').value || 0),
+                video_comments: parseInt(document.getElementById('u_video_comments').value || 0),
+                weibo_views: parseInt(document.getElementById('u_weibo_views').value || 0),
+                weibo_likes: parseInt(document.getElementById('u_weibo_likes').value || 0),
+                weibo_favorites: parseInt(document.getElementById('u_weibo_favorites').value || 0),
+                weibo_comments: parseInt(document.getElementById('u_weibo_comments').value || 0),
+                note_title: document.getElementById('u_note_title') ? document.getElementById('u_note_title').value : '',
+                note_content: document.getElementById('u_note_content') ? document.getElementById('u_note_content').value : ''
+            };
+            const res = await fetch('/api/update_data', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const result = await res.json();
+            if (result.success) {
+                alert('更新数据成功！');
+                location.reload();
+            } else {
+                alert(result.message || '更新失败');
+            }
+        });
+
+        document.getElementById('submitForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            
+            const res = await fetch('/api/submit', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
+            
+            if (result.success) {
+                alert('提交成功！');
+                location.reload();
+            } else {
+                alert(result.message);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>报名成功 - 福瑞医科小红书任务</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root { --xhs-red: #ff2442; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; background: #f5f5f5; }
+        .navbar { background: linear-gradient(135deg, var(--xhs-red) 0%, #ff6b6b 100%); }
+        .success-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .version-card { background: #f8f9fa; border: 2px solid #eee; border-radius: 8px; padding: 15px; margin-bottom: 10px; cursor: pointer; transition: all 0.3s; }
+        .version-card:hover { border-color: var(--xhs-red); }
+        .version-card.selected { border-color: var(--xhs-red); background: #fff5f5; }
+        .copy-btn { background: var(--xhs-red); color: white; border: none; border-radius: 6px; padding: 8px 16px; cursor: pointer; }
+        .copy-btn:hover { background: #e02038; }
+        .regen-btn { background: #4caf50; color: white; border: none; border-radius: 6px; padding: 8px 16px; cursor: pointer; }
+        .asset-card { background: #fffaf7; border: 1px solid #f1d9d3; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+        .asset-preview { width: 100%; border-radius: 12px; border: 1px solid #f2e4df; background: white; }
+    
+        /* MOBILE_PATCH */
+        @media (max-width: 768px) {
+            .container { padding-left: 12px; padding-right: 12px; }
+            .success-card { padding: 14px; }
+            .d-flex.justify-content-between { flex-direction: column; align-items: flex-start !important; gap: 8px; }
+            .copy-btn, .regen-btn { margin-bottom: 6px; }
+            .version-card { padding: 10px; }
+        }
+
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark">
+        <div class="container d-flex justify-content-between align-items-center">
+            <a class="navbar-brand" href="/">← 返回首页</a>
+            <a class="text-white text-decoration-none" href="/my_registration">我的报名</a>
+        </div>
+    </nav>
+
+    <div class="container py-4">
+        <!-- 报名成功提示 -->
+        <div class="alert alert-success mb-4">
+            <h5><i class="bi bi-check-circle"></i> 报名成功！</h5>
+            <p class="mb-0">您已成功报名：<strong>{{ registration.topic.topic_name }}</strong></p>
+        </div>
+
+        <!-- 一键生成文案 -->
+        <div class="success-card mb-4">
+            <h5><i class="bi bi-magic"></i> 一键生成文案</h5>
+            <p class="text-muted">输入自定义提示词，或直接点击生成</p>
+            
+            <div class="mb-3">
+                <label class="form-label">自定义提示词（选填，可粘贴附件文字）</label>
+                <textarea class="form-control" id="userPrompt" rows="3" placeholder="可直接粘贴你附件里的要点。系统会按：话题 + 撰写说明 + 提示词 生成。"></textarea>
+            </div>
+
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="fastMode" checked>
+                <label class="form-check-label" for="fastMode">极速生成（先出2篇，更快）</label>
+            </div>
+            
+            <button id="generateBtn" class="btn btn-primary" style="background: var(--xhs-red); border: none;" onclick="generateCopy()">
+                <i class="bi bi-stars"></i> 生成文案
+            </button>
+            
+            <div id="loading" style="display:none;" class="mt-3">
+                <div class="spinner-border text-primary" role="status"></div>
+                <span class="ms-2">AI生成中...</span>
+            </div>
+
+            <!-- 生成结果 -->
+            <div id="resultArea" class="mt-4" style="display:none;">
+                <!-- 爆款标题选择 -->
+                <div class="mb-3">
+                    <h6 class="mb-2"><i class="bi bi-card-heading"></i> 爆款标题（点击选择）</h6>
+                    <div id="titles" class="d-flex flex-wrap gap-2"></div>
+                </div>
+                
+                <hr>
+                
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0">请选择喜欢的正文版本：</h6>
+                    <div>
+                        <button class="regen-btn me-2" onclick="regenerate()" id="regenBtn">
+                            <i class="bi bi-arrow-clockwise"></i> 重新生成 (<span id="regenCount">0</span>/5)
+                        </button>
+                        <button class="copy-btn me-2" onclick="humanizeSelected()" style="background:#6f42c1;">
+                            <i class="bi bi-magic"></i> 真人化重写
+                        </button>
+                        <button class="copy-btn" onclick="copySelected()">
+                            <i class="bi bi-clipboard"></i> 复制
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="versions"></div>
+                
+                <!-- 合规检查结果 -->
+                <div id="complianceResult" class="mt-3"></div>
+
+                <div class="mt-3">
+                    <button class="copy-btn" type="button" onclick="generateCreativePack()" style="background:#ff8b2b;">
+                        <i class="bi bi-image"></i> 生成封面/配图素材包
+                    </button>
+                </div>
+
+                <div id="creativePackArea" class="mt-4" style="display:none;">
+                    <h6 class="mb-3"><i class="bi bi-palette"></i> 爆款素材包</h6>
+                    <div id="creativePackList"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 话题信息 - 生成文案的参考 -->
+        <div class="success-card mb-4" style="border-left: 4px solid #ff2442;">
+            <h6><i class="bi bi-info-circle"></i> 话题参考信息</h6>
+ <div class="mt-3"><div class="border rounded p-3" style="background:#fff8fa;"><div class="d-flex justify-content-between align-items-center mb-2"><strong>🔖 关键词（可直接复制粘贴）</strong><button type="button" class="btn btn-sm btn-outline-danger" onclick="(function(){var t=((document.getElementById('topicKeywords')||{}).innerText||'').trim();if(!t){return;}try{if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(t);}else{var ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();}alert('关键词已复制');}catch(e){alert('复制失败，请手动复制');}})();">复制关键词</button></div><div id="topicKeywords" style="white-space: pre-wrap; font-size: 13px; color:#444;">{{ registration.topic.keywords or '暂无关键词' }}</div></div></div>
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>🗣️ 话题：</strong><br><span class="text-danger">{{ registration.topic.topic_name }}</span></p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>💡 撰写说明：</strong><br>{{ registration.topic.direction[:200] }}...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 提交笔记 -->
+        <div class="success-card">
+            <h6><i class="bi bi-upload"></i> 提交数据（支持分平台提交）</h6>
+            <form id="submitForm">
+                <div class="alert alert-info">可分平台提交：先提交任一平台链接+数据即可，后续可随时补充其它平台。</div>
+
+                <div class="border rounded p-3 mb-3">
+                    <h6 class="text-danger">小红书</h6>
+                    <div class="mb-2"><input type="url" class="form-control" id="xhs_link" placeholder="小红书链接"></div>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-3"><label class="form-label small mb-1">传播量</label><input type="number" class="form-control" id="xhs_views" min="0" value="0" placeholder="传播量"></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">点赞量</label><input type="number" class="form-control" id="xhs_likes" min="0" value="0" placeholder="点赞量"></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">收藏量</label><input type="number" class="form-control" id="xhs_favorites" min="0" value="0" placeholder="收藏量"></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">评论量</label><input type="number" class="form-control" id="xhs_comments" min="0" value="0" placeholder="评论量"></div>
+                    </div>
+                </div>
+
+                <div class="border rounded p-3 mb-3">
+                    <h6>抖音</h6>
+                    <div class="mb-2"><input type="url" class="form-control" id="douyin_link" placeholder="抖音链接"></div>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-3"><label class="form-label small mb-1">传播量</label><input type="number" class="form-control" id="douyin_views" min="0" value="0" placeholder="传播量"></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">点赞量</label><input type="number" class="form-control" id="douyin_likes" min="0" value="0" placeholder="点赞量"></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">收藏量</label><input type="number" class="form-control" id="douyin_favorites" min="0" value="0" placeholder="收藏量"></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">评论量</label><input type="number" class="form-control" id="douyin_comments" min="0" value="0" placeholder="评论量"></div>
+                    </div>
+                </div>
+
+                <div class="border rounded p-3 mb-3">
+                    <h6>视频号</h6>
+                    <div class="mb-2"><input type="url" class="form-control" id="video_link" placeholder="视频号链接"></div>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-3"><label class="form-label small mb-1">传播量</label><input type="number" class="form-control" id="video_views" min="0" value="0" placeholder="传播量"></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">点赞量</label><input type="number" class="form-control" id="video_likes" min="0" value="0" placeholder="点赞量"></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">收藏量</label><input type="number" class="form-control" id="video_favorites" min="0" value="0" placeholder="收藏量"></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">评论量</label><input type="number" class="form-control" id="video_comments" min="0" value="0" placeholder="评论量"></div>
+                    </div>
+                </div>
+
+                <div class="border rounded p-3 mb-3">
+                    <h6>微博</h6>
+                    <div class="mb-2"><input type="url" class="form-control" id="weibo_link" placeholder="微博链接"></div>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-3"><label class="form-label small mb-1">传播量</label><input type="number" class="form-control" id="weibo_views" min="0" value="0" placeholder="传播量"></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">点赞量</label><input type="number" class="form-control" id="weibo_likes" min="0" value="0" placeholder="点赞量"></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">收藏量</label><input type="number" class="form-control" id="weibo_favorites" min="0" value="0" placeholder="收藏量"></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">评论量</label><input type="number" class="form-control" id="weibo_comments" min="0" value="0" placeholder="评论量"></div>
+                    </div>
+                </div>
+                <div class="border rounded p-3 mb-3">
+                    <h6>笔记内容（用于系统自动识别内容类型，可选）</h6>
+                    <div class="mb-2"><input type="text" class="form-control" id="note_title" placeholder="笔记标题（可选）"></div>
+                    <div><textarea class="form-control" id="note_content" rows="3" placeholder="可粘贴正文，系统会自动识别科普/求助/复盘/检查解读等类型"></textarea></div>
+                </div>
+
+<div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary" style="background: var(--xhs-red); border: none;">
+                        <i class="bi bi-check-circle"></i> 提交数据
+                    </button>
+                    <button type="button" class="btn btn-warning" onclick="updateData()">
+                        <i class="bi bi-arrow-repeat"></i> 数据更新
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let selectedVersion = 0;
+        let selectedTitle = 0;
+        let regenCount = 0;
+        let versions = [];
+        let titles = [];
+        
+        async function generateCopy() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('generateBtn').disabled = true;
+            
+            // 获取用户自定义提示词
+            const userPrompt = document.getElementById('userPrompt').value.trim();
+            
+            try {
+                const res = await fetch('/api/generate_copy', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        registration_id: {{ registration.id }},
+                        user_prompt: userPrompt,
+                        fast_mode: document.getElementById('fastMode') ? document.getElementById('fastMode').checked : true
+                    })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    titles = data.titles || [];
+                    versions = data.versions || [];
+                    // 如果版本里已经包含“标题+内文”，就不再单独展示标题区
+                    if (versions.length > 0 && versions[0].includes('标题：')) {
+                        titles = [];
+                        document.getElementById('titles').innerHTML = '';
+                    } else {
+                        showTitles(titles);
+                    }
+                    showVersions(versions);
+                }
+            } catch(e) {
+                alert('生成失败，请重试');
+            }
+            
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('generateBtn').disabled = false;
+        }
+        
+        function showTitles(tlist) {
+            if (!tlist || tlist.length === 0) return;
+            
+            selectedTitle = 0;
+            let html = '';
+            tlist.forEach((t, i) => {
+                html += `<span class="badge bg-danger-subtle text-danger fs-6 p-2" style="cursor:pointer;" onclick="selectTitle(${i})" id="title-${i}">${t}</span>`;
+            });
+            document.getElementById('titles').innerHTML = html;
+            // 默认选中第一个
+            document.getElementById('title-0').classList.add('bg-danger');
+            document.getElementById('title-0').classList.remove('bg-danger-subtle', 'text-danger');
+        }
+        
+        function selectTitle(i) {
+            selectedTitle = i;
+            // 更新选中状态
+            for (let j = 0; j < titles.length; j++) {
+                const el = document.getElementById('title-' + j);
+                if (j === i) {
+                    el.classList.add('bg-danger');
+                    el.classList.remove('bg-danger-subtle', 'text-danger');
+                } else {
+                    el.classList.remove('bg-danger');
+                    el.classList.add('bg-danger-subtle', 'text-danger');
+                }
+            }
+        }
+        
+        function showVersions(vlist) {
+            selectedVersion = 0;
+            let html = '';
+            vlist.forEach((v, i) => {
+                html += `<div class="version-card ${i===0?'selected':''}" onclick="selectVersion(${i})">
+                    <pre style="white-space: pre-wrap; font-size: 13px; margin: 0;">${v}</pre>
+                </div>`;
+            });
+            document.getElementById('versions').innerHTML = html;
+            document.getElementById('resultArea').style.display = 'block';
+            document.getElementById('creativePackArea').style.display = 'none';
+            document.getElementById('creativePackList').innerHTML = '';
+            window.latestCreativeAssets = [];
+            if (versions.length > 0) {
+                checkCompliance(versions[0]);
+            }
+        }
+        
+        function selectVersion(i) {
+            selectedVersion = i;
+            document.querySelectorAll('.version-card').forEach((el, idx) => {
+                el.classList.toggle('selected', idx === i);
+            });
+            checkCompliance(versions[i]);
+        }
+        
+        async function checkCompliance(content) {
+            const res = await fetch('/api/check_compliance', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({content: content})
+            });
+            const data = await res.json();
+            
+            if (data.warnings && data.warnings.length > 0) {
+                document.getElementById('complianceResult').innerHTML = 
+                    `<div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> 合规提醒：${data.warnings.join(', ')}</div>`;
+            } else {
+                document.getElementById('complianceResult').innerHTML = 
+                    `<div class="alert alert-success"><i class="bi bi-check-circle"></i> 合规检查通过</div>`;
+            }
+        }
+        
+        async function copySelected() {
+            if (!versions || versions.length === 0) {
+                alert('请先生成文案');
+                return;
+            }
+            // 如果没有选中，默认选第一个
+            if (selectedVersion === undefined || selectedVersion < 0) {
+                selectedVersion = 0;
+                document.querySelectorAll('.version-card').forEach((el, idx) => {
+                    el.classList.toggle('selected', idx === 0);
+                });
+            }
+            
+            // 若版本已包含“标题+内文”，直接复制该版本
+            let copyContent = versions[selectedVersion];
+            if (!(copyContent.includes('标题：') && copyContent.includes('内文：')) && titles && titles[selectedTitle]) {
+                copyContent = '【' + titles[selectedTitle] + '】\n\n' + copyContent;
+            }
+
+            // 优先现代剪贴板API，失败则降级到textarea方案（HTTP场景常见）
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(copyContent);
+                } else {
+                    const ta = document.createElement('textarea');
+                    ta.value = copyContent;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                }
+                alert('已复制到剪贴板！');
+            } catch (e) {
+                const ta = document.createElement('textarea');
+                ta.value = copyContent;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                const ok = document.execCommand('copy');
+                document.body.removeChild(ta);
+                alert(ok ? '已复制到剪贴板！' : '复制失败，请手动长按复制');
+            }
+        }
+
+        function getSelectedContent() {
+            if (!versions || versions.length === 0) return '';
+            return versions[selectedVersion] || versions[0] || '';
+        }
+
+        async function copyText(text) {
+            if (!text) return;
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                }
+                alert('已复制到剪贴板！');
+            } catch (e) {
+                alert('复制失败，请手动复制');
+            }
+        }
+
+        async function generateCreativePack() {
+            const res = await fetch('/api/generate_creative_pack', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    registration_id: {{ registration.id }},
+                    selected_content: getSelectedContent()
+                })
+            });
+            const data = await res.json();
+            if (!data.success) {
+                alert(data.message || '素材生成失败');
+                return;
+            }
+
+            window.latestCreativeAssets = data.assets || [];
+            document.getElementById('creativePackList').innerHTML = window.latestCreativeAssets.map((item, index) => `
+                <div class="asset-card">
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <img class="asset-preview" src="${item.svg_data_uri}" alt="${item.type}">
+                        </div>
+                        <div class="col-md-7">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <strong>${item.type}</strong>
+                                    <div class="text-muted small">${item.title}</div>
+                                </div>
+                                <a class="btn btn-sm btn-outline-danger" href="${item.svg_data_uri}" download="${item.download_name}">下载SVG</a>
+                            </div>
+                            <div class="small text-muted mb-2">${item.subtitle || ''}</div>
+                            <ul class="small mb-2">
+                                ${(item.bullets || []).map((bullet) => `<li>${bullet}</li>`).join('')}
+                            </ul>
+                            <div class="border rounded p-2 mb-2" style="background:#fff;">
+                                <div class="small text-muted mb-1">图像生成提示词</div>
+                                <div class="small">${item.image_prompt || ''}</div>
+                            </div>
+                            <button class="btn btn-sm btn-outline-danger" type="button" onclick="copyAssetPrompt(${index})">复制提示词</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('creativePackArea').style.display = 'block';
+        }
+
+        function copyAssetPrompt(index) {
+            const assets = window.latestCreativeAssets || [];
+            const current = assets[index];
+            if (!current) return;
+            copyText(current.image_prompt || '');
+        }
+        
+        async function humanizeSelected() {
+            if (!versions || versions.length === 0) {
+                alert('请先生成文案');
+                return;
+            }
+            const current = versions[selectedVersion] || versions[0];
+            const res = await fetch('/api/humanize_copy', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ content: current })
+            });
+            const data = await res.json();
+            if (data.success) {
+                versions[selectedVersion] = data.content;
+                showVersions(versions);
+                selectVersion(selectedVersion || 0);
+                alert('已完成真人化重写');
+            } else {
+                alert(data.message || '重写失败');
+            }
+        }
+
+        function regenerate() {
+            if (regenCount >= 5) {
+                alert('已达到最大生成次数(5次)');
+                return;
+            }
+            regenCount++;
+            document.getElementById('regenCount').textContent = regenCount;
+            generateCopy();
+        }
+        
+        // 提交表单
+        document.getElementById('submitForm').onsubmit = async function(e) {
+            e.preventDefault();
+            
+            const res = await fetch('/api/submit', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    registration_id: {{ registration.id }},
+                    xhs_link: document.getElementById('xhs_link').value,
+                    xhs_views: parseInt(document.getElementById('xhs_views').value),
+                    xhs_likes: parseInt(document.getElementById('xhs_likes').value),
+                    xhs_favorites: parseInt(document.getElementById('xhs_favorites').value),
+                    xhs_comments: parseInt(document.getElementById('xhs_comments').value),
+                    douyin_link: document.getElementById('douyin_link').value,
+                    douyin_views: parseInt(document.getElementById('douyin_views').value),
+                    douyin_likes: parseInt(document.getElementById('douyin_likes').value),
+                    douyin_favorites: parseInt(document.getElementById('douyin_favorites').value),
+                    douyin_comments: parseInt(document.getElementById('douyin_comments').value),
+                    video_link: document.getElementById('video_link').value,
+                    video_views: parseInt(document.getElementById('video_views').value),
+                    video_likes: parseInt(document.getElementById('video_likes').value),
+                    video_favorites: parseInt(document.getElementById('video_favorites').value),
+                    video_comments: parseInt(document.getElementById('video_comments').value),
+                    weibo_link: document.getElementById('weibo_link').value,
+                    weibo_views: parseInt(document.getElementById('weibo_views').value),
+                    weibo_likes: parseInt(document.getElementById('weibo_likes').value),
+                    weibo_favorites: parseInt(document.getElementById('weibo_favorites').value),
+                    weibo_comments: parseInt(document.getElementById('weibo_comments').value),
+                    note_title: document.getElementById('note_title').value,
+                    note_content: document.getElementById('note_content').value
+                })
+            });
+            
+            const data = await res.json();
+            if (data.success) {
+                alert('提交成功！');
+                location.href = '/my_registration';
+            } else {
+                alert(data.message);
+            }
+        };
+        
+        // 数据更新功能
+        async function updateData() {
+            const xhsLink = document.getElementById('xhs_link').value;
+            if (!xhsLink) {
+                alert('请先填写完整多平台链接和数据');
+                return;
+            }
+            
+            const res = await fetch('/api/update_data', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    registration_id: {{ registration.id }},
+                    xhs_link: document.getElementById('xhs_link').value,
+                    xhs_views: parseInt(document.getElementById('xhs_views').value),
+                    xhs_likes: parseInt(document.getElementById('xhs_likes').value),
+                    xhs_favorites: parseInt(document.getElementById('xhs_favorites').value),
+                    xhs_comments: parseInt(document.getElementById('xhs_comments').value),
+                    douyin_link: document.getElementById('douyin_link').value,
+                    douyin_views: parseInt(document.getElementById('douyin_views').value),
+                    douyin_likes: parseInt(document.getElementById('douyin_likes').value),
+                    douyin_favorites: parseInt(document.getElementById('douyin_favorites').value),
+                    douyin_comments: parseInt(document.getElementById('douyin_comments').value),
+                    video_link: document.getElementById('video_link').value,
+                    video_views: parseInt(document.getElementById('video_views').value),
+                    video_likes: parseInt(document.getElementById('video_likes').value),
+                    video_favorites: parseInt(document.getElementById('video_favorites').value),
+                    video_comments: parseInt(document.getElementById('video_comments').value),
+                    weibo_link: document.getElementById('weibo_link').value,
+                    weibo_views: parseInt(document.getElementById('weibo_views').value),
+                    weibo_likes: parseInt(document.getElementById('weibo_likes').value),
+                    weibo_favorites: parseInt(document.getElementById('weibo_favorites').value),
+                    weibo_comments: parseInt(document.getElementById('weibo_comments').value),
+                    note_title: document.getElementById('note_title').value,
+                    note_content: document.getElementById('note_content').value
+                })
+            });
+            
+            const data = await res.json();
+            if (data.success) {
+                alert('数据更新成功！');
+            } else {
+                alert(data.message || '更新失败');
+            }
+        }
+    </script>
+</body>
+</html>

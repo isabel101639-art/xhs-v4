@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>后台管理 - 福瑞医科小红书任务</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root { --xhs-red: #ff2442; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; background: #f5f5f5; }
+        .sidebar { background: white; min-height: 100vh; padding: 20px; }
+        .nav-link { color: #333; padding: 12px 16px; border-radius: 8px; margin-bottom: 4px; }
+        .nav-link:hover, .nav-link.active { background: #ffe5e8; color: var(--xhs-red); }
+        .btn-xhs { background: var(--xhs-red); color: white; border: none; }
+    
+        /* MOBILE_PATCH */
+        @media (max-width: 768px) {
+            .container { padding-left: 12px; padding-right: 12px; }
+            .table-responsive { overflow-x: auto; }
+            .navbar .container { flex-wrap: wrap; }
+        }
+
+    </style>
+</head>
+<body>
+    <div class="d-flex">
+        <!-- 侧边栏 -->
+        <div class="sidebar" style="width: 250px;">
+            <h5 class="mb-4 text-danger"><i class="bi bi-gear"></i> 后台管理</h5>
+            <nav class="nav flex-column">
+                <a class="nav-link" href="#" onclick="showTab('activities')">
+                    <i class="bi bi-collection"></i> 活动管理
+                </a>
+                <a class="nav-link" href="#" onclick="showTab('topics')">
+                    <i class="bi bi-chat-dots"></i> 话题管理
+                </a>
+                <a class="nav-link" href="#" onclick="showTab('data')">
+                    <i class="bi bi-download"></i> 数据导出
+                </a>
+                <a class="nav-link" href="#" onclick="showTab('snapshots')">
+                    <i class="bi bi-archive"></i> 活动快照
+                </a>
+                <a class="nav-link" href="#" onclick="showTab('creator')">
+                    <i class="bi bi-people"></i> 账号看板
+                </a>
+                <a class="nav-link" href="#" onclick="showTab('logs')">
+                    <i class="bi bi-journal-text"></i> 操作日志
+                </a>
+                <a class="nav-link" href="/automation_center">
+                    <i class="bi bi-lightning-charge"></i> 自动化中心
+                </a>
+                <a href="/admin/logout" class="nav-link text-danger">
+                    <i class="bi bi-box-arrow-right"></i> 退出登录
+                </a>
+            </nav>
+        </div>
+
+        <!-- 主内容 -->
+        <div class="flex-grow-1 p-4">
+            <!-- 活动管理 -->
+            <div id="tab-activities">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h4>活动管理</h4>
+                    <button class="btn btn-xhs" data-bs-toggle="modal" data-bs-target="#activityModal">
+                        <i class="bi bi-plus"></i> 新增活动
+                    </button>
+                </div>
+                
+                <div class="card">
+                    <div class="card-body">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>活动名称</th>
+                                    <th>标题</th>
+                                    <th>状态</th>
+                                    <th>话题数</th>
+                                    <th>快照数</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for activity in activities %}
+                                <tr>
+                                    <td>{{ activity.name }}</td>
+                                    <td>{{ activity.title }}</td>
+                                    <td>
+                                        {% if activity.status == 'published' %}
+                                        <span class="badge bg-success">已发布</span>
+                                        {% elif activity.status == 'archived' %}
+                                        <span class="badge bg-dark">已归档</span>
+                                        {% elif activity.status == 'closed' %}
+                                        <span class="badge bg-warning text-dark">已关闭</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">草稿</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ activity.topics|length }}</td>
+                                    <td>{{ activity.snapshots|length }}</td>
+                                    <td>
+                                        {% if activity.status != 'published' %}
+                                        <a href="/admin/activity/{{ activity.id }}/publish" class="btn btn-sm btn-xhs">发布</a>
+                                        {% endif %}
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showTab('topics')">添加话题</button>
+                                        <button type="button" class="btn btn-sm btn-outline-info" onclick="openSnapshots({{ activity.id }})">快照</button>
+                                        {% if activity.status != 'archived' %}
+                                        <button type="button" class="btn btn-sm btn-outline-dark" onclick='archiveActivity({{ activity.id }}, {{ activity.name|tojson }})'>归档</button>
+                                        {% endif %}
+                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick='cloneActivity({{ activity.id }}, {{ activity.name|tojson }})'>复制</button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 话题管理 -->
+            <div id="tab-topics" style="display:none;">
+                <h4 class="mb-4">话题管理</h4>
+                <div class="card">
+                    <div class="card-body">
+                        <form action="/admin/topic/add" method="POST">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">所属活动</label>
+                                    <select name="activity_id" class="form-select" required>
+                                        {% for activity in activities %}
+                                        <option value="{{ activity.id }}">{{ activity.name }} - {{ activity.title }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">组别</label>
+                                    <input type="text" name="group_num" class="form-control" placeholder="例如：第一组">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">名额</label>
+                                    <input type="number" name="quota" class="form-control" min="1" max="500" value="{{ default_topic_quota or 30 }}" required>
+                                </div>
+                                <div class="col-md-12">
+                                    <label class="form-label">话题名称</label>
+                                    <input type="text" name="topic_name" class="form-control" required>
+                                </div>
+                                <div class="col-md-12">
+                                    <label class="form-label">关键词</label>
+                                    <input type="text" name="keywords" class="form-control" placeholder="多个关键词用逗号分隔">
+                                </div>
+                                <div class="col-md-12">
+                                    <label class="form-label">撰写方向</label>
+                                    <textarea name="direction" class="form-control" rows="4"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">参考内容</label>
+                                    <textarea name="reference_content" class="form-control" rows="3"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">参考链接</label>
+                                    <textarea name="reference_link" class="form-control" rows="3" placeholder="多个链接可换行或空格分隔"></textarea>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <button type="submit" class="btn btn-xhs">新增话题</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 数据导出 -->
+            <div id="tab-data" style="display:none;">
+                <h4 class="mb-4">数据导出</h4>
+                <div class="card">
+                    <div class="card-body">
+                        <p>选择活动期数导出数据：</p>
+                        {% for activity in activities %}
+                        <a href="/admin/export/{{ activity.id }}" class="btn btn-outline-secondary me-2 mb-2">
+                            <i class="bi bi-download"></i> 导出 {{ activity.name }}
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- 活动快照 -->
+            <div id="tab-snapshots" style="display:none;">
+                <h4 class="mb-4">活动快照</h4>
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-6">
+                                <label class="form-label">选择活动</label>
+                                <select id="snapshotActivitySelect" class="form-select" onchange="loadSnapshots()">
+                                    {% for activity in activities %}
+                                    <option value="{{ activity.id }}">{{ activity.name }} - {{ activity.title }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <button type="button" class="btn btn-outline-primary" onclick="loadSnapshots()">刷新快照</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div id="snapshotList" class="text-muted">请选择活动查看快照</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="mb-3">快照详情</h6>
+                        <pre id="snapshotDetail" style="white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 420px; overflow: auto;">暂无快照详情</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 账号看板 -->
+            <div id="tab-creator" style="display:none;">
+                <h4 class="mb-4">报名人账号看板</h4>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-3">
+                                <label class="form-label">平台</label>
+                                <select id="creatorPlatformFilter" class="form-select" onchange="loadCreatorAccounts()">
+                                    <option value="">全部平台</option>
+                                    <option value="xhs">小红书</option>
+                                    <option value="douyin">抖音</option>
+                                    <option value="video">视频号</option>
+                                    <option value="weibo">微博</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">手机号</label>
+                                <input id="creatorPhoneFilter" class="form-control" placeholder="手机号">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">关键词</label>
+                                <input id="creatorKeywordFilter" class="form-control" placeholder="姓名 / 账号 / 昵称">
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-check mt-4">
+                                    <input id="creatorViralOnlyFilter" class="form-check-input" type="checkbox" onchange="loadCreatorAccounts()">
+                                    <label class="form-check-label" for="creatorViralOnlyFilter">只看有爆款</label>
+                                </div>
+                            </div>
+                            <div class="col-md-12 d-flex gap-2">
+                                <button type="button" class="btn btn-outline-primary" onclick="loadCreatorAccounts()">刷新账号列表</button>
+                                <button type="button" class="btn btn-outline-success" onclick="exportCreatorAccounts()">导出账号CSV</button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="clearCreatorFilters()">清空筛选</button>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">统计开始日期</label>
+                                <input id="creatorDateFrom" type="date" class="form-control" onchange="reloadSelectedCreatorAccount()">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">统计结束日期</label>
+                                <input id="creatorDateTo" type="date" class="form-control" onchange="reloadSelectedCreatorAccount()">
+                            </div>
+                            <div class="col-md-6 d-flex align-items-end gap-2">
+                                <button type="button" class="btn btn-outline-primary" onclick="reloadSelectedCreatorAccount()">按时间统计当前账号</button>
+                                <button type="button" class="btn btn-outline-success" onclick="exportSelectedCreatorAccount()">导出当前账号</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="mb-3">账号概览</h6>
+                        <div class="table-responsive">
+                            <table class="table align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>平台</th>
+                                        <th>姓名 / 账号</th>
+                                        <th>粉丝</th>
+                                        <th>发文数</th>
+                                        <th>爆款数</th>
+                                        <th>总阅读</th>
+                                        <th>总互动</th>
+                                        <th>最佳笔记</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="creatorAccountTableBody">
+                                    <tr><td colspan="9" class="text-muted text-center">暂无账号数据</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-lg-4">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="mb-3">新增 / 更新账号</h6>
+                                <input type="hidden" id="creatorAccountId">
+                                <div class="mb-2">
+                                    <label class="form-label">平台</label>
+                                    <select id="creatorAccountPlatform" class="form-select">
+                                        <option value="xhs">小红书</option>
+                                        <option value="douyin">抖音</option>
+                                        <option value="video">视频号</option>
+                                        <option value="weibo">微博</option>
+                                    </select>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">姓名</label>
+                                    <input id="creatorOwnerName" class="form-control">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">手机号</label>
+                                    <input id="creatorOwnerPhone" class="form-control">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">账号标识</label>
+                                    <input id="creatorAccountHandle" class="form-control" placeholder="@账号 / user_id">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">显示昵称</label>
+                                    <input id="creatorDisplayName" class="form-control">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">账号链接</label>
+                                    <input id="creatorProfileUrl" class="form-control">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">当前粉丝</label>
+                                    <input id="creatorFollowerCount" type="number" min="0" class="form-control" value="0">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">备注</label>
+                                    <textarea id="creatorNotes" class="form-control" rows="3"></textarea>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-xhs" onclick="saveCreatorAccount()">保存账号</button>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="resetCreatorAccountForm()">清空</button>
+                                </div>
+                                <div id="creatorAccountMsg" class="text-muted small mt-2"></div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="mb-3">账号快照录入</h6>
+                                <div class="mb-2">
+                                    <label class="form-label">快照日期</label>
+                                    <input id="creatorSnapshotDate" type="date" class="form-control">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">粉丝数</label>
+                                    <input id="creatorSnapshotFollower" type="number" min="0" class="form-control" value="0">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">发文数</label>
+                                    <input id="creatorSnapshotPostCount" type="number" min="0" class="form-control" value="0">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">总阅读</label>
+                                    <input id="creatorSnapshotViews" type="number" min="0" class="form-control" value="0">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">总互动</label>
+                                    <input id="creatorSnapshotInteractions" type="number" min="0" class="form-control" value="0">
+                                </div>
+                                <button type="button" class="btn btn-outline-primary" onclick="saveCreatorSnapshot()">保存快照</button>
+                                <div id="creatorSnapshotMsg" class="text-muted small mt-2"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-8">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="mb-3">账号详情</h6>
+                                <div id="creatorAccountDetail" class="text-muted">请选择左侧账号查看详情</div>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="mb-3">新增笔记表现</h6>
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label">笔记标题</label>
+                                        <input id="creatorPostTitle" class="form-control">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">笔记链接</label>
+                                        <input id="creatorPostUrl" class="form-control">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">发布时间</label>
+                                        <input id="creatorPostPublishTime" class="form-control" placeholder="2026-04-02 10:00:00">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">关联话题</label>
+                                        <input id="creatorPostTopicTitle" class="form-control">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">涨粉</label>
+                                        <input id="creatorPostFollowerDelta" type="number" class="form-control" value="0">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">阅读量</label>
+                                        <input id="creatorPostViews" type="number" min="0" class="form-control" value="0">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">曝光量</label>
+                                        <input id="creatorPostExposures" type="number" min="0" class="form-control" value="0">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">点赞</label>
+                                        <input id="creatorPostLikes" type="number" min="0" class="form-control" value="0">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">收藏</label>
+                                        <input id="creatorPostFavorites" type="number" min="0" class="form-control" value="0">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">评论</label>
+                                        <input id="creatorPostComments" type="number" min="0" class="form-control" value="0">
+                                    </div>
+                                </div>
+                                <div class="mt-3">
+                                    <button type="button" class="btn btn-outline-primary" onclick="saveCreatorPost()">保存笔记</button>
+                                    <span id="creatorPostMsg" class="text-muted small ms-2"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="mb-3">账号笔记列表</h6>
+                                <div class="table-responsive">
+                                    <table class="table align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>标题</th>
+                                                <th>话题</th>
+                                                <th>发布时间</th>
+                                                <th>阅读</th>
+                                                <th>曝光</th>
+                                                <th>互动</th>
+                                                <th>涨粉</th>
+                                                <th>状态</th>
+                                                <th>操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="creatorPostTableBody">
+                                            <tr><td colspan="9" class="text-muted text-center">暂无笔记数据</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="mb-3">账号快照历史</h6>
+                                <div class="table-responsive">
+                                    <table class="table align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>日期</th>
+                                                <th>粉丝数</th>
+                                                <th>发文数</th>
+                                                <th>总阅读</th>
+                                                <th>总互动</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="creatorSnapshotTableBody">
+                                            <tr><td colspan="5" class="text-muted text-center">暂无快照数据</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 操作日志 -->
+            <div id="tab-logs" style="display:none;">
+                <h4 class="mb-4">操作日志</h4>
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-3">
+                                <label class="form-label">操作类型</label>
+                                <input id="logActionFilter" class="form-control" placeholder="如 publish / archive / save">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">目标类型</label>
+                                <input id="logTargetTypeFilter" class="form-control" placeholder="如 activity / topic_idea">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">关键词</label>
+                                <input id="logKeywordFilter" class="form-control" placeholder="操作人 / 说明 / 明细">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">条数</label>
+                                <input id="logLimitFilter" type="number" min="1" max="500" value="50" class="form-control">
+                            </div>
+                            <div class="col-md-12 d-flex gap-2">
+                                <button type="button" class="btn btn-outline-primary" onclick="loadOperationLogs()">刷新日志</button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="clearLogFilters()">清空筛选</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>时间</th>
+                                        <th>操作人</th>
+                                        <th>动作</th>
+                                        <th>目标</th>
+                                        <th>说明</th>
+                                        <th>明细</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="operationLogTableBody">
+                                    <tr><td colspan="6" class="text-muted text-center">暂无日志数据</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增活动弹窗 -->
+    <div class="modal fade" id="activityModal" tabindex="-1">
+        <div class="modal-dialog">
+            <form action="/admin/activity/add" method="POST">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">新增活动</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">活动名称</label>
+                            <input type="text" name="name" class="form-control" placeholder="例如：第1期" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">活动标题</label>
+                            <input type="text" name="title" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">活动描述</label>
+                            <textarea name="description" class="form-control" rows="3"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-xhs">创建</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let selectedCreatorAccountId = null;
+        let creatorAccountCache = {};
+
+        function showTab(tab) {
+            document.getElementById('tab-activities').style.display = 'none';
+            document.getElementById('tab-topics').style.display = 'none';
+            document.getElementById('tab-data').style.display = 'none';
+            document.getElementById('tab-snapshots').style.display = 'none';
+            document.getElementById('tab-creator').style.display = 'none';
+            document.getElementById('tab-logs').style.display = 'none';
+            document.getElementById('tab-' + tab).style.display = 'block';
+            if (tab === 'creator') {
+                loadCreatorAccounts();
+            }
+            if (tab === 'logs') {
+                loadOperationLogs();
+            }
+        }
+
+        function openSnapshots(activityId) {
+            showTab('snapshots');
+            const select = document.getElementById('snapshotActivitySelect');
+            if (select) {
+                select.value = String(activityId);
+            }
+            loadSnapshots();
+        }
+
+        async function archiveActivity(activityId, activityName) {
+            const confirmed = window.confirm(`确认归档活动《${activityName}》吗？系统会生成活动快照。`);
+            if (!confirmed) return;
+            const res = await fetch(`/admin/activity/${activityId}/archive`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({})
+            });
+            const result = await res.json();
+            alert(result.message || '已处理');
+            if (result.success) {
+                location.reload();
+            }
+        }
+
+        async function cloneActivity(activityId, activityName) {
+            const name = window.prompt('请输入新活动名称', `${activityName}-复制`);
+            if (name === null) return;
+            const res = await fetch(`/admin/activity/${activityId}/clone`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name })
+            });
+            const result = await res.json();
+            alert(result.message || '已处理');
+            if (result.success) {
+                location.reload();
+            }
+        }
+
+        async function loadSnapshots() {
+            const activityId = document.getElementById('snapshotActivitySelect')?.value;
+            if (!activityId) return;
+            const res = await fetch(`/api/activity/${activityId}/snapshots`);
+            const result = await res.json();
+            const wrap = document.getElementById('snapshotList');
+            if (!result.success || !(result.items || []).length) {
+                wrap.innerHTML = '<div class="text-muted">暂无快照</div>';
+                document.getElementById('snapshotDetail').textContent = '暂无快照详情';
+                return;
+            }
+            wrap.innerHTML = result.items.map((item) => `
+                <div class="border rounded p-3 mb-2">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div><strong>${item.snapshot_name || '活动快照'}</strong></div>
+                            <div class="text-muted small">状态：${item.source_status || '-'} ｜ 话题${item.topic_count || 0}个 ｜ 报名${item.registration_count || 0}条 ｜ 提报${item.submission_count || 0}条</div>
+                            <div class="text-muted small">生成时间：${item.created_at || '-'}</div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="viewSnapshot(${item.id})">查看</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="restoreSnapshot(${item.id})">恢复为新一期</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function viewSnapshot(snapshotId) {
+            const res = await fetch(`/api/activity_snapshots/${snapshotId}`);
+            const result = await res.json();
+            document.getElementById('snapshotDetail').textContent = JSON.stringify(result.item?.payload || result, null, 2);
+        }
+
+        async function restoreSnapshot(snapshotId) {
+            const name = window.prompt('请输入恢复后的活动名称');
+            if (name === null) return;
+            const res = await fetch(`/admin/activity_snapshots/${snapshotId}/restore`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name })
+            });
+            const result = await res.json();
+            alert(result.message || '已处理');
+            if (result.success) {
+                location.reload();
+            }
+        }
+
+        function creatorPlatformLabel(platform) {
+            const map = { xhs: '小红书', douyin: '抖音', video: '视频号', weibo: '微博' };
+            return map[platform] || platform || '-';
+        }
+
+        function resetCreatorAccountForm() {
+            document.getElementById('creatorAccountId').value = '';
+            document.getElementById('creatorAccountPlatform').value = 'xhs';
+            document.getElementById('creatorOwnerName').value = '';
+            document.getElementById('creatorOwnerPhone').value = '';
+            document.getElementById('creatorAccountHandle').value = '';
+            document.getElementById('creatorDisplayName').value = '';
+            document.getElementById('creatorProfileUrl').value = '';
+            document.getElementById('creatorFollowerCount').value = '0';
+            document.getElementById('creatorNotes').value = '';
+        }
+
+        function ensureSnapshotDate() {
+            const input = document.getElementById('creatorSnapshotDate');
+            if (input && !input.value) {
+                input.value = new Date().toISOString().slice(0, 10);
+            }
+        }
+
+        function clearCreatorFilters() {
+            document.getElementById('creatorPlatformFilter').value = '';
+            document.getElementById('creatorPhoneFilter').value = '';
+            document.getElementById('creatorKeywordFilter').value = '';
+            document.getElementById('creatorViralOnlyFilter').checked = false;
+            loadCreatorAccounts();
+        }
+
+        async function loadCreatorAccounts() {
+            const params = new URLSearchParams();
+            const platform = document.getElementById('creatorPlatformFilter').value;
+            const phone = document.getElementById('creatorPhoneFilter').value.trim();
+            const keyword = document.getElementById('creatorKeywordFilter').value.trim();
+            const viralOnly = document.getElementById('creatorViralOnlyFilter').checked;
+            if (platform) params.set('platform', platform);
+            if (phone) params.set('phone', phone);
+            if (keyword) params.set('keyword', keyword);
+            if (viralOnly) params.set('viral_only', '1');
+            const res = await fetch(`/api/creator_accounts?${params.toString()}`);
+            const result = await res.json();
+            const body = document.getElementById('creatorAccountTableBody');
+            const items = result.items || [];
+            creatorAccountCache = Object.fromEntries(items.map((item) => [item.id, item]));
+            body.innerHTML = items.map((item) => `
+                <tr>
+                    <td>${creatorPlatformLabel(item.platform)}</td>
+                    <td>
+                        <strong>${item.owner_name || '-'}</strong>
+                        <div class="text-muted small">${item.display_name || item.account_handle || '-'}</div>
+                        <div class="text-muted small">${item.account_handle || '-'}</div>
+                    </td>
+                    <td>${item.follower_count || 0}</td>
+                    <td>${item.post_count || 0}</td>
+                    <td>${item.viral_post_count || 0}</td>
+                    <td>${item.total_views || 0}</td>
+                    <td>${item.total_interactions || 0}</td>
+                    <td>${item.best_post ? item.best_post.title : '暂无'}</td>
+                    <td>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectCreatorAccount(${item.id})">查看</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="editCreatorAccount(${item.id})">编辑</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="9" class="text-muted text-center">暂无账号数据</td></tr>';
+
+            if (items.length && (!selectedCreatorAccountId || !creatorAccountCache[selectedCreatorAccountId])) {
+                selectCreatorAccount(items[0].id);
+            } else if (items.length && selectedCreatorAccountId && creatorAccountCache[selectedCreatorAccountId]) {
+                selectCreatorAccount(selectedCreatorAccountId);
+            } else if (!items.length) {
+                selectedCreatorAccountId = null;
+                document.getElementById('creatorAccountDetail').textContent = '请选择左侧账号查看详情';
+                document.getElementById('creatorPostTableBody').innerHTML = '<tr><td colspan="9" class="text-muted text-center">暂无笔记数据</td></tr>';
+                document.getElementById('creatorSnapshotTableBody').innerHTML = '<tr><td colspan="5" class="text-muted text-center">暂无快照数据</td></tr>';
+            }
+        }
+
+        function exportCreatorAccounts() {
+            const params = new URLSearchParams();
+            const platform = document.getElementById('creatorPlatformFilter').value;
+            const phone = document.getElementById('creatorPhoneFilter').value.trim();
+            const keyword = document.getElementById('creatorKeywordFilter').value.trim();
+            const viralOnly = document.getElementById('creatorViralOnlyFilter').checked;
+            if (platform) params.set('platform', platform);
+            if (phone) params.set('phone', phone);
+            if (keyword) params.set('keyword', keyword);
+            if (viralOnly) params.set('viral_only', '1');
+            window.open(`/api/creator_accounts/export?${params.toString()}`, '_blank');
+        }
+
+        function fillCreatorAccountForm(item) {
+            if (!item) return;
+            document.getElementById('creatorAccountId').value = item.id || '';
+            document.getElementById('creatorAccountPlatform').value = item.platform || 'xhs';
+            document.getElementById('creatorOwnerName').value = item.owner_name || '';
+            document.getElementById('creatorOwnerPhone').value = item.owner_phone || '';
+            document.getElementById('creatorAccountHandle').value = item.account_handle || '';
+            document.getElementById('creatorDisplayName').value = item.display_name || '';
+            document.getElementById('creatorProfileUrl').value = item.profile_url || '';
+            document.getElementById('creatorFollowerCount').value = item.follower_count || 0;
+            document.getElementById('creatorNotes').value = item.notes || '';
+        }
+
+        async function editCreatorAccount(accountId) {
+            const item = creatorAccountCache[accountId];
+            if (item) fillCreatorAccountForm(item);
+        }
+
+        async function saveCreatorAccount() {
+            const payload = {
+                id: document.getElementById('creatorAccountId').value || undefined,
+                platform: document.getElementById('creatorAccountPlatform').value,
+                owner_name: document.getElementById('creatorOwnerName').value.trim(),
+                owner_phone: document.getElementById('creatorOwnerPhone').value.trim(),
+                account_handle: document.getElementById('creatorAccountHandle').value.trim(),
+                display_name: document.getElementById('creatorDisplayName').value.trim(),
+                profile_url: document.getElementById('creatorProfileUrl').value.trim(),
+                follower_count: parseInt(document.getElementById('creatorFollowerCount').value || '0', 10),
+                notes: document.getElementById('creatorNotes').value.trim()
+            };
+            const res = await fetch('/api/creator_accounts', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const result = await res.json();
+            document.getElementById('creatorAccountMsg').textContent = result.message || '已处理';
+            if (result.success) {
+                selectedCreatorAccountId = result.item.id;
+                resetCreatorAccountForm();
+                loadCreatorAccounts();
+            }
+        }
+
+        async function selectCreatorAccount(accountId) {
+            selectedCreatorAccountId = accountId;
+            const params = new URLSearchParams();
+            const dateFrom = document.getElementById('creatorDateFrom').value;
+            const dateTo = document.getElementById('creatorDateTo').value;
+            if (dateFrom) params.set('date_from', dateFrom);
+            if (dateTo) params.set('date_to', dateTo);
+            const [postRes, snapshotRes] = await Promise.all([
+                fetch(`/api/creator_accounts/${accountId}/posts?${params.toString()}`),
+                fetch(`/api/creator_accounts/${accountId}/snapshots?${params.toString()}`)
+            ]);
+            const postData = await postRes.json();
+            const snapshotData = await snapshotRes.json();
+            const account = postData.account || snapshotData.account;
+            if (!account) return;
+            const posts = postData.items || [];
+            const filteredPostCount = posts.length;
+            const filteredViralCount = posts.filter((item) => item.is_viral).length;
+            const filteredViews = posts.reduce((sum, item) => sum + (item.views || 0), 0);
+            const filteredInteractions = posts.reduce((sum, item) => sum + (item.interactions || 0), 0);
+            const filteredBestPost = posts.length ? [...posts].sort((a, b) => (b.views || 0) - (a.views || 0) || (b.interactions || 0) - (a.interactions || 0))[0] : null;
+
+            fillCreatorAccountForm(account);
+            document.getElementById('creatorAccountDetail').innerHTML = `
+                <div><strong>${account.owner_name || '-'}</strong> · ${creatorPlatformLabel(account.platform)}</div>
+                <div class="text-muted small mt-1">账号：${account.display_name || account.account_handle || '-'} ｜ 粉丝：${account.follower_count || 0}</div>
+                <div class="text-muted small">发文数：${filteredPostCount} ｜ 爆款数：${filteredViralCount} ｜ 总阅读：${filteredViews} ｜ 总互动：${filteredInteractions}</div>
+                <div class="text-muted small">最佳笔记：${filteredBestPost ? filteredBestPost.title : '暂无'} ｜ 上次同步：${account.last_synced_at || '-'}</div>
+                <div class="text-muted small">统计区间：${dateFrom || '-'} ~ ${dateTo || '-'}</div>
+            `;
+
+            document.getElementById('creatorPostTableBody').innerHTML = posts.map((item) => `
+                <tr>
+                    <td>${item.post_url ? `<a href="${item.post_url}" target="_blank">${item.title}</a>` : item.title}</td>
+                    <td>${item.topic_title || '-'}</td>
+                    <td>${item.publish_time || '-'}</td>
+                    <td>${item.views || 0}</td>
+                    <td>${item.exposures || 0}</td>
+                    <td>${item.interactions || 0}</td>
+                    <td>${item.follower_delta || 0}</td>
+                    <td>${item.is_viral ? '<span class="badge bg-danger">爆款</span>' : '<span class="badge bg-secondary">普通</span>'}</td>
+                    <td><button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleCreatorPostViral(${item.id}, ${item.is_viral ? 'false' : 'true'})">${item.is_viral ? '改普通' : '标爆款'}</button></td>
+                </tr>
+            `).join('') || '<tr><td colspan="9" class="text-muted text-center">暂无笔记数据</td></tr>';
+
+            const snapshots = snapshotData.items || [];
+            document.getElementById('creatorSnapshotTableBody').innerHTML = snapshots.map((item) => `
+                <tr>
+                    <td>${item.snapshot_date || '-'}</td>
+                    <td>${item.follower_count || 0}</td>
+                    <td>${item.post_count || 0}</td>
+                    <td>${item.total_views || 0}</td>
+                    <td>${item.total_interactions || 0}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="5" class="text-muted text-center">暂无快照数据</td></tr>';
+
+            document.getElementById('creatorSnapshotFollower').value = account.follower_count || 0;
+            document.getElementById('creatorSnapshotPostCount').value = account.post_count || 0;
+            document.getElementById('creatorSnapshotViews').value = account.total_views || 0;
+            document.getElementById('creatorSnapshotInteractions').value = account.total_interactions || 0;
+            ensureSnapshotDate();
+        }
+
+        async function saveCreatorPost() {
+            if (!selectedCreatorAccountId) {
+                document.getElementById('creatorPostMsg').textContent = '请先选择账号';
+                return;
+            }
+            const payload = {
+                title: document.getElementById('creatorPostTitle').value.trim(),
+                post_url: document.getElementById('creatorPostUrl').value.trim(),
+                publish_time: document.getElementById('creatorPostPublishTime').value.trim(),
+                topic_title: document.getElementById('creatorPostTopicTitle').value.trim(),
+                follower_delta: parseInt(document.getElementById('creatorPostFollowerDelta').value || '0', 10),
+                views: parseInt(document.getElementById('creatorPostViews').value || '0', 10),
+                exposures: parseInt(document.getElementById('creatorPostExposures').value || '0', 10),
+                likes: parseInt(document.getElementById('creatorPostLikes').value || '0', 10),
+                favorites: parseInt(document.getElementById('creatorPostFavorites').value || '0', 10),
+                comments: parseInt(document.getElementById('creatorPostComments').value || '0', 10)
+            };
+            const res = await fetch(`/api/creator_accounts/${selectedCreatorAccountId}/posts`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const result = await res.json();
+            document.getElementById('creatorPostMsg').textContent = result.message || '已处理';
+            if (result.success) {
+                selectCreatorAccount(selectedCreatorAccountId);
+            }
+        }
+
+        function reloadSelectedCreatorAccount() {
+            if (selectedCreatorAccountId) {
+                selectCreatorAccount(selectedCreatorAccountId);
+            }
+        }
+
+        function exportSelectedCreatorAccount() {
+            if (!selectedCreatorAccountId) {
+                document.getElementById('creatorPostMsg').textContent = '请先选择账号';
+                return;
+            }
+            const params = new URLSearchParams();
+            const dateFrom = document.getElementById('creatorDateFrom').value;
+            const dateTo = document.getElementById('creatorDateTo').value;
+            if (dateFrom) params.set('date_from', dateFrom);
+            if (dateTo) params.set('date_to', dateTo);
+            window.open(`/api/creator_accounts/${selectedCreatorAccountId}/export?${params.toString()}`, '_blank');
+        }
+
+        async function toggleCreatorPostViral(postId, nextValue) {
+            if (!selectedCreatorAccountId) return;
+            const res = await fetch(`/api/creator_accounts/${selectedCreatorAccountId}/posts/${postId}/viral`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ is_viral: nextValue === 'true' })
+            });
+            const result = await res.json();
+            document.getElementById('creatorPostMsg').textContent = result.message || '已处理';
+            if (result.success) {
+                selectCreatorAccount(selectedCreatorAccountId);
+                loadCreatorAccounts();
+            }
+        }
+
+        async function saveCreatorSnapshot() {
+            if (!selectedCreatorAccountId) {
+                document.getElementById('creatorSnapshotMsg').textContent = '请先选择账号';
+                return;
+            }
+            const payload = {
+                snapshot_date: document.getElementById('creatorSnapshotDate').value,
+                follower_count: parseInt(document.getElementById('creatorSnapshotFollower').value || '0', 10),
+                post_count: parseInt(document.getElementById('creatorSnapshotPostCount').value || '0', 10),
+                total_views: parseInt(document.getElementById('creatorSnapshotViews').value || '0', 10),
+                total_interactions: parseInt(document.getElementById('creatorSnapshotInteractions').value || '0', 10)
+            };
+            const res = await fetch(`/api/creator_accounts/${selectedCreatorAccountId}/snapshots`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const result = await res.json();
+            document.getElementById('creatorSnapshotMsg').textContent = result.message || '已处理';
+            if (result.success) {
+                selectCreatorAccount(selectedCreatorAccountId);
+            }
+        }
+
+        function clearLogFilters() {
+            document.getElementById('logActionFilter').value = '';
+            document.getElementById('logTargetTypeFilter').value = '';
+            document.getElementById('logKeywordFilter').value = '';
+            document.getElementById('logLimitFilter').value = '50';
+            loadOperationLogs();
+        }
+
+        async function loadOperationLogs() {
+            const params = new URLSearchParams();
+            const action = document.getElementById('logActionFilter').value.trim();
+            const targetType = document.getElementById('logTargetTypeFilter').value.trim();
+            const keyword = document.getElementById('logKeywordFilter').value.trim();
+            const limit = document.getElementById('logLimitFilter').value.trim();
+            if (action) params.set('action', action);
+            if (targetType) params.set('target_type', targetType);
+            if (keyword) params.set('keyword', keyword);
+            if (limit) params.set('limit', limit);
+            const res = await fetch(`/api/operation_logs?${params.toString()}`);
+            const result = await res.json();
+            const body = document.getElementById('operationLogTableBody');
+            body.innerHTML = (result.items || []).map((item) => `
+                <tr>
+                    <td>${item.created_at || '-'}</td>
+                    <td>${item.actor || '-'}</td>
+                    <td>${item.action || '-'}</td>
+                    <td>${item.target_type || '-'}${item.target_id ? ` #${item.target_id}` : ''}</td>
+                    <td>${item.message || '-'}</td>
+                    <td><details><summary>查看</summary><pre style="white-space: pre-wrap; word-break: break-word; font-size: 12px;">${item.detail || '-'}</pre></details></td>
+                </tr>
+            `).join('') || '<tr><td colspan="6" class="text-muted text-center">暂无日志数据</td></tr>';
+        }
+
+        ensureSnapshotDate();
+    </script>
+</body>
+</html>

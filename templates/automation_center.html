@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自动化中心 - 福瑞医科小红书任务</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --accent: #ef4e45;
+            --accent-dark: #cf3f37;
+            --paper: #fff9f6;
+            --line: #f0ddd7;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+            background:
+                radial-gradient(circle at top right, rgba(239, 78, 69, 0.10), transparent 28%),
+                linear-gradient(180deg, #fff8f5 0%, #fffdfc 100%);
+            color: #22242b;
+        }
+
+        .navbar {
+            background: linear-gradient(135deg, #ff7a59 0%, #ef4e45 55%, #d43c34 100%);
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.93);
+            border: 1px solid rgba(239, 78, 69, 0.12);
+            border-radius: 22px;
+            box-shadow: 0 18px 44px rgba(209, 92, 69, 0.10);
+        }
+
+        .metric {
+            border-radius: 18px;
+            border: 1px solid rgba(239, 78, 69, 0.12);
+            padding: 18px;
+            background: linear-gradient(180deg, #fff 0%, #fff8f5 100%);
+            height: 100%;
+        }
+
+        .metric-number {
+            color: var(--accent);
+            font-size: 30px;
+            line-height: 1;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 14px;
+        }
+
+        .subtle {
+            color: #717784;
+            font-size: 13px;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+        }
+
+        .data-table th {
+            font-weight: 600;
+            color: #555c68;
+            background: #fff5f1;
+            border-bottom: 1px solid var(--line);
+            white-space: nowrap;
+        }
+
+        .data-table td {
+            vertical-align: top;
+            border-bottom: 1px solid #f4ebe7;
+            font-size: 14px;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: #fff4f0;
+            color: var(--accent-dark);
+            font-size: 13px;
+            margin: 0 8px 8px 0;
+            border: 1px solid rgba(239, 78, 69, 0.10);
+        }
+
+        .btn-accent {
+            background: var(--accent);
+            color: white;
+            border: none;
+        }
+
+        .btn-accent:hover {
+            background: var(--accent-dark);
+            color: white;
+        }
+
+        textarea.form-control,
+        input.form-control,
+        select.form-select {
+            border-radius: 14px;
+            border-color: #ecd8d1;
+        }
+
+        details summary {
+            cursor: pointer;
+            color: var(--accent-dark);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding-left: 12px;
+                padding-right: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="/">← 返回首页</a>
+            <ul class="navbar-nav ms-auto d-flex flex-row flex-wrap">
+                <li class="nav-item"><a class="nav-link" href="/data_analysis">数据分析</a></li>
+                <li class="nav-item"><a class="nav-link" href="/admin">后台</a></li>
+                <li class="nav-item"><a class="nav-link" href="/admin/logout">退出</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container pb-5">
+        <div class="panel p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                <div>
+                    <div class="section-title mb-1">自动化中心</div>
+                    <div class="subtle">这版先把语料库、热点采集池、80话题工厂和素材生产底座搭起来，默认流程为“生成候选话题 → 人工审核 → 发布到活动”。</div>
+                </div>
+                <div class="subtle">建议流程：导入热点 → 积累语料 → 生成80话题 → 发布到活动</div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4" id="metricWrap">
+            <div class="col-md-3">
+                <div class="metric">
+                    <div class="metric-number" id="metricCorpus">0</div>
+                    <div class="subtle">语料条数</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric">
+                    <div class="metric-number" id="metricTrends">0</div>
+                    <div class="subtle">热点笔记池</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric">
+                    <div class="metric-number" id="metricIdeas">0</div>
+                    <div class="subtle">候选话题数</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric">
+                    <div class="metric-number" id="metricPublishedIdeas">0</div>
+                    <div class="subtle">已发布到活动</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel p-4 mb-4">
+            <div class="section-title">默认热点词池</div>
+            <div id="defaultKeywordWrap"></div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-6">
+                <div class="panel p-4 h-100">
+                    <div class="section-title">热点导入</div>
+                    <div class="subtle mb-3">支持两种格式：1. JSON数组；2. 每行一条，按“关键词|标题|链接|点赞|收藏|评论|传播量|作者|摘要”粘贴。</div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label subtle">来源平台</label>
+                            <select id="trendSourcePlatform" class="form-select">
+                                <option value="小红书">小红书</option>
+                                <option value="千瓜数据">千瓜数据</option>
+                                <option value="抖音">抖音</option>
+                                <option value="手工整理">手工整理</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label subtle">来源渠道</label>
+                            <input id="trendSourceChannel" class="form-control" value="手动导入">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label subtle">批次名</label>
+                            <input id="trendBatchName" class="form-control" placeholder="例如：2026-03-27 肝病热点">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label subtle">粘贴热点数据</label>
+                        <textarea id="trendPayload" rows="10" class="form-control" placeholder='[{"keyword":"脂肪肝","title":"脂肪肝体检后别只看转氨酶","likes":320,"favorites":118,"comments":26,"views":6800}]'></textarea>
+                    </div>
+
+                    <button class="btn btn-accent" onclick="importTrends()">导入热点</button>
+                    <div id="trendImportMsg" class="subtle mt-2"></div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="panel p-4 h-100">
+                    <div class="section-title">语料库新增</div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label subtle">语料标题</label>
+                            <input id="corpusTitle" class="form-control" placeholder="例如：脂肪肝误区卡片模板">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label subtle">分类</label>
+                            <select id="corpusCategory" class="form-select">
+                                <option value="爆款拆解">爆款拆解</option>
+                                <option value="医学科普">医学科普</option>
+                                <option value="合规表达">合规表达</option>
+                                <option value="产品卖点">产品卖点</option>
+                                <option value="封面模板">封面模板</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label subtle">来源</label>
+                            <input id="corpusSource" class="form-control" value="手动录入">
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label subtle">标签</label>
+                            <input id="corpusTags" class="form-control" placeholder="例如：脂肪肝,知识卡片,合规">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label subtle">语料内容</label>
+                        <textarea id="corpusContent" rows="10" class="form-control" placeholder="可粘贴爆款拆解、标准表达、封面结构、选题观察等内容。"></textarea>
+                    </div>
+                    <button class="btn btn-accent" onclick="saveCorpus()">保存语料</button>
+                    <div id="corpusMsg" class="subtle mt-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel p-4 my-4">
+            <div class="section-title">80 话题工厂</div>
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label subtle">目标活动</label>
+                    <select id="ideaActivityId" class="form-select">
+                        {% for activity in activities %}
+                        <option value="{{ activity.id }}">{{ activity.name }} - {{ activity.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label subtle">生成数量</label>
+                    <input id="ideaCount" type="number" min="1" max="120" value="80" class="form-control">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label subtle">默认名额</label>
+                    <input id="ideaQuota" type="number" min="1" max="500" value="{{ default_topic_quota or 30 }}" class="form-control">
+                </div>
+                <div class="col-md-4 d-flex gap-2">
+                    <button class="btn btn-accent" onclick="generateIdeas()">生成话题</button>
+                    <button class="btn btn-outline-danger" onclick="loadIdeas()">刷新话题池</button>
+                </div>
+            </div>
+            <div id="ideaMsg" class="subtle mt-2"></div>
+        </div>
+
+        <div class="panel p-4 mb-4">
+            <div class="section-title">热点笔记池</div>
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label subtle">来源平台筛选</label>
+                    <select id="trendPlatformFilter" class="form-select" onchange="loadTrends()">
+                        <option value="">全部平台</option>
+                        <option value="小红书">小红书</option>
+                        <option value="千瓜数据">千瓜数据</option>
+                        <option value="抖音">抖音</option>
+                        <option value="手工整理">手工整理</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label subtle">内容池筛选</label>
+                    <select id="trendPoolFilter" class="form-select" onchange="loadTrends()">
+                        <option value="">全部</option>
+                        <option value="reserve">储备池</option>
+                        <option value="candidate">候选池</option>
+                        <option value="archived">归档池</option>
+                    </select>
+                </div>
+                <div class="col-md-6 d-flex align-items-end">
+                    <button class="btn btn-outline-primary me-2" onclick="promoteReserveTrends()">储备热点推入候选池</button>
+                    <button class="btn btn-outline-danger" onclick="loadTrends()">刷新热点池</button>
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table class="table data-table align-middle">
+                    <thead>
+                        <tr>
+                            <th>来源</th>
+                            <th>关键词</th>
+                            <th>标题</th>
+                            <th>状态</th>
+                            <th>互动</th>
+                            <th>传播量</th>
+                            <th>作者</th>
+                            <th>批次</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trendTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="panel p-4 mb-4">
+            <div class="section-title">语料库</div>
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label subtle">内容池筛选</label>
+                    <select id="corpusPoolFilter" class="form-select" onchange="loadCorpus()">
+                        <option value="">全部</option>
+                        <option value="reserve">储备池</option>
+                        <option value="candidate">候选池</option>
+                        <option value="archived">归档池</option>
+                    </select>
+                </div>
+                <div class="col-md-9 d-flex align-items-end">
+                    <button class="btn btn-outline-primary me-2" onclick="promoteReserveCorpus()">储备语料推入候选池</button>
+                    <button class="btn btn-outline-danger" onclick="loadCorpus()">刷新语料库</button>
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table class="table data-table align-middle">
+                    <thead>
+                        <tr>
+                            <th>分类</th>
+                            <th>标题</th>
+                            <th>状态</th>
+                            <th>标签</th>
+                            <th>内容</th>
+                            <th>使用次数</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpusTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="panel p-4">
+            <div class="section-title">候选话题池</div>
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label subtle">状态筛选</label>
+                    <select id="ideaStatusFilter" class="form-select" onchange="loadIdeas()">
+                        <option value="">全部</option>
+                        <option value="pending_review">待审核</option>
+                        <option value="approved">已通过</option>
+                        <option value="rejected">已驳回</option>
+                        <option value="published">已发布</option>
+                        <option value="archived">已归档</option>
+                    </select>
+                </div>
+                <div class="col-md-9 d-flex align-items-end gap-2">
+                    <button class="btn btn-outline-primary" onclick="publishSelectedIdeas()">批量发布选中话题</button>
+                    <button class="btn btn-outline-danger" onclick="loadIdeas()">刷新候选话题</button>
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table class="table data-table align-middle">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="selectAllIdeas" onchange="toggleAllIdeas(this.checked)"></th>
+                            <th>状态</th>
+                            <th>话题</th>
+                            <th>类型 / 人设</th>
+                            <th>名额</th>
+                            <th>热度</th>
+                            <th>软植入</th>
+                            <th>配图建议</th>
+                            <th>文案提示词</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ideaTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function escapeHtml(text) {
+            return (text || '').replace(/[&<>"']/g, (char) => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            }[char]));
+        }
+
+        function ideaStatusClass(status) {
+            const map = {
+                pending_review: 'bg-warning text-dark',
+                approved: 'bg-success',
+                rejected: 'bg-secondary',
+                published: 'bg-danger',
+                archived: 'bg-dark',
+                draft: 'bg-light text-dark'
+            };
+            return map[status] || 'bg-light text-dark';
+        }
+
+        function poolStatusClass(status) {
+            const map = {
+                reserve: 'bg-info',
+                candidate: 'bg-warning text-dark',
+                formal: 'bg-danger',
+                archived: 'bg-dark'
+            };
+            return map[status] || 'bg-light text-dark';
+        }
+
+        async function loadOverview() {
+            const res = await fetch('/api/automation/overview');
+            const data = await res.json();
+            if (!data.success) return;
+            document.getElementById('metricCorpus').textContent = data.counts.corpus_entries || 0;
+            document.getElementById('metricTrends').textContent = data.counts.trend_notes || 0;
+            document.getElementById('metricIdeas').textContent = data.counts.topic_ideas || 0;
+            document.getElementById('metricPublishedIdeas').textContent = data.counts.published_ideas || 0;
+            document.getElementById('defaultKeywordWrap').innerHTML = (data.default_keywords || []).map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join('');
+        }
+
+        async function loadTrends() {
+            const params = new URLSearchParams();
+            const sourcePlatform = document.getElementById('trendPlatformFilter')?.value;
+            const poolStatus = document.getElementById('trendPoolFilter')?.value;
+            if (sourcePlatform) params.set('source_platform', sourcePlatform);
+            if (poolStatus) params.set('pool_status', poolStatus);
+            const res = await fetch(`/api/trends?${params.toString()}`);
+            const data = await res.json();
+            const body = document.getElementById('trendTableBody');
+            body.innerHTML = (data.items || []).map((item) => `
+                <tr>
+                    <td>${escapeHtml(item.source_platform)}<div class="subtle">${escapeHtml(item.source_channel)}</div></td>
+                    <td>${escapeHtml(item.keyword || '-')}</td>
+                    <td>
+                        ${item.link ? `<a href="${escapeHtml(item.link)}" target="_blank">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)}
+                        <div class="subtle">${escapeHtml((item.summary || '').slice(0, 60))}</div>
+                    </td>
+                    <td><span class="badge ${poolStatusClass(item.pool_status)}">${escapeHtml(item.pool_status_label || item.pool_status || '储备池')}</span></td>
+                    <td>${item.interactions || 0}</td>
+                    <td>${item.views || 0}</td>
+                    <td>${escapeHtml(item.author || '-')}</td>
+                    <td>${escapeHtml(item.import_batch || '-')}</td>
+                    <td>
+                        <div class="d-flex flex-column gap-2">
+                            ${item.pool_status === 'reserve' ? `<button class="btn btn-sm btn-outline-primary" onclick="changeTrendPoolStatus(${item.id}, 'candidate')">推入候选</button>` : ''}
+                            ${item.pool_status === 'candidate' ? `<button class="btn btn-sm btn-outline-info" onclick="changeTrendPoolStatus(${item.id}, 'reserve')">退回储备</button>` : ''}
+                            ${item.pool_status !== 'archived' ? `<button class="btn btn-sm btn-outline-dark" onclick="changeTrendPoolStatus(${item.id}, 'archived')">归档</button>` : `<button class="btn btn-sm btn-outline-info" onclick="changeTrendPoolStatus(${item.id}, 'reserve')">恢复储备</button>`}
+                        </div>
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="9" class="text-center text-muted">暂无热点数据</td></tr>';
+        }
+
+        async function loadCorpus() {
+            const params = new URLSearchParams();
+            const poolStatus = document.getElementById('corpusPoolFilter')?.value;
+            if (poolStatus) params.set('pool_status', poolStatus);
+            const res = await fetch(`/api/corpus?${params.toString()}`);
+            const data = await res.json();
+            const body = document.getElementById('corpusTableBody');
+            body.innerHTML = (data.items || []).map((item) => `
+                <tr>
+                    <td>${escapeHtml(item.category)}</td>
+                    <td>${escapeHtml(item.title)}<div class="subtle">${escapeHtml(item.source || '-')}</div></td>
+                    <td><span class="badge ${poolStatusClass(item.pool_status)}">${escapeHtml(item.pool_status_label || item.pool_status || '储备池')}</span></td>
+                    <td>${escapeHtml(item.tags || '-')}</td>
+                    <td>${escapeHtml((item.content || '').slice(0, 120))}</td>
+                    <td>${item.usage_count || 0}</td>
+                    <td>
+                        ${item.pool_status === 'reserve' ? `<button class="btn btn-sm btn-outline-primary" onclick="changeCorpusPoolStatus(${item.id}, 'candidate')">推入候选</button>` : ''}
+                        ${item.pool_status === 'candidate' ? `<button class="btn btn-sm btn-outline-info" onclick="changeCorpusPoolStatus(${item.id}, 'reserve')">退回储备</button>` : ''}
+                        ${item.pool_status !== 'archived' ? `<button class="btn btn-sm btn-outline-dark" onclick="changeCorpusPoolStatus(${item.id}, 'archived')">归档</button>` : `<button class="btn btn-sm btn-outline-info" onclick="changeCorpusPoolStatus(${item.id}, 'reserve')">恢复储备</button>`}
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="7" class="text-center text-muted">暂无语料</td></tr>';
+        }
+
+        async function loadIdeas() {
+            const params = new URLSearchParams();
+            const status = document.getElementById('ideaStatusFilter')?.value;
+            if (status) params.set('status', status);
+            const res = await fetch(`/api/topic_ideas?${params.toString()}`);
+            const data = await res.json();
+            const body = document.getElementById('ideaTableBody');
+            const selectAll = document.getElementById('selectAllIdeas');
+            if (selectAll) selectAll.checked = false;
+            body.innerHTML = (data.items || []).map((item) => `
+                <tr>
+                    <td><input type="checkbox" class="idea-select" value="${item.id}" ${item.status === 'approved' ? '' : 'disabled'}></td>
+                    <td>
+                        <span class="badge ${ideaStatusClass(item.status)}">${escapeHtml(item.status_label || item.status)}</span>
+                        ${item.review_note ? `<div class="subtle mt-2">${escapeHtml(item.review_note)}</div>` : ''}
+                    </td>
+                    <td>
+                        <strong>${escapeHtml(item.topic_title)}</strong>
+                        <div class="subtle">${escapeHtml(item.keywords || '')}</div>
+                        <div class="subtle">${escapeHtml((item.angle || '').slice(0, 70))}</div>
+                    </td>
+                    <td>${escapeHtml(item.content_type || '-')}<div class="subtle">${escapeHtml(item.persona || '-')}</div></td>
+                    <td>${item.quota || 30}人</td>
+                    <td>${item.hot_value || 0}</td>
+                    <td>${escapeHtml(item.soft_insertion || '-')}</td>
+                    <td>${escapeHtml(item.asset_brief || '-')}</td>
+                    <td>
+                        <details>
+                            <summary>查看提示词</summary>
+                            <div class="subtle mt-2" style="white-space: pre-wrap;">${escapeHtml(item.copy_prompt || '')}</div>
+                        </details>
+                    </td>
+                    <td>
+                        <div class="d-flex flex-column gap-2">
+                            ${(item.status === 'pending_review' || item.status === 'rejected' || item.status === 'draft') ? `
+                                <button class="btn btn-sm btn-outline-primary" onclick="changeIdeaQuota(${item.id}, ${item.quota || 30})">调整名额</button>
+                                <button class="btn btn-sm btn-outline-success" onclick="reviewIdea(${item.id}, 'approve')">通过审核</button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="reviewIdea(${item.id}, 'reject')">驳回</button>
+                            ` : ''}
+                            ${item.status === 'approved' ? `
+                                <button class="btn btn-sm btn-outline-primary" onclick="changeIdeaQuota(${item.id}, ${item.quota || 30})">调整名额</button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="publishIdea(${item.id})">发布到活动</button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="reviewIdea(${item.id}, 'reject')">改为驳回</button>
+                            ` : ''}
+                            ${item.status === 'published' ? `
+                                <button class="btn btn-sm btn-outline-danger" disabled>已发布</button>
+                                <button class="btn btn-sm btn-outline-dark" onclick="reviewIdea(${item.id}, 'archive')">归档</button>
+                            ` : ''}
+                            ${item.status === 'archived' ? `
+                                <button class="btn btn-sm btn-outline-dark" disabled>已归档</button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="reviewIdea(${item.id}, 'reset')">退回待审核</button>
+                            ` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="10" class="text-center text-muted">暂无候选话题</td></tr>';
+        }
+
+        async function importTrends() {
+            const payload = {
+                source_platform: document.getElementById('trendSourcePlatform').value,
+                source_channel: document.getElementById('trendSourceChannel').value,
+                batch_name: document.getElementById('trendBatchName').value,
+                payload: document.getElementById('trendPayload').value
+            };
+            const res = await fetch('/api/trends/import', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            document.getElementById('trendImportMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                document.getElementById('trendPayload').value = '';
+                loadOverview();
+                loadTrends();
+            }
+        }
+
+        async function saveCorpus() {
+            const payload = {
+                title: document.getElementById('corpusTitle').value,
+                category: document.getElementById('corpusCategory').value,
+                source: document.getElementById('corpusSource').value,
+                tags: document.getElementById('corpusTags').value,
+                content: document.getElementById('corpusContent').value
+            };
+            const res = await fetch('/api/corpus', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            document.getElementById('corpusMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                document.getElementById('corpusTitle').value = '';
+                document.getElementById('corpusTags').value = '';
+                document.getElementById('corpusContent').value = '';
+                loadOverview();
+                loadCorpus();
+            }
+        }
+
+        async function generateIdeas() {
+            const payload = {
+                activity_id: parseInt(document.getElementById('ideaActivityId').value, 10),
+                count: parseInt(document.getElementById('ideaCount').value, 10),
+                quota: parseInt(document.getElementById('ideaQuota').value, 10)
+            };
+            const res = await fetch('/api/topic_ideas/generate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            document.getElementById('ideaMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadOverview();
+                loadIdeas();
+            }
+        }
+
+        async function publishIdea(id) {
+            const payload = {
+                activity_id: parseInt(document.getElementById('ideaActivityId').value, 10),
+                quota: parseInt(document.getElementById('ideaQuota').value, 10)
+            };
+            const res = await fetch(`/api/topic_ideas/${id}/publish`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.message) {
+                document.getElementById('ideaMsg').textContent = data.message;
+            }
+            if (data.success) {
+                loadOverview();
+                loadIdeas();
+            }
+        }
+
+        function toggleAllIdeas(checked) {
+            document.querySelectorAll('.idea-select:not([disabled])').forEach((el) => {
+                el.checked = checked;
+            });
+        }
+
+        function selectedIdeaIds() {
+            return Array.from(document.querySelectorAll('.idea-select:checked')).map((el) => parseInt(el.value, 10)).filter(Boolean);
+        }
+
+        async function publishSelectedIdeas() {
+            const ideaIds = selectedIdeaIds();
+            if (!ideaIds.length) {
+                document.getElementById('ideaMsg').textContent = '请先选择已审核通过的话题';
+                return;
+            }
+            const payload = {
+                activity_id: parseInt(document.getElementById('ideaActivityId').value, 10),
+                idea_ids: ideaIds
+            };
+            const res = await fetch('/api/topic_ideas/publish_batch', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            document.getElementById('ideaMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadOverview();
+                loadIdeas();
+            }
+        }
+
+        async function changeIdeaQuota(id, currentQuota) {
+            const nextQuota = window.prompt('请输入该候选话题的名额', currentQuota || 30);
+            if (nextQuota === null) return;
+            const res = await fetch(`/api/topic_ideas/${id}/quota`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ quota: parseInt(nextQuota, 10) })
+            });
+            const data = await res.json();
+            document.getElementById('ideaMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadIdeas();
+            }
+        }
+
+        async function reviewIdea(id, action) {
+            const res = await fetch(`/api/topic_ideas/${id}/review`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ action })
+            });
+            const data = await res.json();
+            document.getElementById('ideaMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadOverview();
+                loadIdeas();
+            }
+        }
+
+        async function changeTrendPoolStatus(id, poolStatus) {
+            const res = await fetch(`/api/trends/${id}/pool_status`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ pool_status: poolStatus })
+            });
+            const data = await res.json();
+            document.getElementById('trendImportMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadTrends();
+            }
+        }
+
+        async function promoteReserveTrends() {
+            const sourcePlatform = document.getElementById('trendPlatformFilter')?.value || '';
+            const res = await fetch('/api/trends/promote_reserve', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ source_platform: sourcePlatform })
+            });
+            const data = await res.json();
+            document.getElementById('trendImportMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadOverview();
+                loadTrends();
+            }
+        }
+
+        async function changeCorpusPoolStatus(id, poolStatus) {
+            const res = await fetch(`/api/corpus/${id}/pool_status`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ pool_status: poolStatus })
+            });
+            const data = await res.json();
+            document.getElementById('corpusMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadCorpus();
+            }
+        }
+
+        async function promoteReserveCorpus() {
+            const res = await fetch('/api/corpus/promote_reserve', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({})
+            });
+            const data = await res.json();
+            document.getElementById('corpusMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadOverview();
+                loadCorpus();
+            }
+        }
+
+        loadOverview();
+        loadTrends();
+        loadCorpus();
+        loadIdeas();
+    </script>
+</body>
+</html>

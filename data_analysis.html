@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据分析 - 福瑞医科小红书任务</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; background: #f5f5f5; }
+        .navbar { background: linear-gradient(135deg, #ff2442 0%, #ff6b6b 100%); }
+        .stat-card { background: white; border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .stat-number { font-size: 32px; font-weight: bold; color: #ff2442; }
+        .stat-label { color: #666; font-size: 14px; margin-top: 5px; }
+        .chart-card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .rank-table { width: 100%; border-collapse: collapse; }
+        .rank-table th, .rank-table td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
+        .rank-table th { background: #f8f9fa; font-weight: 600; }
+        .rank-table tr:hover { background: #f8f9fa; }
+        .rank-num { display: inline-block; width: 24px; height: 24px; border-radius: 50%; background: #ff2442; color: white; text-align: center; line-height: 24px; font-size: 12px; }
+        .rank-num.top3 { background: #ffd700; }
+    
+        /* MOBILE_PATCH */
+        @media (max-width: 768px) {
+            .container { padding-left: 12px; padding-right: 12px; }
+            .navbar .container { flex-wrap: wrap; }
+            .navbar-nav { flex-wrap: wrap; }
+            .nav-link { padding: 4px 6px !important; margin-left: 0 !important; font-size: 12px; }
+            .stat-card { padding: 14px; margin-bottom: 10px; }
+            .stat-number { font-size: 24px; }
+            .chart-card { padding: 12px; overflow-x: auto; }
+            .rank-table { min-width: 620px; }
+        }
+
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="/">← 返回首页</a>
+            <ul class="navbar-nav ms-auto d-flex flex-row">
+                <li class="nav-item"><a class="nav-link" href="/">话题广场</a></li>
+                <li class="nav-item"><a class="nav-link" href="/activity">活动管理</a></li>
+                <li class="nav-item"><a class="nav-link" href="/admin">后台</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h4 class="mb-2">📊 数据分析</h4>
+            <button class="btn btn-sm btn-outline-danger" onclick="exportWeeklyReport()">一键导出周报</button>
+        </div>
+        <div class="text-muted mb-3" style="font-size:13px;">自动刷新中（每60秒）｜最后更新：<span id="updatedAt">--</span></div>
+        
+        <!-- 选择活动期数 -->
+        <div class="mb-4">
+            <label class="form-label">选择活动期数：</label>
+            <select id="activitySelect" class="form-select" style="max-width: 300px;">
+                {% for activity in activities %}
+                <option value="{{ activity.id }}">{{ activity.name }} - {{ activity.title }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- 整体数据概览 -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="chart-card">
+                    <h6>内容占比（四类都需覆盖）</h6>
+                    <canvas id="contentTypeChart"></canvas>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalReg">0</div>
+                    <div class="stat-label">总报名数</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalPub">0</div>
+                    <div class="stat-label">已发布笔记</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalInt">0</div>
+                    <div class="stat-label">总互动量</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalLikes">0</div>
+                    <div class="stat-label">总点赞</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 图表区域 -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="chart-card">
+                    <h6>各组报名人数</h6>
+                    <canvas id="groupChart"></canvas>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="chart-card">
+                    <h6>话题报名分布</h6>
+                    <canvas id="topicChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- TOP30排行榜 -->
+        <div class="chart-card mb-4">
+            <h6>🏆 TOP30 传播数据排行榜</h6>
+            <table class="rank-table">
+                <thead>
+                    <tr>
+                        <th>排名</th>
+                        <th>姓名</th>
+                        <th>小组</th>
+                        <th>话题</th>
+                        <th>点赞</th>
+                        <th>收藏</th>
+                        <th>评论</th>
+                        <th>总互动</th>
+                    </tr>
+                </thead>
+                <tbody id="topTable">
+                </tbody>
+            </table>
+        </div>
+
+
+        <div class="chart-card mb-4">
+            <h6>📌 各组完成情况（提交完成率）</h6>
+            <table class="rank-table">
+                <thead><tr><th>小组</th><th>报名人数</th><th>已提交</th><th>完成率</th></tr></thead>
+                <tbody id="groupCompletionTable"></tbody>
+            </table>
+        </div>
+
+        <div class="chart-card mb-4">
+            <h6>🥇 每组互动量TOP3</h6>
+            <div id="groupTop3Wrap"></div>
+        </div>
+
+        <div class="chart-card mb-4">
+            <h6>🔥 爆款笔记分析（小红书）</h6>
+            <table class="rank-table">
+                <thead><tr><th>姓名</th><th>小组</th><th>类型</th><th>传播量</th><th>互动</th><th>链接</th></tr></thead>
+                <tbody id="viralNotesTable"></tbody>
+            </table>
+        </div>
+
+        <div class="chart-card mb-4">
+            <h6>📚 同类型爆款推荐（学习链接）</h6>
+            <div id="typeRecommendWrap"></div>
+        </div>
+
+        <!-- 数据分析报告 -->
+        <div class="chart-card">
+            <h6>📝 数据分析报告</h6>
+            <div id="reportContent">
+                <p class="text-muted">暂无数据，请先选择活动期数</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let groupChart, topicChart, contentTypeChart;
+
+        async function loadStats(activityId) {
+            const res = await fetch(`/api/stats/${activityId}`);
+            const data = await res.json();
+            
+            document.getElementById('totalReg').textContent = data.total_registrations;
+            document.getElementById('totalPub').textContent = data.total_published;
+            document.getElementById('totalInt').textContent = data.total_interactions;
+            document.getElementById('totalLikes').textContent = data.total_likes;
+            
+            // 更新各组图表
+            const groups = Object.keys(data.group_stats);
+            const counts = groups.map(g => data.group_stats[g].count);
+            
+            if (groupChart) groupChart.destroy();
+            groupChart = new Chart(document.getElementById('groupChart'), {
+                type: 'bar',
+                data: {
+                    labels: groups,
+                    datasets: [{ label: '报名人数', data: counts, backgroundColor: '#ff2442' }]
+                }
+            });
+            
+            // 更新话题分布图
+            const topics = data.topic_stats.slice(0, 10);
+            if (topicChart) topicChart.destroy();
+            topicChart = new Chart(document.getElementById('topicChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: topics.map(t => t.name.substring(0, 10) + '...'),
+                    datasets: [{ data: topics.map(t => t.count), backgroundColor: ['#ff2442','#ff6b6b','#ffa500','#ffd700','#4caf50','#2196f3','#9c27b0','#00bcd4','#795548','#607d8b'] }]
+                }
+            });
+            
+            // 更新内容类型占比
+            const contentTypeOrder = Object.keys(data.content_type_stats || {});
+            const contentTypeCounts = contentTypeOrder.map(k => (data.content_type_stats && data.content_type_stats[k]) ? data.content_type_stats[k] : 0);
+            if (contentTypeChart) contentTypeChart.destroy();
+            contentTypeChart = new Chart(document.getElementById('contentTypeChart'), {
+                type: 'pie',
+                data: {
+                    labels: contentTypeOrder,
+                    datasets: [{ data: contentTypeCounts, backgroundColor: ['#ff2442','#4caf50','#2196f3','#ffa500'] }]
+                }
+            });
+
+            // 更新TOP30
+            let html = '';
+            data.top_30.forEach((item, idx) => {
+                const rankClass = idx < 3 ? 'top3' : '';
+                html += `<tr>
+                    <td><span class="rank-num ${rankClass}">${idx+1}</span></td>
+                    <td>${item.name}</td>
+                    <td>${item.group}</td>
+                    <td>${item.topic.substring(0, 15)}...</td>
+                    <td>${item.likes}</td>
+                    <td>${item.favorites}</td>
+                    <td>${item.comments}</td>
+                    <td><strong>${item.total}</strong></td>
+                </tr>`;
+            });
+            document.getElementById('topTable').innerHTML = html;
+            
+
+            // 各组完成情况
+            let gcHtml = '';
+            (data.group_completion || []).forEach(g => {
+                gcHtml += `<tr><td>${g.group}</td><td>${g.count}</td><td>${g.published}</td><td><strong>${g.completion_rate}%</strong></td></tr>`;
+            });
+            document.getElementById('groupCompletionTable').innerHTML = gcHtml || '<tr><td colspan="4" class="text-muted">暂无数据</td></tr>';
+
+            // 每组TOP3
+            let gtHtml = '';
+            const gt = data.group_top3 || {};
+            Object.keys(gt).forEach(g => {
+                const rows = gt[g] || [];
+                gtHtml += `<div class="mb-3"><strong>${g}</strong><ul>`;
+                if (!rows.length) {
+                    gtHtml += '<li class="text-muted">暂无已提交数据</li>';
+                } else {
+                    rows.forEach((r, i) => {
+                        gtHtml += `<li>TOP${i+1}：${r.name}（互动${r.total}）- ${r.topic}</li>`;
+                    });
+                }
+                gtHtml += '</ul></div>';
+            });
+            document.getElementById('groupTop3Wrap').innerHTML = gtHtml || '<p class="text-muted">暂无数据</p>';
+
+            // 爆款笔记
+            let vnHtml = '';
+            (data.viral_notes || []).slice(0, 10).forEach(v => {
+                vnHtml += `<tr><td>${v.name}</td><td>${v.group}</td><td>${v.content_type || '未识别'}</td><td>${v.xhs_views || 0}</td><td>${v.xhs_interactions || 0}</td><td><a href="${v.xhs_link}" target="_blank">查看</a></td></tr>`;
+            });
+            document.getElementById('viralNotesTable').innerHTML = vnHtml || '<tr><td colspan="6" class="text-muted">暂无已提交小红书链接数据</td></tr>';
+
+            // 同类型推荐
+            let trHtml = '';
+            const tr = data.type_note_recommendations || {};
+            Object.keys(tr).forEach(ct => {
+                trHtml += `<div class="mb-2"><strong>${ct}</strong><ul>`;
+                (tr[ct] || []).forEach((n, i) => {
+                    trHtml += `<li><a href="${n.xhs_link}" target="_blank">${n.name}｜${n.topic || '话题'}｜互动${n.xhs_interactions || 0}</a></li>`;
+                });
+                trHtml += '</ul></div>';
+            });
+            document.getElementById('typeRecommendWrap').innerHTML = trHtml || '<p class="text-muted">暂无推荐数据</p>';
+
+            // 生成报告
+            const avgInt = data.total_registrations > 0 ? Math.round(data.total_interactions / data.total_registrations) : 0;
+            const completion = data.total_registrations > 0 ? Math.round(data.total_published / data.total_registrations * 100) : 0;
+            
+            document.getElementById('updatedAt').textContent = data.updated_at || '--';
+            document.getElementById('reportContent').innerHTML = `
+                <p><strong>数据概览：</strong></p>
+                <ul>
+                    <li>总报名人数：${data.total_registrations}人</li>
+                    <li>已发布笔记：${data.total_published}篇</li>
+                    <li>总互动量：${data.total_interactions}（点赞${data.total_likes} + 收藏${data.total_favorites} + 评论${data.total_comments}）</li>
+                    <li>人均互动：${avgInt}</li>
+                    <li>发布完成率：${completion}%</li>
+                </ul>
+                <p><strong>下期建议：</strong></p>
+                <ul>
+                    <li>继续保持当前话题热度，鼓励更多员工发布笔记</li>
+                    <li>关注TOP10员工的优质内容，形成内部分享</li>
+                    <li>互动量较高的内容可以适当增加推广</li>
+                    <li>内容占比：${Object.entries(data.content_type_stats || {}).map(([k,v]) => `${k}${v}`).join('、') || '暂无识别数据'}</li>
+                    <li>当前表现最佳类型：${data.best_content_type || '暂无'}（按互动率/平均互动综合）</li>
+                    <li>笔记完善建议：${(data.note_improvement_suggestions || []).join('；') || '暂无'}</li>
+                    <li>下期话题建议：${(data.next_topic_suggestions || []).join('；') || '暂无'}</li>
+                </ul>
+            `;
+        }
+
+        document.getElementById('activitySelect').addEventListener('change', (e) => {
+            loadStats(e.target.value);
+        });
+
+        function exportWeeklyReport() {
+            const activityId = document.getElementById('activitySelect').value;
+            window.open(`/api/weekly_report/${activityId}`, '_blank');
+        }
+
+        const currentActivity = () => document.getElementById('activitySelect').value;
+        loadStats(currentActivity());
+        setInterval(() => loadStats(currentActivity()), 60000);
+    </script>
+</body>
+</html>
