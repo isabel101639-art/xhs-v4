@@ -2,7 +2,8 @@ import multiprocessing
 import os
 
 
-bind = os.environ.get('GUNICORN_BIND', '0.0.0.0:8000')
+default_port = os.environ.get('PORT') or os.environ.get('WEB_PORT') or '8000'
+bind = os.environ.get('GUNICORN_BIND', f'0.0.0.0:{default_port}')
 workers = int(os.environ.get('GUNICORN_WORKERS', max(multiprocessing.cpu_count() // 2, 2)))
 threads = int(os.environ.get('GUNICORN_THREADS', '4'))
 worker_class = os.environ.get('GUNICORN_WORKER_CLASS', 'gthread')
