@@ -12,6 +12,9 @@
         .nav-link { color: #333; padding: 12px 16px; border-radius: 8px; margin-bottom: 4px; }
         .nav-link:hover, .nav-link.active { background: #ffe5e8; color: var(--xhs-red); }
         .btn-xhs { background: var(--xhs-red); color: white; border: none; }
+        .metric-strip { height: 8px; border-radius: 999px; background: #f1f5f9; overflow: hidden; }
+        .metric-strip > span { display: block; height: 100%; background: linear-gradient(90deg, #ff7a59, #ef4e45); border-radius: 999px; }
+        .mini-card { border: 1px solid #f0dfd8; border-radius: 14px; background: #fffaf7; padding: 14px 16px; }
     
         /* MOBILE_PATCH */
         @media (max-width: 768px) {
@@ -270,6 +273,13 @@
 
                 <div class="card mb-3">
                     <div class="card-body">
+                        <h6 class="mb-3">全局账号总览</h6>
+                        <div id="creatorGlobalSummary" class="text-muted">按筛选条件查看全局账号总览</div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
                         <h6 class="mb-3">账号概览</h6>
                         <div class="table-responsive">
                             <table class="table align-middle">
@@ -377,8 +387,61 @@
                     <div class="col-lg-8">
                         <div class="card mb-3">
                             <div class="card-body">
+                                <h6 class="mb-3">平台分布</h6>
+                                <div class="table-responsive">
+                                    <table class="table align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>平台</th>
+                                                <th>账号数</th>
+                                                <th>发文数</th>
+                                                <th>爆款数</th>
+                                                <th>总阅读</th>
+                                                <th>总互动</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="creatorPlatformAnalyticsTableBody">
+                                            <tr><td colspan="6" class="text-muted text-center">暂无平台统计</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="mb-3">Top 账号</h6>
+                                <div class="table-responsive">
+                                    <table class="table align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>姓名 / 账号</th>
+                                                <th>平台</th>
+                                                <th>发文数</th>
+                                                <th>爆款数</th>
+                                                <th>总阅读</th>
+                                                <th>总互动</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="creatorTopAccountTableBody">
+                                            <tr><td colspan="6" class="text-muted text-center">暂无账号排行</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-body">
                                 <h6 class="mb-3">账号详情</h6>
                                 <div id="creatorAccountDetail" class="text-muted">请选择左侧账号查看详情</div>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="mb-3">账号分析摘要</h6>
+                                <div id="creatorAnalyticsSummary" class="text-muted">请选择账号查看分析摘要</div>
                             </div>
                         </div>
 
@@ -462,6 +525,43 @@
 
                         <div class="card">
                             <div class="card-body">
+                                <h6 class="mb-3">按日趋势与快照</h6>
+                                <div class="table-responsive mb-4">
+                                    <table class="table align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>日期</th>
+                                                <th>发文数</th>
+                                                <th>爆款数</th>
+                                                <th>阅读</th>
+                                                <th>曝光</th>
+                                                <th>互动</th>
+                                                <th>涨粉</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="creatorAnalyticsTableBody">
+                                            <tr><td colspan="7" class="text-muted text-center">暂无趋势数据</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <h6 class="mb-3">Top 话题</h6>
+                                <div class="table-responsive mb-4">
+                                    <table class="table align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>话题</th>
+                                                <th>发文数</th>
+                                                <th>阅读</th>
+                                                <th>互动</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="creatorTopTopicTableBody">
+                                            <tr><td colspan="4" class="text-muted text-center">暂无话题统计</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
                                 <h6 class="mb-3">账号快照历史</h6>
                                 <div class="table-responsive">
                                     <table class="table align-middle">
@@ -717,12 +817,20 @@
             const phone = document.getElementById('creatorPhoneFilter').value.trim();
             const keyword = document.getElementById('creatorKeywordFilter').value.trim();
             const viralOnly = document.getElementById('creatorViralOnlyFilter').checked;
+            const dateFrom = document.getElementById('creatorDateFrom').value;
+            const dateTo = document.getElementById('creatorDateTo').value;
             if (platform) params.set('platform', platform);
             if (phone) params.set('phone', phone);
             if (keyword) params.set('keyword', keyword);
             if (viralOnly) params.set('viral_only', '1');
-            const res = await fetch(`/api/creator_accounts?${params.toString()}`);
+            if (dateFrom) params.set('date_from', dateFrom);
+            if (dateTo) params.set('date_to', dateTo);
+            const [res, analyticsRes] = await Promise.all([
+                fetch(`/api/creator_accounts?${params.toString()}`),
+                fetch(`/api/creator_accounts/analytics?${params.toString()}`)
+            ]);
             const result = await res.json();
+            const analyticsData = await analyticsRes.json();
             const body = document.getElementById('creatorAccountTableBody');
             const items = result.items || [];
             creatorAccountCache = Object.fromEntries(items.map((item) => [item.id, item]));
@@ -749,6 +857,40 @@
                 </tr>
             `).join('') || '<tr><td colspan="9" class="text-muted text-center">暂无账号数据</td></tr>';
 
+            const overview = analyticsData.overview || {};
+            document.getElementById('creatorGlobalSummary').innerHTML = `
+                <div class="row g-3">
+                    <div class="col-md-3"><div class="mini-card">账号数<br><strong>${overview.account_count || 0}</strong></div></div>
+                    <div class="col-md-3"><div class="mini-card">发文数<br><strong>${overview.post_count || 0}</strong></div></div>
+                    <div class="col-md-3"><div class="mini-card">总阅读<br><strong>${overview.total_views || 0}</strong></div></div>
+                    <div class="col-md-3"><div class="mini-card">总互动<br><strong>${overview.total_interactions || 0}</strong></div></div>
+                </div>
+            `;
+
+            const platformRows = analyticsData.platforms || [];
+            document.getElementById('creatorPlatformAnalyticsTableBody').innerHTML = platformRows.map((item) => `
+                <tr>
+                    <td>${creatorPlatformLabel(item.platform)}</td>
+                    <td>${item.account_count || 0}</td>
+                    <td>${item.post_count || 0}</td>
+                    <td>${item.viral_posts || 0}</td>
+                    <td>${item.total_views || 0}</td>
+                    <td>${item.total_interactions || 0}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="6" class="text-muted text-center">暂无平台统计</td></tr>';
+
+            const topAccounts = analyticsData.top_accounts || [];
+            document.getElementById('creatorTopAccountTableBody').innerHTML = topAccounts.map((item) => `
+                <tr>
+                    <td>${item.owner_name || '-'}<div class="text-muted small">${item.display_name || '-'}</div></td>
+                    <td>${creatorPlatformLabel(item.platform)}</td>
+                    <td>${item.post_count || 0}</td>
+                    <td>${item.viral_posts || 0}</td>
+                    <td>${item.total_views || 0}</td>
+                    <td>${item.total_interactions || 0}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="6" class="text-muted text-center">暂无账号排行</td></tr>';
+
             if (items.length && (!selectedCreatorAccountId || !creatorAccountCache[selectedCreatorAccountId])) {
                 selectCreatorAccount(items[0].id);
             } else if (items.length && selectedCreatorAccountId && creatorAccountCache[selectedCreatorAccountId]) {
@@ -756,7 +898,10 @@
             } else if (!items.length) {
                 selectedCreatorAccountId = null;
                 document.getElementById('creatorAccountDetail').textContent = '请选择左侧账号查看详情';
+                document.getElementById('creatorAnalyticsSummary').textContent = '请选择账号查看分析摘要';
                 document.getElementById('creatorPostTableBody').innerHTML = '<tr><td colspan="9" class="text-muted text-center">暂无笔记数据</td></tr>';
+                document.getElementById('creatorAnalyticsTableBody').innerHTML = '<tr><td colspan="7" class="text-muted text-center">暂无趋势数据</td></tr>';
+                document.getElementById('creatorTopTopicTableBody').innerHTML = '<tr><td colspan="4" class="text-muted text-center">暂无话题统计</td></tr>';
                 document.getElementById('creatorSnapshotTableBody').innerHTML = '<tr><td colspan="5" class="text-muted text-center">暂无快照数据</td></tr>';
             }
         }
@@ -825,20 +970,23 @@
             const dateTo = document.getElementById('creatorDateTo').value;
             if (dateFrom) params.set('date_from', dateFrom);
             if (dateTo) params.set('date_to', dateTo);
-            const [postRes, snapshotRes] = await Promise.all([
+            const [postRes, snapshotRes, analyticsRes] = await Promise.all([
                 fetch(`/api/creator_accounts/${accountId}/posts?${params.toString()}`),
-                fetch(`/api/creator_accounts/${accountId}/snapshots?${params.toString()}`)
+                fetch(`/api/creator_accounts/${accountId}/snapshots?${params.toString()}`),
+                fetch(`/api/creator_accounts/${accountId}/analytics?${params.toString()}`)
             ]);
             const postData = await postRes.json();
             const snapshotData = await snapshotRes.json();
+            const analyticsData = await analyticsRes.json();
             const account = postData.account || snapshotData.account;
             if (!account) return;
             const posts = postData.items || [];
-            const filteredPostCount = posts.length;
-            const filteredViralCount = posts.filter((item) => item.is_viral).length;
-            const filteredViews = posts.reduce((sum, item) => sum + (item.views || 0), 0);
-            const filteredInteractions = posts.reduce((sum, item) => sum + (item.interactions || 0), 0);
-            const filteredBestPost = posts.length ? [...posts].sort((a, b) => (b.views || 0) - (a.views || 0) || (b.interactions || 0) - (a.interactions || 0))[0] : null;
+            const overview = analyticsData.overview || {};
+            const filteredPostCount = overview.post_count || 0;
+            const filteredViralCount = overview.viral_posts || 0;
+            const filteredViews = overview.total_views || 0;
+            const filteredInteractions = overview.total_interactions || 0;
+            const filteredBestPost = overview.best_post || null;
 
             fillCreatorAccountForm(account);
             document.getElementById('creatorAccountDetail').innerHTML = `
@@ -847,6 +995,17 @@
                 <div class="text-muted small">发文数：${filteredPostCount} ｜ 爆款数：${filteredViralCount} ｜ 总阅读：${filteredViews} ｜ 总互动：${filteredInteractions}</div>
                 <div class="text-muted small">最佳笔记：${filteredBestPost ? filteredBestPost.title : '暂无'} ｜ 上次同步：${account.last_synced_at || '-'}</div>
                 <div class="text-muted small">统计区间：${dateFrom || '-'} ~ ${dateTo || '-'}</div>
+            `;
+
+            document.getElementById('creatorAnalyticsSummary').innerHTML = `
+                <div class="row g-3">
+                    <div class="col-md-3"><div class="mini-card">发文数<br><strong>${overview.post_count || 0}</strong></div></div>
+                    <div class="col-md-3"><div class="mini-card">爆款数<br><strong>${overview.viral_posts || 0}</strong></div></div>
+                    <div class="col-md-3"><div class="mini-card">总曝光<br><strong>${overview.total_exposures || 0}</strong></div></div>
+                    <div class="col-md-3"><div class="mini-card">总涨粉<br><strong>${overview.total_follower_delta || 0}</strong></div></div>
+                    <div class="col-md-6"><div class="mini-card">平均阅读<br><strong>${overview.avg_views || 0}</strong><div class="subtle mt-1">总阅读 ${overview.total_views || 0}</div></div></div>
+                    <div class="col-md-6"><div class="mini-card">平均互动<br><strong>${overview.avg_interactions || 0}</strong><div class="subtle mt-1">总互动 ${overview.total_interactions || 0}</div></div></div>
+                </div>
             `;
 
             document.getElementById('creatorPostTableBody').innerHTML = posts.map((item) => `
@@ -862,6 +1021,37 @@
                     <td><button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleCreatorPostViral(${item.id}, ${item.is_viral ? 'false' : 'true'})">${item.is_viral ? '改普通' : '标爆款'}</button></td>
                 </tr>
             `).join('') || '<tr><td colspan="9" class="text-muted text-center">暂无笔记数据</td></tr>';
+
+            const analyticsRows = analyticsData.daily_posts || [];
+            const maxViews = Math.max(...analyticsRows.map((item) => item.views || 0), 0) || 1;
+            document.getElementById('creatorAnalyticsTableBody').innerHTML = analyticsRows.map((item) => `
+                <tr>
+                    <td>${item.date || '-'}</td>
+                    <td>${item.post_count || 0}</td>
+                    <td>${item.viral_posts || 0}</td>
+                    <td>
+                        <div>${item.views || 0}</div>
+                        <div class="metric-strip mt-1"><span style="width:${Math.max(((item.views || 0) / maxViews) * 100, 3)}%"></span></div>
+                    </td>
+                    <td>${item.exposures || 0}</td>
+                    <td>${item.interactions || 0}</td>
+                    <td>${item.follower_delta || 0}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="7" class="text-muted text-center">暂无趋势数据</td></tr>';
+
+            const topTopics = analyticsData.top_topics || [];
+            const maxTopicViews = Math.max(...topTopics.map((item) => item.views || 0), 0) || 1;
+            document.getElementById('creatorTopTopicTableBody').innerHTML = topTopics.map((item) => `
+                <tr>
+                    <td>${item.topic_title || '-'}</td>
+                    <td>${item.post_count || 0}</td>
+                    <td>
+                        <div>${item.views || 0}</div>
+                        <div class="metric-strip mt-1"><span style="width:${Math.max(((item.views || 0) / maxTopicViews) * 100, 3)}%"></span></div>
+                    </td>
+                    <td>${item.interactions || 0}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="4" class="text-muted text-center">暂无话题统计</td></tr>';
 
             const snapshots = snapshotData.items || [];
             document.getElementById('creatorSnapshotTableBody').innerHTML = snapshots.map((item) => `

@@ -513,6 +513,14 @@ def _current_actor():
     return session.get('admin_username') or 'system'
 
 
+def _admin_username():
+    return os.environ.get('ADMIN_USERNAME', 'furui')
+
+
+def _admin_password():
+    return os.environ.get('ADMIN_PASSWORD', 'wangdandan39')
+
+
 def _log_operation(action, target_type, target_id=None, message='', detail=None):
     detail_text = ''
     if detail is not None:
@@ -563,6 +571,16 @@ def _serialize_operation_log(log):
         'detail': log.detail or '',
         'created_at': log.created_at.strftime('%Y-%m-%d %H:%M:%S') if log.created_at else '',
     }
+
+
+def _deserialize_operation_detail(detail):
+    if not detail:
+        return {}
+    try:
+        parsed = json.loads(detail)
+        return parsed if isinstance(parsed, dict) else {'raw': parsed}
+    except Exception:
+        return {'raw': detail}
 
 
 def _serialize_topic(topic):
@@ -940,6 +958,82 @@ def _build_creator_account_query(args):
     if viral_only:
         query = query.join(CreatorPost, CreatorPost.creator_account_id == CreatorAccount.id).filter(CreatorPost.is_viral.is_(True)).distinct()
     return query
+
+
+def _build_creator_analytics_payload(posts, snapshots, date_from=None, date_to=None):
+    daily_map = defaultdict(lambda: {
+        'post_count': 0,
+        'viral_posts': 0,
+        'views': 0,
+        'exposures': 0,
+        'interactions': 0,
+        'follower_delta': 0,
+    })
+    topic_map = defaultdict(lambda: {'post_count': 0, 'views': 0, 'interactions': 0})
+
+    for post in posts:
+        base_dt = post.publish_time or post.created_at or datetime.now()
+        day_key = base_dt.strftime('%Y-%m-%d')
+        interactions = (post.likes or 0) + (post.favorites or 0) + (post.comments or 0)
+        row = daily_map[day_key]
+        row['post_count'] += 1
+        row['viral_posts'] += 1 if post.is_viral else 0
+        row['views'] += post.views or 0
+        row['exposures'] += post.exposures or 0
+        row['interactions'] += interactions
+        row['follower_delta'] += post.follower_delta or 0
+
+        topic_key = (post.topic_title or '未关联话题').strip()
+        topic_row = topic_map[topic_key]
+        topic_row['post_count'] += 1
+        topic_row['views'] += post.views or 0
+        topic_row['interactions'] += interactions
+
+    daily_rows = [{'date': day_key, **daily_map[day_key]} for day_key in sorted(daily_map.keys())]
+    snapshot_rows = [{
+        'date': snapshot.snapshot_date.isoformat() if snapshot.snapshot_date else '',
+        'follower_count': snapshot.follower_count or 0,
+        'post_count': snapshot.post_count or 0,
+        'total_views': snapshot.total_views or 0,
+        'total_interactions': snapshot.total_interactions or 0,
+    } for snapshot in snapshots]
+
+    top_topics = []
+    for topic_name, item in topic_map.items():
+        top_topics.append({'topic_title': topic_name, **item})
+    top_topics.sort(key=lambda row: (row['interactions'], row['views'], row['post_count']), reverse=True)
+
+    total_views = sum(post.views or 0 for post in posts)
+    total_exposures = sum(post.exposures or 0 for post in posts)
+    total_interactions = sum((post.likes or 0) + (post.favorites or 0) + (post.comments or 0) for post in posts)
+    total_follower_delta = sum(post.follower_delta or 0 for post in posts)
+    viral_posts = len([post for post in posts if post.is_viral])
+    best_post = sorted(
+        posts,
+        key=lambda item: ((item.views or 0), ((item.likes or 0) + (item.favorites or 0) + (item.comments or 0)), (item.follower_delta or 0)),
+        reverse=True
+    )[0] if posts else None
+
+    overview = {
+        'post_count': len(posts),
+        'viral_posts': viral_posts,
+        'total_views': total_views,
+        'total_exposures': total_exposures,
+        'total_interactions': total_interactions,
+        'total_follower_delta': total_follower_delta,
+        'avg_views': round(total_views / len(posts), 2) if posts else 0,
+        'avg_interactions': round(total_interactions / len(posts), 2) if posts else 0,
+        'best_post': _serialize_creator_post(best_post) if best_post else None,
+        'date_from': date_from.isoformat() if date_from else '',
+        'date_to': date_to.isoformat() if date_to else '',
+    }
+
+    return {
+        'overview': overview,
+        'daily_posts': daily_rows,
+        'daily_snapshots': snapshot_rows,
+        'top_topics': top_topics[:10],
+    }
 
 
 @app.route('/healthz')
@@ -3129,6 +3223,67 @@ def review_topic_idea(idea_id):
     })
 
 
+@app.route('/api/topic_ideas/review_batch', methods=['POST'])
+def review_topic_ideas_batch():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    data = request.json or {}
+    action = (data.get('action') or '').strip()
+    note = (data.get('note') or '').strip()
+    raw_ids = data.get('idea_ids') or []
+    idea_ids = []
+    for item in raw_ids:
+        value = _safe_int(item, 0)
+        if value > 0:
+            idea_ids.append(value)
+    idea_ids = list(dict.fromkeys(idea_ids))
+    if not idea_ids:
+        return jsonify({'success': False, 'message': '请先选择要批量处理的话题'})
+    if action not in {'approve', 'reject', 'reset', 'archive'}:
+        return jsonify({'success': False, 'message': '不支持的批量审核动作'})
+
+    ideas = TopicIdea.query.filter(TopicIdea.id.in_(idea_ids)).all()
+    if not ideas:
+        return jsonify({'success': False, 'message': '未找到可处理的话题'})
+
+    status_map = {
+        'approve': ('approved', '已审核通过'),
+        'reject': ('rejected', '已驳回'),
+        'reset': ('pending_review', '已退回待审核'),
+        'archive': ('archived', '已归档'),
+    }
+    target_status, message = status_map[action]
+    updated = []
+    skipped = []
+    for idea in ideas:
+        if idea.status == 'published' and action != 'archive':
+            skipped.append({'id': idea.id, 'title': idea.topic_title, 'reason': '已发布的话题仅支持归档'})
+            continue
+        idea.status = target_status
+        idea.review_note = note
+        idea.reviewed_at = datetime.now()
+        updated.append({'id': idea.id, 'title': idea.topic_title, 'status': idea.status})
+
+    _log_operation('review_batch', 'topic_idea', message='批量审核候选话题', detail={
+        'action': action,
+        'note': note,
+        'selected_count': len(idea_ids),
+        'updated_count': len(updated),
+        'skipped_count': len(skipped),
+        'updated': updated,
+        'skipped': skipped,
+    })
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': f'批量处理完成：{message} {len(updated)} 条，跳过 {len(skipped)} 条',
+        'updated': updated,
+        'skipped': skipped,
+    })
+
+
 @app.route('/api/topic_ideas/<int:idea_id>/publish', methods=['POST'])
 def publish_topic_idea(idea_id):
     guard = _admin_json_guard()
@@ -3338,6 +3493,85 @@ def creator_accounts():
     return jsonify({
         'success': True,
         'items': [_serialize_creator_account(account) for account in accounts]
+    })
+
+
+@app.route('/api/creator_accounts/analytics')
+def creator_accounts_analytics():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    accounts = _build_creator_account_query(request.args).all()
+    account_ids = [account.id for account in accounts]
+    date_from = _parse_date(request.args.get('date_from'))
+    date_to = _parse_date(request.args.get('date_to'))
+
+    posts = []
+    snapshots = []
+    if account_ids:
+        post_query = CreatorPost.query.filter(CreatorPost.creator_account_id.in_(account_ids))
+        post_query, _, _ = _apply_creator_post_range(post_query, request.args)
+        posts = post_query.order_by(CreatorPost.publish_time.asc(), CreatorPost.created_at.asc()).all()
+
+        snapshot_query = CreatorAccountSnapshot.query.filter(CreatorAccountSnapshot.creator_account_id.in_(account_ids))
+        if date_from:
+            snapshot_query = snapshot_query.filter(CreatorAccountSnapshot.snapshot_date >= date_from)
+        if date_to:
+            snapshot_query = snapshot_query.filter(CreatorAccountSnapshot.snapshot_date <= date_to)
+        snapshots = snapshot_query.order_by(CreatorAccountSnapshot.snapshot_date.asc(), CreatorAccountSnapshot.created_at.asc()).all()
+
+    analytics = _build_creator_analytics_payload(posts, snapshots, date_from=date_from, date_to=date_to)
+
+    platform_map = defaultdict(lambda: {
+        'account_count': 0,
+        'post_count': 0,
+        'viral_posts': 0,
+        'total_views': 0,
+        'total_interactions': 0,
+        'follower_count': 0,
+    })
+    account_rows = []
+    posts_by_account = defaultdict(list)
+    for post in posts:
+        posts_by_account[post.creator_account_id].append(post)
+
+    for account in accounts:
+        platform_key = account.platform or 'unknown'
+        account_posts = posts_by_account.get(account.id, [])
+        post_count = len(account_posts)
+        viral_posts = len([post for post in account_posts if post.is_viral])
+        total_views = sum(post.views or 0 for post in account_posts)
+        total_interactions = sum((post.likes or 0) + (post.favorites or 0) + (post.comments or 0) for post in account_posts)
+        platform_row = platform_map[platform_key]
+        platform_row['account_count'] += 1
+        platform_row['post_count'] += post_count
+        platform_row['viral_posts'] += viral_posts
+        platform_row['total_views'] += total_views
+        platform_row['total_interactions'] += total_interactions
+        platform_row['follower_count'] += account.follower_count or 0
+
+        account_rows.append({
+            'id': account.id,
+            'owner_name': account.owner_name or '',
+            'display_name': account.display_name or account.account_handle or '',
+            'platform': platform_key,
+            'post_count': post_count,
+            'viral_posts': viral_posts,
+            'total_views': total_views,
+            'total_interactions': total_interactions,
+        })
+
+    platform_rows = [{'platform': platform, **stats} for platform, stats in platform_map.items()]
+    platform_rows.sort(key=lambda item: (item['total_interactions'], item['total_views'], item['account_count']), reverse=True)
+    account_rows.sort(key=lambda item: (item['total_interactions'], item['total_views'], item['post_count']), reverse=True)
+
+    analytics['overview']['account_count'] = len(accounts)
+    analytics['platforms'] = platform_rows
+    analytics['top_accounts'] = account_rows[:10]
+    return jsonify({
+        'success': True,
+        **analytics,
     })
 
 
@@ -3619,6 +3853,110 @@ def creator_account_snapshots(account_id):
         } for snapshot in snapshots]
     })
 
+
+@app.route('/api/creator_accounts/<int:account_id>/analytics')
+def creator_account_analytics(account_id):
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    account = CreatorAccount.query.get_or_404(account_id)
+    post_query = CreatorPost.query.filter_by(creator_account_id=account.id)
+    post_query, date_from, date_to = _apply_creator_post_range(post_query, request.args)
+    posts = post_query.order_by(CreatorPost.publish_time.asc(), CreatorPost.created_at.asc()).all()
+
+    snapshot_query = CreatorAccountSnapshot.query.filter_by(creator_account_id=account.id)
+    if date_from:
+        snapshot_query = snapshot_query.filter(CreatorAccountSnapshot.snapshot_date >= date_from)
+    if date_to:
+        snapshot_query = snapshot_query.filter(CreatorAccountSnapshot.snapshot_date <= date_to)
+    snapshots = snapshot_query.order_by(CreatorAccountSnapshot.snapshot_date.asc(), CreatorAccountSnapshot.created_at.asc()).all()
+
+    daily_map = defaultdict(lambda: {
+        'post_count': 0,
+        'viral_posts': 0,
+        'views': 0,
+        'exposures': 0,
+        'interactions': 0,
+        'follower_delta': 0,
+    })
+    topic_map = defaultdict(lambda: {'post_count': 0, 'views': 0, 'interactions': 0})
+    for post in posts:
+        base_dt = post.publish_time or post.created_at or datetime.now()
+        day_key = base_dt.strftime('%Y-%m-%d')
+        interactions = (post.likes or 0) + (post.favorites or 0) + (post.comments or 0)
+        row = daily_map[day_key]
+        row['post_count'] += 1
+        row['viral_posts'] += 1 if post.is_viral else 0
+        row['views'] += post.views or 0
+        row['exposures'] += post.exposures or 0
+        row['interactions'] += interactions
+        row['follower_delta'] += post.follower_delta or 0
+
+        topic_key = (post.topic_title or '未关联话题').strip()
+        topic_row = topic_map[topic_key]
+        topic_row['post_count'] += 1
+        topic_row['views'] += post.views or 0
+        topic_row['interactions'] += interactions
+
+    daily_rows = []
+    for day_key in sorted(daily_map.keys()):
+        item = daily_map[day_key]
+        daily_rows.append({
+            'date': day_key,
+            **item,
+        })
+
+    snapshot_rows = [{
+        'date': snapshot.snapshot_date.isoformat() if snapshot.snapshot_date else '',
+        'follower_count': snapshot.follower_count or 0,
+        'post_count': snapshot.post_count or 0,
+        'total_views': snapshot.total_views or 0,
+        'total_interactions': snapshot.total_interactions or 0,
+    } for snapshot in snapshots]
+
+    top_topics = []
+    for topic_name, item in topic_map.items():
+        top_topics.append({
+            'topic_title': topic_name,
+            **item,
+        })
+    top_topics.sort(key=lambda row: (row['interactions'], row['views'], row['post_count']), reverse=True)
+
+    total_views = sum(post.views or 0 for post in posts)
+    total_exposures = sum(post.exposures or 0 for post in posts)
+    total_interactions = sum((post.likes or 0) + (post.favorites or 0) + (post.comments or 0) for post in posts)
+    total_follower_delta = sum(post.follower_delta or 0 for post in posts)
+    viral_posts = len([post for post in posts if post.is_viral])
+    best_post = sorted(
+        posts,
+        key=lambda item: ((item.views or 0), ((item.likes or 0) + (item.favorites or 0) + (item.comments or 0)), (item.follower_delta or 0)),
+        reverse=True
+    )[0] if posts else None
+
+    overview = {
+        'post_count': len(posts),
+        'viral_posts': viral_posts,
+        'total_views': total_views,
+        'total_exposures': total_exposures,
+        'total_interactions': total_interactions,
+        'total_follower_delta': total_follower_delta,
+        'avg_views': round(total_views / len(posts), 2) if posts else 0,
+        'avg_interactions': round(total_interactions / len(posts), 2) if posts else 0,
+        'best_post': _serialize_creator_post(best_post) if best_post else None,
+        'date_from': date_from.isoformat() if date_from else '',
+        'date_to': date_to.isoformat() if date_to else '',
+    }
+
+    return jsonify({
+        'success': True,
+        'account': _serialize_creator_account(account),
+        'overview': overview,
+        'daily_posts': daily_rows,
+        'daily_snapshots': snapshot_rows,
+        'top_topics': top_topics[:10],
+    })
+
 # 活动管理
 @app.route('/activity')
 def activity_list():
@@ -3775,6 +4113,120 @@ def operation_logs():
     })
 
 
+@app.route('/api/jobs/ping', methods=['POST'])
+def trigger_worker_ping():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    from celery_app import ping
+
+    task = ping.delay()
+    _log_operation('dispatch_job', 'worker', message='触发 Worker 联通检查', detail={
+        'task_id': task.id,
+        'job': 'system.ping',
+    })
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': '已触发 Worker 联通检查',
+        'task_id': task.id,
+        'job': 'system.ping',
+    })
+
+
+@app.route('/api/jobs/topic_ideas/generate', methods=['POST'])
+def trigger_generate_topic_ideas_job():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    data = request.json or {}
+    count = min(max(_safe_int(data.get('count'), 80), 1), 120)
+    activity_id = data.get('activity_id')
+    quota = _normalize_quota(data.get('quota'))
+
+    from celery_app import generate_topic_ideas_job
+
+    task = generate_topic_ideas_job.delay(count=count, activity_id=activity_id, quota=quota)
+    _log_operation('dispatch_job', 'topic_idea', message='触发异步生成候选话题', detail={
+        'task_id': task.id,
+        'count': count,
+        'activity_id': activity_id,
+        'quota': quota,
+    })
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': '已触发异步生成候选话题任务',
+        'task_id': task.id,
+        'job': 'jobs.generate_topic_ideas',
+    })
+
+
+@app.route('/api/jobs/<task_id>')
+def get_job_status(task_id):
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    from celery.result import AsyncResult
+    from celery_app import celery
+
+    result = AsyncResult(task_id, app=celery)
+    payload = result.result
+    if not isinstance(payload, (dict, list, str, int, float, bool, type(None))):
+        payload = str(payload)
+    return jsonify({
+        'success': True,
+        'task_id': task_id,
+        'state': result.state,
+        'result': payload,
+    })
+
+
+@app.route('/api/jobs/history')
+def get_job_history():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    from celery.result import AsyncResult
+    from celery_app import celery
+
+    limit = min(max(_safe_int(request.args.get('limit'), 20), 1), 200)
+    logs = OperationLog.query.filter(OperationLog.action.in_(['dispatch_job', 'worker_generate'])).order_by(
+        OperationLog.created_at.desc(),
+        OperationLog.id.desc()
+    ).limit(limit).all()
+    items = []
+    for log in logs:
+        detail_obj = _deserialize_operation_detail(log.detail)
+        items.append({
+            'id': log.id,
+            'created_at': log.created_at.strftime('%Y-%m-%d %H:%M:%S') if log.created_at else '',
+            'actor': log.actor or 'system',
+            'action': log.action,
+            'target_type': log.target_type,
+            'target_id': log.target_id,
+            'message': log.message or '',
+            'detail': detail_obj,
+            'task_id': detail_obj.get('task_id') or '',
+            'state': '',
+        })
+        task_id = detail_obj.get('task_id')
+        if task_id:
+            try:
+                async_result = AsyncResult(task_id, app=celery)
+                items[-1]['state'] = async_result.state
+            except Exception:
+                items[-1]['state'] = 'UNKNOWN'
+    return jsonify({
+        'success': True,
+        'items': items,
+    })
+
+
 @app.route('/admin/activity_snapshots/<int:snapshot_id>/restore', methods=['POST'])
 def restore_activity_snapshot(snapshot_id):
     if not session.get('admin_logged_in'):
@@ -3818,7 +4270,7 @@ def admin_login():
         username = request.form.get('username')
         password = request.form.get('password')
 
-        if username == 'furui' and password == 'wangdandan39':
+        if username == _admin_username() and password == _admin_password():
             session['admin_logged_in'] = True
             session['admin_username'] = username
             return redirect(url_for('admin'))
