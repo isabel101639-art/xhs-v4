@@ -308,6 +308,28 @@ class AssetGenerationTask(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
 
+class AssetLibrary(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    asset_generation_task_id = db.Column(db.Integer)
+    registration_id = db.Column(db.Integer)
+    topic_id = db.Column(db.Integer)
+    library_type = db.Column(db.String(30), default='generated')
+    asset_type = db.Column(db.String(50), default='知识卡片')
+    title = db.Column(db.String(200))
+    subtitle = db.Column(db.String(300))
+    source_provider = db.Column(db.String(50), default='svg_fallback')
+    model_name = db.Column(db.String(100))
+    pool_status = db.Column(db.String(20), default='reserve')
+    status = db.Column(db.String(20), default='active')
+    tags = db.Column(db.String(300))
+    prompt_text = db.Column(db.Text)
+    preview_url = db.Column(db.Text)
+    download_name = db.Column(db.String(200))
+    raw_payload = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+
 class AutomationSchedule(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     job_key = db.Column(db.String(80), unique=True, nullable=False)
@@ -980,6 +1002,36 @@ def _serialize_asset_generation_task(task, detail=False):
         'created_at': _format_datetime(task.created_at),
         'updated_at': _format_datetime(task.updated_at),
         'selected_content_preview': _truncate_text(task.selected_content or '', 120) if not detail else task.selected_content or '',
+    }
+
+
+def _serialize_asset_library_item(item, detail=False):
+    reg = Registration.query.get(item.registration_id) if item.registration_id else None
+    topic = Topic.query.get(item.topic_id) if item.topic_id else None
+    payload_json = _load_json_value(item.raw_payload, {})
+    return {
+        'id': item.id,
+        'asset_generation_task_id': item.asset_generation_task_id,
+        'registration_id': item.registration_id,
+        'registration_name': reg.name if reg else '',
+        'topic_id': item.topic_id,
+        'topic_name': topic.topic_name if topic else '',
+        'library_type': item.library_type or 'generated',
+        'asset_type': item.asset_type or '',
+        'title': item.title or '',
+        'subtitle': item.subtitle or '',
+        'source_provider': item.source_provider or 'svg_fallback',
+        'model_name': item.model_name or '',
+        'pool_status': item.pool_status or 'reserve',
+        'pool_status_label': _pool_status_label(item.pool_status or 'reserve'),
+        'status': item.status or 'active',
+        'tags': item.tags or '',
+        'prompt_text': item.prompt_text or '',
+        'preview_url': item.preview_url or '',
+        'download_name': item.download_name or '',
+        'raw_payload': payload_json if detail else {},
+        'created_at': _format_datetime(item.created_at),
+        'updated_at': _format_datetime(item.updated_at),
     }
 
 
@@ -3721,6 +3773,7 @@ def automation_overview():
             'data_source_tasks': DataSourceTask.query.count(),
             'running_data_source_tasks': DataSourceTask.query.filter(DataSourceTask.status.in_(['queued', 'running'])).count(),
             'asset_generation_tasks': AssetGenerationTask.query.count(),
+            'asset_library_items': AssetLibrary.query.count(),
             'automation_schedules': AutomationSchedule.query.count(),
             'enabled_schedules': AutomationSchedule.query.filter_by(enabled=True).count(),
         },
@@ -3923,6 +3976,78 @@ def list_asset_generation_tasks():
     return jsonify({
         'success': True,
         'items': [_serialize_asset_generation_task(item) for item in items]
+    })
+
+
+@app.route('/api/admin/assets/library')
+def list_asset_library():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    pool_status = (request.args.get('pool_status') or '').strip()
+    source_provider = (request.args.get('source_provider') or '').strip()
+    keyword = (request.args.get('keyword') or '').strip()
+    limit = min(max(_safe_int(request.args.get('limit'), 30), 1), 100)
+
+    query = AssetLibrary.query
+    if pool_status:
+        query = query.filter_by(pool_status=pool_status)
+    if source_provider:
+        query = query.filter_by(source_provider=source_provider)
+    if keyword:
+        query = query.filter(or_(
+            AssetLibrary.title.contains(keyword),
+            AssetLibrary.subtitle.contains(keyword),
+            AssetLibrary.tags.contains(keyword),
+        ))
+
+    items = query.order_by(AssetLibrary.created_at.desc(), AssetLibrary.id.desc()).limit(limit).all()
+    return jsonify({
+        'success': True,
+        'items': [_serialize_asset_library_item(item) for item in items]
+    })
+
+
+@app.route('/api/admin/assets/library/<int:item_id>')
+def asset_library_detail(item_id):
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    item = AssetLibrary.query.get_or_404(item_id)
+    return jsonify({
+        'success': True,
+        'item': _serialize_asset_library_item(item, detail=True)
+    })
+
+
+@app.route('/api/admin/assets/library/<int:item_id>/pool_status', methods=['POST'])
+def update_asset_library_pool_status(item_id):
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    payload = request.json or {}
+    pool_status = (payload.get('pool_status') or '').strip()
+    if pool_status not in {'reserve', 'candidate', 'formal', 'archived'}:
+        return jsonify({'success': False, 'message': '不支持的资产池状态'})
+
+    item = AssetLibrary.query.get_or_404(item_id)
+    item.pool_status = pool_status
+    if pool_status == 'archived':
+        item.status = 'archived'
+    elif item.status == 'archived':
+        item.status = 'active'
+    _log_operation('move_pool', 'asset_library', target_id=item.id, message='更新图片资产池状态', detail={
+        'title': item.title,
+        'pool_status': pool_status,
+    })
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': f'图片资产已移动到{_pool_status_label(pool_status)}',
+        'item': _serialize_asset_library_item(item)
     })
 
 

@@ -554,6 +554,59 @@
         </div>
 
         <div class="panel p-4 mb-4">
+            <div class="section-title">图片资产库</div>
+            <div class="subtle mb-3">图片任务成功后会自动沉淀到资产库。这里可以做筛选、预览，并把资产推入候选池或正式池。</div>
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label subtle">池状态筛选</label>
+                    <select id="assetLibraryPoolFilter" class="form-select" onchange="loadAssetLibrary()">
+                        <option value="">全部</option>
+                        <option value="reserve">储备池</option>
+                        <option value="candidate">候选池</option>
+                        <option value="formal">正式池</option>
+                        <option value="archived">归档池</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label subtle">提供方筛选</label>
+                    <select id="assetLibraryProviderFilter" class="form-select" onchange="loadAssetLibrary()">
+                        <option value="">全部</option>
+                        <option value="svg_fallback">svg_fallback</option>
+                        <option value="openai">openai</option>
+                        <option value="openai_compatible">openai_compatible</option>
+                        <option value="generic_json">generic_json</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label subtle">关键词筛选</label>
+                    <input id="assetLibraryKeywordFilter" class="form-control" placeholder="标题 / 标签 / 话题" oninput="loadAssetLibrary()">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label subtle">条数</label>
+                    <input id="assetLibraryLimitFilter" type="number" min="1" max="100" value="30" class="form-control" onchange="loadAssetLibrary()">
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table class="table data-table align-middle">
+                    <thead>
+                        <tr>
+                            <th>预览</th>
+                            <th>标题</th>
+                            <th>来源</th>
+                            <th>池状态</th>
+                            <th>标签</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="assetLibraryTableBody">
+                        <tr><td colspan="6" class="text-center text-muted">暂无图片资产</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="assetLibraryDetail" class="detail-card mt-3 text-muted">点击某条资产查看详细信息。</div>
+        </div>
+
+        <div class="panel p-4 mb-4">
             <div class="section-title">自动调度配置</div>
             <div class="subtle mb-3">这里控制“自动热点巡检”“自动候选话题生成”等周期任务。开启后需要配合独立 `beat` 服务一起运行。</div>
             <div class="d-flex gap-2 flex-wrap mb-3">
@@ -741,6 +794,7 @@
         let automationConfigCache = null;
         let dataSourceTaskCache = {};
         let assetTaskCache = {};
+        let assetLibraryCache = {};
 
         function escapeHtml(text) {
             return (text || '').replace(/[&<>"']/g, (char) => ({
@@ -950,6 +1004,42 @@
             `).join('') || '<tr><td colspan="6" class="text-center text-muted">暂无图片任务</td></tr>';
         }
 
+        async function loadAssetLibrary() {
+            const params = new URLSearchParams();
+            const poolStatus = document.getElementById('assetLibraryPoolFilter')?.value;
+            const provider = document.getElementById('assetLibraryProviderFilter')?.value;
+            const keyword = document.getElementById('assetLibraryKeywordFilter')?.value?.trim();
+            const limit = document.getElementById('assetLibraryLimitFilter')?.value || '30';
+            if (poolStatus) params.set('pool_status', poolStatus);
+            if (provider) params.set('source_provider', provider);
+            if (keyword) params.set('keyword', keyword);
+            if (limit) params.set('limit', limit);
+            const res = await fetch(`/api/admin/assets/library?${params.toString()}`);
+            const data = await res.json();
+            const body = document.getElementById('assetLibraryTableBody');
+            assetLibraryCache = Object.fromEntries((data.items || []).map((item) => [item.id, item]));
+            body.innerHTML = (data.items || []).map((item) => `
+                <tr>
+                    <td>${item.preview_url ? `<img class="asset-preview" src="${item.preview_url}" alt="${escapeHtml(item.title || '')}" style="max-width:120px;">` : '<span class="text-muted">无预览</span>'}</td>
+                    <td>
+                        <strong>${escapeHtml(item.title || '-')}</strong>
+                        <div class="subtle">${escapeHtml(item.topic_name || '-')}</div>
+                    </td>
+                    <td>${escapeHtml(item.source_provider || '-')}<div class="subtle">${escapeHtml(item.model_name || '-')}</div></td>
+                    <td><span class="badge ${poolStatusClass(item.pool_status)}">${escapeHtml(item.pool_status_label || item.pool_status || '储备池')}</span></td>
+                    <td>${escapeHtml(item.tags || '-')}</td>
+                    <td>
+                        <div class="d-flex flex-column gap-2">
+                            <button class="btn btn-sm btn-outline-primary" onclick="showAssetLibraryDetail(${item.id})">详情</button>
+                            ${item.pool_status !== 'candidate' ? `<button class="btn btn-sm btn-outline-secondary" onclick="changeAssetLibraryPoolStatus(${item.id}, 'candidate')">推入候选</button>` : ''}
+                            ${item.pool_status !== 'formal' ? `<button class="btn btn-sm btn-outline-success" onclick="changeAssetLibraryPoolStatus(${item.id}, 'formal')">转正式池</button>` : ''}
+                            ${item.pool_status !== 'archived' ? `<button class="btn btn-sm btn-outline-dark" onclick="changeAssetLibraryPoolStatus(${item.id}, 'archived')">归档</button>` : `<button class="btn btn-sm btn-outline-info" onclick="changeAssetLibraryPoolStatus(${item.id}, 'reserve')">恢复储备</button>`}
+                        </div>
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="6" class="text-center text-muted">暂无图片资产</td></tr>';
+        }
+
         async function loadDiagnostics() {
             const res = await fetch('/api/admin/runtime-diagnostics');
             const data = await res.json();
@@ -1127,6 +1217,56 @@
             const item = data.item || {};
             assetTaskCache[taskId] = item;
             showAssetTaskDetail(taskId);
+        }
+
+        async function showAssetLibraryDetail(itemId) {
+            const cached = assetLibraryCache[itemId];
+            const detailWrap = document.getElementById('assetLibraryDetail');
+            if (cached && cached.prompt_text) {
+                detailWrap.innerHTML = `
+                    <div class="row g-3">
+                        <div class="col-lg-4">
+                            ${cached.preview_url ? `<img class="asset-preview" src="${cached.preview_url}" alt="${escapeHtml(cached.title || '')}">` : '<div class="text-muted">无预览</div>'}
+                        </div>
+                        <div class="col-lg-4">
+                            <strong>${escapeHtml(cached.title || '-')}</strong>
+                            <div class="subtle mt-2">类型：${escapeHtml(cached.asset_type || '-')}</div>
+                            <div class="subtle">话题：${escapeHtml(cached.topic_name || '-')}</div>
+                            <div class="subtle">报名人：${escapeHtml(cached.registration_name || '-')}</div>
+                            <div class="subtle">池状态：${escapeHtml(cached.pool_status_label || cached.pool_status || '-')}</div>
+                            <div class="subtle">提供方：${escapeHtml(cached.source_provider || '-')}</div>
+                        </div>
+                        <div class="col-lg-4">
+                            <strong>Prompt / 元数据</strong>
+                            <div class="json-box mt-2">${escapeHtml(cached.prompt_text || '')}</div>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            const res = await fetch(`/api/admin/assets/library/${itemId}`);
+            const data = await res.json();
+            if (!data.success) {
+                detailWrap.textContent = data.message || '图片资产详情加载失败';
+                return;
+            }
+            const item = data.item || {};
+            assetLibraryCache[itemId] = item;
+            showAssetLibraryDetail(itemId);
+        }
+
+        async function changeAssetLibraryPoolStatus(itemId, poolStatus) {
+            const res = await fetch(`/api/admin/assets/library/${itemId}/pool_status`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ pool_status: poolStatus })
+            });
+            const data = await res.json();
+            document.getElementById('jobMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadAssetLibrary();
+                loadOverview();
+            }
         }
 
         async function loadSchedules() {
@@ -1529,6 +1669,7 @@
             document.getElementById('jobMsg').textContent = data.message || '已处理';
             if (data.success) {
                 loadAssetTasks();
+                loadAssetLibrary();
                 loadJobHistory();
             }
         }
@@ -1635,6 +1776,7 @@
                     loadJobHistory();
                     loadDataSourceTasks();
                     loadAssetTasks();
+                    loadAssetLibrary();
                     loadSchedules();
                     loadDiagnostics();
                 }, 15000);
@@ -1705,6 +1847,7 @@
         loadJobHistory();
         loadDataSourceTasks();
         loadAssetTasks();
+        loadAssetLibrary();
         loadSchedules();
         loadDiagnostics();
         document.getElementById('autoRefreshJobs')?.addEventListener('change', syncJobAutoRefresh);

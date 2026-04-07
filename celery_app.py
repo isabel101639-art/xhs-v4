@@ -260,6 +260,7 @@ def generate_asset_images_job(asset_task_id):
         _build_asset_provider_request_preview,
         _build_asset_generation_fallback_results,
         _log_operation,
+        AssetLibrary,
         AssetGenerationTask,
         Topic,
         db,
@@ -446,6 +447,27 @@ def generate_asset_images_job(asset_task_id):
             image_count=task.image_count or 3,
         )
 
+    for item in results:
+        tags = ','.join(filter(None, [topic.topic_name if topic else '', item.get('type') or '', task.style_preset or '']))
+        db.session.add(AssetLibrary(
+            asset_generation_task_id=task.id,
+            registration_id=task.registration_id,
+            topic_id=task.topic_id,
+            library_type='generated',
+            asset_type=item.get('type') or '知识卡片',
+            title=item.get('title') or task.title_hint or '',
+            subtitle=item.get('subtitle') or '',
+            source_provider=actual_provider,
+            model_name=model_name or task.model_name or '',
+            pool_status='reserve',
+            status='active',
+            tags=tags[:300],
+            prompt_text=item.get('image_prompt') or task.prompt_text or '',
+            preview_url=item.get('preview_url') or '',
+            download_name=item.get('download_name') or '',
+            raw_payload=json.dumps(item, ensure_ascii=False),
+        ))
+
     task.status = 'success'
     task.source_provider = actual_provider
     task.model_name = model_name or task.model_name
@@ -456,6 +478,7 @@ def generate_asset_images_job(asset_task_id):
     _log_operation('worker_generate_asset', 'asset_generation_task', target_id=task.id, message='Worker 执行图片生成任务', detail={
         'provider': actual_provider,
         'image_count': len(results),
+        'library_items_created': len(results),
         'registration_id': task.registration_id,
         'topic_id': task.topic_id,
     })
