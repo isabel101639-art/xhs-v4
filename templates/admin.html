@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>后台管理 - 福瑞医科小红书任务</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <style>
         :root { --xhs-red: #ff2442; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; background: #f5f5f5; }
@@ -15,6 +16,10 @@
         .metric-strip { height: 8px; border-radius: 999px; background: #f1f5f9; overflow: hidden; }
         .metric-strip > span { display: block; height: 100%; background: linear-gradient(90deg, #ff7a59, #ef4e45); border-radius: 999px; }
         .mini-card { border: 1px solid #f0dfd8; border-radius: 14px; background: #fffaf7; padding: 14px 16px; }
+        .portal-preview { border-radius: 16px; border: 1px solid #f0dfd8; background: linear-gradient(180deg, #fff 0%, #fff8f5 100%); padding: 18px; }
+        .portal-swatch { width: 36px; height: 36px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.08); }
+        .portal-nav-preview { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+        .portal-chip { padding: 7px 12px; border-radius: 999px; background: #fff5f6; color: #c81e3a; font-size: 12px; border: 1px solid #ffd7df; }
     
         /* MOBILE_PATCH */
         @media (max-width: 768px) {
@@ -36,6 +41,9 @@
                 </a>
                 <a class="nav-link" href="#" onclick="showTab('topics')">
                     <i class="bi bi-chat-dots"></i> 话题管理
+                </a>
+                <a class="nav-link" href="#" onclick="showTab('portal')">
+                    <i class="bi bi-window-stack"></i> 门户配置
                 </a>
                 <a class="nav-link" href="#" onclick="showTab('data')">
                     <i class="bi bi-download"></i> 数据导出
@@ -167,6 +175,246 @@
                                 <button type="submit" class="btn btn-xhs">新增话题</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 门户配置 -->
+            <div id="tab-portal" style="display:none;">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h4>门户配置</h4>
+                    <button type="button" class="btn btn-outline-primary" onclick="loadSiteConfig()">刷新配置</button>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-lg-7">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6 class="mb-3">首页文案与结构</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">站点名称</label>
+                                        <input id="siteNameInput" class="form-control">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">浏览器标题</label>
+                                        <input id="sitePageTitleInput" class="form-control">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Hero 标签</label>
+                                        <input id="siteHeroBadgeInput" class="form-control" placeholder="当前活动期">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label">Hero 主标题</label>
+                                        <input id="siteHeroTitleInput" class="form-control" placeholder="不填则沿用当前活动标题">
+                                    </div>
+                                    <div class="col-md-12">
+                                        <label class="form-label">Hero 副标题</label>
+                                        <textarea id="siteHeroSubtitleInput" class="form-control" rows="3" placeholder="不填则沿用当前活动描述"></textarea>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">公告区标题</label>
+                                        <input id="siteAnnouncementTitleInput" class="form-control">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">热点区标题</label>
+                                        <input id="siteTrendTitleInput" class="form-control">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">主分区图标</label>
+                                        <input id="sitePrimaryIconInput" class="form-control" placeholder="bi-capsule">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label">主分区标题</label>
+                                        <input id="sitePrimaryTitleInput" class="form-control">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">第二分区图标</label>
+                                        <input id="siteSecondaryIconInput" class="form-control" placeholder="bi-heart-pulse">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label">第二分区标题</label>
+                                        <input id="siteSecondaryTitleInput" class="form-control">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">首区话题阈值</label>
+                                        <input id="sitePrimaryTopicLimitInput" type="number" min="1" max="120" class="form-control">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label">页脚文案</label>
+                                        <input id="siteFooterTextInput" class="form-control">
+                                    </div>
+                                    <div class="col-md-12">
+                                        <label class="form-label">导航项</label>
+                                        <textarea id="siteNavItemsInput" class="form-control" rows="6" placeholder="每行一项，格式：名称|链接|图标|target&#10;示例：话题广场|/|bi-collection|_self"></textarea>
+                                        <div class="form-text">支持最多 8 项，`target` 选填 `_self` 或 `_blank`。</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-5">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6 class="mb-3">主题颜色</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">主题名称</label>
+                                        <input id="themeNameInput" class="form-control">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">字体</label>
+                                        <input id="themeFontFamilyInput" class="form-control" placeholder="默认即可">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">主色</label>
+                                        <input id="themePrimaryColorInput" type="color" class="form-control form-control-color">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">主色浅底</label>
+                                        <input id="themePrimarySoftColorInput" type="color" class="form-control form-control-color">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">辅色</label>
+                                        <input id="themeSecondaryColorInput" type="color" class="form-control form-control-color">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">辅色浅底</label>
+                                        <input id="themeSecondarySoftColorInput" type="color" class="form-control form-control-color">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">导航渐变起点</label>
+                                        <input id="themeNavStartInput" type="color" class="form-control form-control-color">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">导航渐变终点</label>
+                                        <input id="themeNavEndInput" type="color" class="form-control form-control-color">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Hero 渐变起点</label>
+                                        <input id="themeHeroStartInput" type="color" class="form-control form-control-color">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Hero 渐变终点</label>
+                                        <input id="themeHeroEndInput" type="color" class="form-control form-control-color">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">背景起点</label>
+                                        <input id="themeBgStartInput" type="color" class="form-control form-control-color">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">背景终点</label>
+                                        <input id="themeBgEndInput" type="color" class="form-control form-control-color">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">卡片底色</label>
+                                        <input id="themeSurfaceColorInput" type="color" class="form-control form-control-color">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">正文颜色</label>
+                                        <input id="themeTextColorInput" type="color" class="form-control form-control-color">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">辅助文字颜色</label>
+                                        <input id="themeMutedTextColorInput" type="color" class="form-control form-control-color">
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-2 mt-4">
+                                    <button type="button" class="btn btn-xhs" onclick="saveSiteConfig()">保存门户配置</button>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="loadSiteConfig()">重置回当前配置</button>
+                                </div>
+                                <div id="siteConfigMsg" class="text-muted small mt-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="mb-3">门户预览摘要</h6>
+                        <div id="portalPreview" class="portal-preview text-muted">加载配置后显示预览摘要</div>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-lg-5">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6 class="mb-3">新增 / 编辑公告</h6>
+                                <input type="hidden" id="announcementIdInput">
+                                <div class="mb-2">
+                                    <label class="form-label">标题</label>
+                                    <input id="announcementTitleInput" class="form-control">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">内容</label>
+                                    <textarea id="announcementContentInput" class="form-control" rows="4"></textarea>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">链接</label>
+                                    <input id="announcementLinkInput" class="form-control" placeholder="https://...">
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label">按钮文案</label>
+                                        <input id="announcementButtonTextInput" class="form-control" placeholder="查看详情">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">优先级</label>
+                                        <input id="announcementPriorityInput" type="number" class="form-control" value="100">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">状态</label>
+                                        <select id="announcementStatusInput" class="form-select">
+                                            <option value="draft">草稿</option>
+                                            <option value="active">上线</option>
+                                            <option value="archived">归档</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">开始时间</label>
+                                        <input id="announcementStartsAtInput" type="datetime-local" class="form-control">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">结束时间</label>
+                                        <input id="announcementEndsAtInput" type="datetime-local" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-2 mt-3">
+                                    <button type="button" class="btn btn-xhs" onclick="saveAnnouncement()">保存公告</button>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="resetAnnouncementForm()">清空</button>
+                                </div>
+                                <div id="announcementMsg" class="text-muted small mt-2"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-7">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 class="mb-0">公告列表</h6>
+                                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="loadAnnouncements()">刷新公告</button>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>标题</th>
+                                                <th>状态</th>
+                                                <th>优先级</th>
+                                                <th>时间</th>
+                                                <th>操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="announcementTableBody">
+                                            <tr><td colspan="5" class="text-muted text-center">暂无公告</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -674,15 +922,31 @@
     <script>
         let selectedCreatorAccountId = null;
         let creatorAccountCache = {};
+        let siteConfigCache = null;
+        let announcementCache = {};
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
 
         function showTab(tab) {
             document.getElementById('tab-activities').style.display = 'none';
             document.getElementById('tab-topics').style.display = 'none';
+            document.getElementById('tab-portal').style.display = 'none';
             document.getElementById('tab-data').style.display = 'none';
             document.getElementById('tab-snapshots').style.display = 'none';
             document.getElementById('tab-creator').style.display = 'none';
             document.getElementById('tab-logs').style.display = 'none';
             document.getElementById('tab-' + tab).style.display = 'block';
+            if (tab === 'portal') {
+                loadSiteConfig();
+                loadAnnouncements();
+            }
             if (tab === 'creator') {
                 loadCreatorAccounts();
             }
@@ -776,6 +1040,261 @@
             alert(result.message || '已处理');
             if (result.success) {
                 location.reload();
+            }
+        }
+
+        function formatNavItems(items) {
+            return (items || []).map((item) => {
+                const parts = [
+                    item.label || '',
+                    item.url || '',
+                    item.icon || '',
+                    item.target || '_self'
+                ];
+                return parts.join('|');
+            }).join('\n');
+        }
+
+        function parseNavItemsText(rawText) {
+            return String(rawText || '')
+                .split('\n')
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .map((line) => {
+                    const [label = '', url = '', icon = '', target = '_self'] = line.split('|').map((part) => part.trim());
+                    return { label, url, icon, target: target || '_self' };
+                })
+                .filter((item) => item.label && item.url);
+        }
+
+        function renderPortalPreview(pageConfig, theme) {
+            const preview = document.getElementById('portalPreview');
+            if (!pageConfig || !theme) {
+                preview.textContent = '配置尚未加载';
+                return;
+            }
+            preview.innerHTML = `
+                <div class="row g-3">
+                    <div class="col-lg-7">
+                        <div class="mb-2"><strong>${escapeHtml(pageConfig.site_name || '-')}</strong></div>
+                        <div class="text-muted small mb-2">Hero：${escapeHtml(pageConfig.hero_badge || '-')} / ${escapeHtml(pageConfig.hero_title || '沿用活动标题')}</div>
+                        <div class="small mb-3" style="line-height:1.7;">${escapeHtml(pageConfig.hero_subtitle || '未设置副标题，前台将自动沿用活动描述。')}</div>
+                        <div class="portal-nav-preview">
+                            ${(pageConfig.nav_items || []).map((item) => `
+                                <span class="portal-chip">${escapeHtml(item.label)} ${item.icon ? `<span class="text-muted">${escapeHtml(item.icon)}</span>` : ''}</span>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div class="col-lg-5">
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            <div class="portal-swatch" style="background:${escapeHtml(theme.primary_color)};" title="主色"></div>
+                            <div class="portal-swatch" style="background:${escapeHtml(theme.secondary_color)};" title="辅色"></div>
+                            <div class="portal-swatch" style="background:${escapeHtml(theme.nav_gradient_start)};" title="导航起点"></div>
+                            <div class="portal-swatch" style="background:${escapeHtml(theme.nav_gradient_end)};" title="导航终点"></div>
+                            <div class="portal-swatch" style="background:${escapeHtml(theme.hero_gradient_start)};" title="Hero 起点"></div>
+                            <div class="portal-swatch" style="background:${escapeHtml(theme.hero_gradient_end)};" title="Hero 终点"></div>
+                        </div>
+                        <div class="small text-muted">主分区：${escapeHtml(pageConfig.primary_section_title || '-')} ｜ 第二分区：${escapeHtml(pageConfig.secondary_section_title || '-')}</div>
+                        <div class="small text-muted mt-1">首区话题阈值：${pageConfig.primary_topic_limit || 18} ｜ 页脚：${escapeHtml(pageConfig.footer_text || '-')}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function fillSiteConfigForm(payload) {
+            const pageConfig = payload.page_config || {};
+            const theme = payload.theme || {};
+            siteConfigCache = payload;
+
+            document.getElementById('siteNameInput').value = pageConfig.site_name || '';
+            document.getElementById('sitePageTitleInput').value = pageConfig.page_title || '';
+            document.getElementById('siteHeroBadgeInput').value = pageConfig.hero_badge || '';
+            document.getElementById('siteHeroTitleInput').value = pageConfig.hero_title || '';
+            document.getElementById('siteHeroSubtitleInput').value = pageConfig.hero_subtitle || '';
+            document.getElementById('siteAnnouncementTitleInput').value = pageConfig.announcement_title || '';
+            document.getElementById('siteTrendTitleInput').value = pageConfig.trend_title || '';
+            document.getElementById('sitePrimaryIconInput').value = pageConfig.primary_section_icon || '';
+            document.getElementById('sitePrimaryTitleInput').value = pageConfig.primary_section_title || '';
+            document.getElementById('siteSecondaryIconInput').value = pageConfig.secondary_section_icon || '';
+            document.getElementById('siteSecondaryTitleInput').value = pageConfig.secondary_section_title || '';
+            document.getElementById('sitePrimaryTopicLimitInput').value = pageConfig.primary_topic_limit || 18;
+            document.getElementById('siteFooterTextInput').value = pageConfig.footer_text || '';
+            document.getElementById('siteNavItemsInput').value = formatNavItems(pageConfig.nav_items || []);
+
+            document.getElementById('themeNameInput').value = theme.name || '';
+            document.getElementById('themeFontFamilyInput').value = theme.font_family || '';
+            document.getElementById('themePrimaryColorInput').value = theme.primary_color || '#ff2442';
+            document.getElementById('themePrimarySoftColorInput').value = theme.primary_soft_color || '#ffe5e8';
+            document.getElementById('themeSecondaryColorInput').value = theme.secondary_color || '#ff7a59';
+            document.getElementById('themeSecondarySoftColorInput').value = theme.secondary_soft_color || '#fff3e8';
+            document.getElementById('themeNavStartInput').value = theme.nav_gradient_start || '#ff2442';
+            document.getElementById('themeNavEndInput').value = theme.nav_gradient_end || '#ff6b6b';
+            document.getElementById('themeHeroStartInput').value = theme.hero_gradient_start || '#ff2442';
+            document.getElementById('themeHeroEndInput').value = theme.hero_gradient_end || '#ff7a59';
+            document.getElementById('themeBgStartInput').value = theme.background_gradient_start || '#fff7f5';
+            document.getElementById('themeBgEndInput').value = theme.background_gradient_end || '#ffffff';
+            document.getElementById('themeSurfaceColorInput').value = theme.surface_color || '#ffffff';
+            document.getElementById('themeTextColorInput').value = theme.text_color || '#1f2937';
+            document.getElementById('themeMutedTextColorInput').value = theme.muted_text_color || '#6b7280';
+
+            renderPortalPreview(pageConfig, theme);
+        }
+
+        async function loadSiteConfig() {
+            const res = await fetch('/api/admin/site-config');
+            const result = await res.json();
+            if (!result.success) {
+                document.getElementById('siteConfigMsg').textContent = result.message || '加载门户配置失败';
+                return;
+            }
+            fillSiteConfigForm(result);
+            document.getElementById('siteConfigMsg').textContent = `已加载配置，更新时间：${result.page_config?.updated_at || result.theme?.updated_at || '刚刚'}`;
+        }
+
+        async function saveSiteConfig() {
+            const payload = {
+                page_config: {
+                    site_name: document.getElementById('siteNameInput').value.trim(),
+                    page_title: document.getElementById('sitePageTitleInput').value.trim(),
+                    hero_badge: document.getElementById('siteHeroBadgeInput').value.trim(),
+                    hero_title: document.getElementById('siteHeroTitleInput').value.trim(),
+                    hero_subtitle: document.getElementById('siteHeroSubtitleInput').value.trim(),
+                    announcement_title: document.getElementById('siteAnnouncementTitleInput').value.trim(),
+                    trend_title: document.getElementById('siteTrendTitleInput').value.trim(),
+                    primary_section_icon: document.getElementById('sitePrimaryIconInput').value.trim(),
+                    primary_section_title: document.getElementById('sitePrimaryTitleInput').value.trim(),
+                    secondary_section_icon: document.getElementById('siteSecondaryIconInput').value.trim(),
+                    secondary_section_title: document.getElementById('siteSecondaryTitleInput').value.trim(),
+                    primary_topic_limit: parseInt(document.getElementById('sitePrimaryTopicLimitInput').value || '18', 10),
+                    footer_text: document.getElementById('siteFooterTextInput').value.trim(),
+                    nav_items: parseNavItemsText(document.getElementById('siteNavItemsInput').value)
+                },
+                theme: {
+                    name: document.getElementById('themeNameInput').value.trim(),
+                    font_family: document.getElementById('themeFontFamilyInput').value.trim(),
+                    primary_color: document.getElementById('themePrimaryColorInput').value,
+                    primary_soft_color: document.getElementById('themePrimarySoftColorInput').value,
+                    secondary_color: document.getElementById('themeSecondaryColorInput').value,
+                    secondary_soft_color: document.getElementById('themeSecondarySoftColorInput').value,
+                    nav_gradient_start: document.getElementById('themeNavStartInput').value,
+                    nav_gradient_end: document.getElementById('themeNavEndInput').value,
+                    hero_gradient_start: document.getElementById('themeHeroStartInput').value,
+                    hero_gradient_end: document.getElementById('themeHeroEndInput').value,
+                    background_gradient_start: document.getElementById('themeBgStartInput').value,
+                    background_gradient_end: document.getElementById('themeBgEndInput').value,
+                    surface_color: document.getElementById('themeSurfaceColorInput').value,
+                    text_color: document.getElementById('themeTextColorInput').value,
+                    muted_text_color: document.getElementById('themeMutedTextColorInput').value
+                }
+            };
+
+            const res = await fetch('/api/admin/site-config', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const result = await res.json();
+            document.getElementById('siteConfigMsg').textContent = result.message || (result.success ? '门户配置已保存' : '门户配置保存失败');
+            if (result.success) {
+                fillSiteConfigForm(result);
+                document.getElementById('siteConfigMsg').textContent = '门户配置已保存并刷新到预览';
+            }
+        }
+
+        function resetAnnouncementForm() {
+            document.getElementById('announcementIdInput').value = '';
+            document.getElementById('announcementTitleInput').value = '';
+            document.getElementById('announcementContentInput').value = '';
+            document.getElementById('announcementLinkInput').value = '';
+            document.getElementById('announcementButtonTextInput').value = '';
+            document.getElementById('announcementPriorityInput').value = '100';
+            document.getElementById('announcementStatusInput').value = 'draft';
+            document.getElementById('announcementStartsAtInput').value = '';
+            document.getElementById('announcementEndsAtInput').value = '';
+        }
+
+        function fillAnnouncementForm(item) {
+            if (!item) return;
+            document.getElementById('announcementIdInput').value = item.id || '';
+            document.getElementById('announcementTitleInput').value = item.title || '';
+            document.getElementById('announcementContentInput').value = item.content || '';
+            document.getElementById('announcementLinkInput').value = item.link_url || '';
+            document.getElementById('announcementButtonTextInput').value = item.button_text || '';
+            document.getElementById('announcementPriorityInput').value = item.priority || 100;
+            document.getElementById('announcementStatusInput').value = item.status || 'draft';
+            document.getElementById('announcementStartsAtInput').value = item.starts_at_input || '';
+            document.getElementById('announcementEndsAtInput').value = item.ends_at_input || '';
+        }
+
+        async function loadAnnouncements() {
+            const res = await fetch('/api/admin/announcements');
+            const result = await res.json();
+            const body = document.getElementById('announcementTableBody');
+            const items = result.items || [];
+            announcementCache = Object.fromEntries(items.map((item) => [item.id, item]));
+            body.innerHTML = items.map((item) => `
+                <tr>
+                    <td>
+                        <strong>${escapeHtml(item.title)}</strong>
+                        <div class="text-muted small">${escapeHtml(item.content || '').slice(0, 60) || '暂无内容'}</div>
+                    </td>
+                    <td>${escapeHtml(item.status || '-')}</td>
+                    <td>${item.priority || 0}</td>
+                    <td>
+                        <div class="small text-muted">开始：${escapeHtml(item.starts_at || '-')}</div>
+                        <div class="small text-muted">结束：${escapeHtml(item.ends_at || '-')}</div>
+                    </td>
+                    <td>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="editAnnouncement(${item.id})">编辑</button>
+                            <button type="button" class="btn btn-sm btn-outline-success" onclick="updateAnnouncementStatus(${item.id}, 'active')">上线</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="updateAnnouncementStatus(${item.id}, 'draft')">草稿</button>
+                            <button type="button" class="btn btn-sm btn-outline-dark" onclick="updateAnnouncementStatus(${item.id}, 'archived')">归档</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="5" class="text-muted text-center">暂无公告</td></tr>';
+        }
+
+        function editAnnouncement(announcementId) {
+            fillAnnouncementForm(announcementCache[announcementId]);
+        }
+
+        async function saveAnnouncement() {
+            const payload = {
+                id: document.getElementById('announcementIdInput').value || undefined,
+                title: document.getElementById('announcementTitleInput').value.trim(),
+                content: document.getElementById('announcementContentInput').value.trim(),
+                link_url: document.getElementById('announcementLinkInput').value.trim(),
+                button_text: document.getElementById('announcementButtonTextInput').value.trim(),
+                priority: parseInt(document.getElementById('announcementPriorityInput').value || '100', 10),
+                status: document.getElementById('announcementStatusInput').value,
+                starts_at: document.getElementById('announcementStartsAtInput').value,
+                ends_at: document.getElementById('announcementEndsAtInput').value
+            };
+            const res = await fetch('/api/admin/announcements', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const result = await res.json();
+            document.getElementById('announcementMsg').textContent = result.message || '已处理';
+            if (result.success) {
+                resetAnnouncementForm();
+                loadAnnouncements();
+            }
+        }
+
+        async function updateAnnouncementStatus(announcementId, status) {
+            const res = await fetch(`/api/admin/announcements/${announcementId}/status`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ status })
+            });
+            const result = await res.json();
+            document.getElementById('announcementMsg').textContent = result.message || '已处理';
+            if (result.success) {
+                loadAnnouncements();
             }
         }
 

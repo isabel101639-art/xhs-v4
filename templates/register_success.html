@@ -19,6 +19,8 @@
         .regen-btn { background: #4caf50; color: white; border: none; border-radius: 6px; padding: 8px 16px; cursor: pointer; }
         .asset-card { background: #fffaf7; border: 1px solid #f1d9d3; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
         .asset-preview { width: 100%; border-radius: 12px; border: 1px solid #f2e4df; background: white; }
+        .bundle-card { background: #fffefc; border: 1px solid #ecdcd5; border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+        .bundle-copy-box { border: 1px solid #f0e1db; background: #fff; border-radius: 10px; padding: 12px; white-space: pre-wrap; font-size: 13px; line-height: 1.8; }
     
         /* MOBILE_PATCH */
         @media (max-width: 768px) {
@@ -104,11 +106,28 @@
                     <button class="copy-btn" type="button" onclick="generateCreativePack()" style="background:#ff8b2b;">
                         <i class="bi bi-image"></i> 生成封面/配图素材包
                     </button>
+                    <button class="copy-btn ms-2" type="button" onclick="generateGraphicArticleBundle()" style="background:#0f766e;">
+                        <i class="bi bi-layout-text-window-reverse"></i> 一键生成图文创作包
+                    </button>
+                    <button class="copy-btn ms-2" type="button" onclick="startAssetGenerationTask()" style="background:#2563eb;">
+                        <i class="bi bi-stars"></i> AI 生成图片任务
+                    </button>
                 </div>
 
                 <div id="creativePackArea" class="mt-4" style="display:none;">
                     <h6 class="mb-3"><i class="bi bi-palette"></i> 爆款素材包</h6>
                     <div id="creativePackList"></div>
+                </div>
+
+                <div id="graphicBundleArea" class="mt-4" style="display:none;">
+                    <h6 class="mb-3"><i class="bi bi-card-image"></i> 图文创作包</h6>
+                    <div id="graphicBundleList"></div>
+                </div>
+
+                <div id="assetTaskArea" class="mt-4" style="display:none;">
+                    <h6 class="mb-3"><i class="bi bi-images"></i> AI 图片任务结果</h6>
+                    <div id="assetTaskMsg" class="text-muted small mb-3"></div>
+                    <div id="assetTaskList"></div>
                 </div>
             </div>
         </div>
@@ -200,6 +219,10 @@
         let regenCount = 0;
         let versions = [];
         let titles = [];
+        window.latestCreativeAssets = [];
+        window.latestGraphicBundles = [];
+        window.latestGeneratedImages = [];
+        window.currentAssetTaskId = null;
         
         async function generateCopy() {
             document.getElementById('loading').style.display = 'block';
@@ -231,6 +254,9 @@
                         showTitles(titles);
                     }
                     showVersions(versions);
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('generateBtn').disabled = false;
+                    return true;
                 }
             } catch(e) {
                 alert('生成失败，请重试');
@@ -238,6 +264,7 @@
             
             document.getElementById('loading').style.display = 'none';
             document.getElementById('generateBtn').disabled = false;
+            return false;
         }
         
         function showTitles(tlist) {
@@ -281,7 +308,13 @@
             document.getElementById('resultArea').style.display = 'block';
             document.getElementById('creativePackArea').style.display = 'none';
             document.getElementById('creativePackList').innerHTML = '';
+            document.getElementById('graphicBundleArea').style.display = 'none';
+            document.getElementById('graphicBundleList').innerHTML = '';
+            document.getElementById('assetTaskArea').style.display = 'none';
+            document.getElementById('assetTaskList').innerHTML = '';
             window.latestCreativeAssets = [];
+            window.latestGraphicBundles = [];
+            window.latestGeneratedImages = [];
             if (versions.length > 0) {
                 checkCompliance(versions[0]);
             }
@@ -434,9 +467,169 @@
             document.getElementById('creativePackArea').style.display = 'block';
         }
 
+        async function generateGraphicArticleBundle() {
+            if (!versions || versions.length === 0) {
+                const ok = await generateCopy();
+                if (!ok) return;
+            }
+
+            const res = await fetch('/api/generate_graphic_article_bundle', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    registration_id: {{ registration.id }},
+                    selected_content: getSelectedContent()
+                })
+            });
+            const data = await res.json();
+            if (!data.success) {
+                alert(data.message || '图文创作包生成失败');
+                return;
+            }
+
+            window.latestGraphicBundles = data.items || [];
+            document.getElementById('graphicBundleList').innerHTML = window.latestGraphicBundles.map((item, index) => `
+                <div class="bundle-card">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <img class="asset-preview" src="${item.asset.svg_data_uri}" alt="${item.asset.type}">
+                        </div>
+                        <div class="col-md-8">
+                            <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                <div>
+                                    <strong>${item.card_type || item.asset.type || '图文方案'}</strong>
+                                    <div class="text-muted small">${item.cover_title || item.publish_title || ''}</div>
+                                </div>
+                                <a class="btn btn-sm btn-outline-danger" href="${item.asset.svg_data_uri}" download="${item.asset.download_name}">下载SVG</a>
+                            </div>
+                            <div class="small text-muted mb-2">${item.summary || item.asset.subtitle || ''}</div>
+                            <div class="bundle-copy-box mb-2">${item.full_copy || ''}</div>
+                            <div class="small text-muted mb-2">推荐标签：${item.tag_text || ''}</div>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button class="btn btn-sm btn-outline-danger" type="button" onclick="copyGraphicBundle(${index})">复制整套文案</button>
+                                <button class="btn btn-sm btn-outline-secondary" type="button" onclick="copyGraphicAssetPrompt(${index})">复制配图提示词</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('graphicBundleArea').style.display = 'block';
+        }
+
         function copyAssetPrompt(index) {
             const assets = window.latestCreativeAssets || [];
             const current = assets[index];
+            if (!current) return;
+            copyText(current.image_prompt || '');
+        }
+
+        function copyGraphicBundle(index) {
+            const bundles = window.latestGraphicBundles || [];
+            const current = bundles[index];
+            if (!current) return;
+            copyText(current.full_copy || '');
+        }
+
+        function copyGraphicAssetPrompt(index) {
+            const bundles = window.latestGraphicBundles || [];
+            const current = bundles[index];
+            if (!current || !current.asset) return;
+            copyText(current.asset.image_prompt || '');
+        }
+
+        function renderGeneratedImages(items) {
+            window.latestGeneratedImages = items || [];
+            document.getElementById('assetTaskList').innerHTML = window.latestGeneratedImages.map((item, index) => {
+                const previewLinkAttrs = String(item.preview_url || '').startsWith('data:')
+                    ? `href="${item.preview_url}" download="${item.download_name || `asset_${index + 1}.png`}"`
+                    : `href="${item.preview_url}" target="_blank" rel="noreferrer"`;
+                return `
+                    <div class="asset-card">
+                        <div class="row g-3">
+                            <div class="col-md-5">
+                                <img class="asset-preview" src="${item.preview_url}" alt="${item.title || item.type || 'AI图片'}">
+                            </div>
+                            <div class="col-md-7">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <strong>${item.title || item.type || 'AI图片'}</strong>
+                                        <div class="text-muted small">${item.provider || '-'} / ${item.format || '-'}</div>
+                                    </div>
+                                    <a class="btn btn-sm btn-outline-danger" ${previewLinkAttrs}>下载/打开</a>
+                                </div>
+                                <div class="small text-muted mb-2">${item.subtitle || ''}</div>
+                                <div class="border rounded p-2 mb-2" style="background:#fff;">
+                                    <div class="small text-muted mb-1">配图提示词</div>
+                                    <div class="small">${item.image_prompt || ''}</div>
+                                </div>
+                                <button class="btn btn-sm btn-outline-primary" type="button" onclick="copyGeneratedImagePrompt(${index})">复制提示词</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            document.getElementById('assetTaskArea').style.display = 'block';
+        }
+
+        async function startAssetGenerationTask() {
+            if (!versions || versions.length === 0) {
+                const ok = await generateCopy();
+                if (!ok) return;
+            }
+
+            document.getElementById('assetTaskArea').style.display = 'block';
+            document.getElementById('assetTaskMsg').textContent = '正在创建图片任务...';
+            document.getElementById('assetTaskList').innerHTML = '';
+
+            const selectedTitleText = titles && titles[selectedTitle] ? titles[selectedTitle] : '';
+            const res = await fetch('/api/jobs/assets/generate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    registration_id: {{ registration.id }},
+                    selected_content: getSelectedContent(),
+                    title_hint: selectedTitleText,
+                    style_preset: '小红书图文',
+                    image_count: 3
+                })
+            });
+            const data = await res.json();
+            if (!data.success) {
+                document.getElementById('assetTaskMsg').textContent = data.message || '图片任务创建失败';
+                return;
+            }
+            window.currentAssetTaskId = data.asset_task_id;
+            document.getElementById('assetTaskMsg').textContent = `${data.message || '图片任务已创建'}，任务ID：${data.asset_task_id}`;
+            pollAssetGenerationTask(data.asset_task_id, 0);
+        }
+
+        async function pollAssetGenerationTask(taskId, attempt) {
+            const res = await fetch(`/api/asset_tasks/${taskId}?registration_id={{ registration.id }}`);
+            const data = await res.json();
+            const item = data.item || {};
+            if (!data.success) {
+                document.getElementById('assetTaskMsg').textContent = data.message || '图片任务查询失败';
+                return;
+            }
+
+            document.getElementById('assetTaskMsg').textContent = `任务状态：${item.status || '-'} ｜ ${item.message || ''}`;
+            if (item.status === 'success') {
+                renderGeneratedImages(item.result_payload || []);
+                return;
+            }
+            if (item.status === 'failed') {
+                return;
+            }
+            if (attempt >= 25) {
+                document.getElementById('assetTaskMsg').textContent = `任务仍在处理中，可稍后再回来查看。任务ID：${taskId}`;
+                return;
+            }
+            setTimeout(() => pollAssetGenerationTask(taskId, attempt + 1), 3000);
+        }
+
+        function copyGeneratedImagePrompt(index) {
+            const items = window.latestGeneratedImages || [];
+            const current = items[index];
             if (!current) return;
             copyText(current.image_prompt || '');
         }

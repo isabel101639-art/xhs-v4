@@ -81,3 +81,279 @@ def generate_topic_ideas_job(count=80, activity_id=None, quota=None):
         'quota': safe_quota,
         'idea_ids': [idea.id for idea in ideas],
     }
+
+
+@celery.task(name='jobs.hotwords.sync')
+def sync_hotwords_job(data_source_task_id):
+    from app import (
+        _append_data_source_log,
+        _automation_keyword_seeds,
+        _build_hotword_skeleton_rows,
+        _load_json_value,
+        _log_operation,
+        DataSourceTask,
+        TrendNote,
+        db,
+        datetime,
+        json,
+    )
+
+    task_record = DataSourceTask.query.get(data_source_task_id)
+    if not task_record:
+        return {
+            'success': False,
+            'message': '数据源任务不存在',
+            'data_source_task_id': data_source_task_id,
+        }
+
+    try:
+        task_record.status = 'running'
+        task_record.started_at = datetime.now()
+        task_record.message = 'Worker 正在生成热点抓取骨架结果'
+        db.session.flush()
+        _append_data_source_log(task_record.id, 'Worker 已接管任务，开始生成热点抓取骨架', detail={
+            'batch_name': task_record.batch_name,
+            'source_platform': task_record.source_platform,
+            'mode': task_record.mode,
+        })
+        db.session.commit()
+
+        params = _load_json_value(task_record.params_payload, {})
+        keywords = params.get('keywords') if isinstance(params, dict) else []
+        if not isinstance(keywords, list) or not keywords:
+            keywords = _automation_keyword_seeds()[:max(task_record.keyword_limit or 10, 1)]
+        keywords = [str(item).strip() for item in keywords if str(item).strip()]
+        rows = _build_hotword_skeleton_rows(
+            keywords,
+            source_platform=task_record.source_platform or '小红书',
+            source_channel=task_record.source_channel or 'Worker骨架',
+            batch_name=task_record.batch_name or '',
+        )
+
+        inserted_count = 0
+        for row in rows:
+            note = TrendNote(
+                source_platform=row.get('source_platform') or task_record.source_platform or '小红书',
+                source_channel=row.get('source_channel') or task_record.source_channel or 'Worker骨架',
+                import_batch=row.get('import_batch') or task_record.batch_name,
+                keyword=row.get('keyword') or '',
+                topic_category=row.get('topic_category') or '热点骨架',
+                title=row.get('title') or '热点抓取骨架样例',
+                author=row.get('author') or '',
+                link=row.get('link') or '',
+                views=row.get('views') or 0,
+                likes=row.get('likes') or 0,
+                favorites=row.get('favorites') or 0,
+                comments=row.get('comments') or 0,
+                publish_time=datetime.now(),
+                summary=row.get('summary') or '',
+                raw_payload=json.dumps(row.get('raw_payload') or {}, ensure_ascii=False),
+                pool_status='reserve',
+            )
+            db.session.add(note)
+            inserted_count += 1
+
+        task_record.status = 'success'
+        task_record.item_count = inserted_count
+        task_record.finished_at = datetime.now()
+        task_record.message = f'热点抓取骨架执行完成，已生成 {inserted_count} 条热点样例'
+        task_record.result_payload = json.dumps({
+            'inserted_count': inserted_count,
+            'batch_name': task_record.batch_name,
+            'keywords': keywords,
+            'mode': task_record.mode,
+        }, ensure_ascii=False)
+        db.session.flush()
+        _append_data_source_log(task_record.id, '热点抓取骨架执行完成，已写入热点池', detail={
+            'inserted_count': inserted_count,
+            'batch_name': task_record.batch_name,
+            'keywords': keywords,
+        })
+        _log_operation('worker_sync', 'data_source_task', target_id=task_record.id, message='Worker 执行热点抓取骨架任务', detail={
+            'inserted_count': inserted_count,
+            'batch_name': task_record.batch_name,
+            'source_platform': task_record.source_platform,
+        })
+        db.session.commit()
+        return {
+            'success': True,
+            'data_source_task_id': task_record.id,
+            'inserted_count': inserted_count,
+            'batch_name': task_record.batch_name,
+        }
+    except Exception as exc:
+        db.session.rollback()
+        task_record = DataSourceTask.query.get(data_source_task_id)
+        if task_record:
+            task_record.status = 'failed'
+            task_record.finished_at = datetime.now()
+            task_record.message = f'热点抓取骨架执行失败：{exc}'
+            task_record.result_payload = json.dumps({'error': str(exc)}, ensure_ascii=False)
+            db.session.flush()
+            _append_data_source_log(task_record.id, '热点抓取骨架执行失败', level='error', detail={'error': str(exc)})
+            db.session.commit()
+        raise
+
+
+@celery.task(name='jobs.assets.generate')
+def generate_asset_images_job(asset_task_id):
+    from app import (
+        _build_asset_generation_fallback_results,
+        _log_operation,
+        AssetGenerationTask,
+        Topic,
+        db,
+        datetime,
+        json,
+    )
+    import requests
+
+    task = AssetGenerationTask.query.get(asset_task_id)
+    if not task:
+        return {
+            'success': False,
+            'message': '图片任务不存在',
+            'asset_task_id': asset_task_id,
+        }
+
+    topic = Topic.query.get(task.topic_id) if task.topic_id else None
+    if not topic:
+        task.status = 'failed'
+        task.finished_at = datetime.now()
+        task.message = '图片任务缺少话题信息'
+        task.result_payload = json.dumps({'error': 'topic missing'}, ensure_ascii=False)
+        db.session.commit()
+        return {
+            'success': False,
+            'message': 'topic missing',
+            'asset_task_id': asset_task_id,
+        }
+
+    api_url = (os.environ.get('ASSET_IMAGE_API_URL') or '').strip()
+    api_key = (os.environ.get('ASSET_IMAGE_API_KEY') or '').strip()
+    provider = (os.environ.get('ASSET_IMAGE_PROVIDER') or task.source_provider or 'svg_fallback').strip() or 'svg_fallback'
+    model_name = (os.environ.get('ASSET_IMAGE_MODEL') or task.model_name or '').strip()
+    image_size = (os.environ.get('ASSET_IMAGE_SIZE') or '1024x1536').strip()
+
+    def normalize_external_results(payload):
+        candidates = []
+        if isinstance(payload, dict):
+            for key in ['data', 'images', 'output', 'results']:
+                value = payload.get(key)
+                if isinstance(value, list):
+                    candidates = value
+                    break
+        elif isinstance(payload, list):
+            candidates = payload
+
+        normalized = []
+        for index, item in enumerate(candidates, start=1):
+            if isinstance(item, str):
+                normalized.append({
+                    'index': index,
+                    'type': task.style_preset or 'AI图片',
+                    'title': task.title_hint or f'AI生成图{index}',
+                    'subtitle': '',
+                    'image_prompt': task.prompt_text or '',
+                    'preview_url': item,
+                    'download_name': f'asset_task_{task.id}_{index}.png',
+                    'provider': provider,
+                    'format': 'url',
+                    'bullets': [],
+                })
+                continue
+            if not isinstance(item, dict):
+                continue
+            if item.get('b64_json'):
+                normalized.append({
+                    'index': index,
+                    'type': task.style_preset or 'AI图片',
+                    'title': task.title_hint or f'AI生成图{index}',
+                    'subtitle': '',
+                    'image_prompt': task.prompt_text or '',
+                    'preview_url': f"data:image/png;base64,{item.get('b64_json')}",
+                    'download_name': f'asset_task_{task.id}_{index}.png',
+                    'provider': provider,
+                    'format': 'png',
+                    'bullets': [],
+                })
+            elif item.get('url') or item.get('image_url'):
+                normalized.append({
+                    'index': index,
+                    'type': task.style_preset or 'AI图片',
+                    'title': task.title_hint or f'AI生成图{index}',
+                    'subtitle': '',
+                    'image_prompt': task.prompt_text or '',
+                    'preview_url': item.get('url') or item.get('image_url'),
+                    'download_name': f'asset_task_{task.id}_{index}.png',
+                    'provider': provider,
+                    'format': 'url',
+                    'bullets': [],
+                })
+        return normalized
+
+    task.status = 'running'
+    task.started_at = datetime.now()
+    task.message = 'Worker 正在生成图片'
+    db.session.commit()
+
+    results = []
+    message = ''
+    actual_provider = provider
+
+    if api_url and api_key:
+        try:
+            headers = {
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json',
+            }
+            payload = {
+                'model': model_name or 'image-default',
+                'prompt': task.prompt_text or '',
+                'image_count': task.image_count or 3,
+                'size': image_size,
+                'style': task.style_preset or '小红书图文',
+                'response_format': 'b64_json',
+            }
+            response = requests.post(api_url, json=payload, headers=headers, timeout=90)
+            response.raise_for_status()
+            results = normalize_external_results(response.json())
+            if results:
+                message = f'图片模型返回 {len(results)} 张结果'
+            else:
+                message = '外部图片模型无可识别结果，已切换 SVG 兜底'
+                actual_provider = 'svg_fallback'
+        except Exception as exc:
+            message = f'外部图片模型调用失败，已切换 SVG 兜底：{exc}'
+            actual_provider = 'svg_fallback'
+    else:
+        message = '未配置图片模型环境变量，使用 SVG 兜底生成'
+        actual_provider = 'svg_fallback'
+
+    if not results:
+        results = _build_asset_generation_fallback_results(
+            topic,
+            selected_content=task.selected_content or '',
+            image_count=task.image_count or 3,
+        )
+
+    task.status = 'success'
+    task.source_provider = actual_provider
+    task.model_name = model_name or task.model_name
+    task.finished_at = datetime.now()
+    task.message = message
+    task.result_payload = json.dumps(results, ensure_ascii=False)
+    db.session.flush()
+    _log_operation('worker_generate_asset', 'asset_generation_task', target_id=task.id, message='Worker 执行图片生成任务', detail={
+        'provider': actual_provider,
+        'image_count': len(results),
+        'registration_id': task.registration_id,
+        'topic_id': task.topic_id,
+    })
+    db.session.commit()
+    return {
+        'success': True,
+        'asset_task_id': task.id,
+        'provider': actual_provider,
+        'image_count': len(results),
+    }

@@ -198,6 +198,116 @@ class Settings(db.Model):
     value = db.Column(db.Text)
 
 
+class SiteTheme(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    theme_key = db.Column(db.String(50), unique=True, nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    is_active = db.Column(db.Boolean, default=False)
+    primary_color = db.Column(db.String(20), default='#ff2442')
+    primary_soft_color = db.Column(db.String(20), default='#ffe5e8')
+    secondary_color = db.Column(db.String(20), default='#ff7a59')
+    secondary_soft_color = db.Column(db.String(20), default='#fff3e8')
+    nav_gradient_start = db.Column(db.String(20), default='#ff2442')
+    nav_gradient_end = db.Column(db.String(20), default='#ff6b6b')
+    hero_gradient_start = db.Column(db.String(20), default='#ff2442')
+    hero_gradient_end = db.Column(db.String(20), default='#ff7a59')
+    background_gradient_start = db.Column(db.String(20), default='#fff7f5')
+    background_gradient_end = db.Column(db.String(20), default='#ffffff')
+    surface_color = db.Column(db.String(20), default='#ffffff')
+    text_color = db.Column(db.String(20), default='#1f2937')
+    muted_text_color = db.Column(db.String(20), default='#6b7280')
+    footer_text = db.Column(db.String(200), default='福瑞医科小红书任务管理系统')
+    font_family = db.Column(db.String(200), default='-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif')
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class SitePageConfig(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    page_key = db.Column(db.String(50), unique=True, nullable=False)
+    site_name = db.Column(db.String(100), default='福瑞医科')
+    page_title = db.Column(db.String(200), default='福瑞医科内容运营平台')
+    hero_badge = db.Column(db.String(100), default='当前活动期')
+    hero_title = db.Column(db.String(200))
+    hero_subtitle = db.Column(db.Text)
+    announcement_title = db.Column(db.String(100), default='最新公告')
+    trend_title = db.Column(db.String(100), default='最新热点')
+    primary_section_title = db.Column(db.String(100), default='复方鳖甲软肝片话题')
+    primary_section_icon = db.Column(db.String(50), default='bi-capsule')
+    secondary_section_title = db.Column(db.String(100), default='FibroScan体检话题')
+    secondary_section_icon = db.Column(db.String(50), default='bi-heart-pulse')
+    primary_topic_limit = db.Column(db.Integer, default=18)
+    footer_text = db.Column(db.String(200), default='福瑞医科小红书任务管理系统')
+    nav_items = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class Announcement(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text)
+    link_url = db.Column(db.String(500))
+    button_text = db.Column(db.String(50))
+    priority = db.Column(db.Integer, default=100)
+    status = db.Column(db.String(20), default='draft')
+    starts_at = db.Column(db.DateTime)
+    ends_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class DataSourceTask(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    task_type = db.Column(db.String(50), nullable=False)
+    source_platform = db.Column(db.String(50), default='小红书')
+    source_channel = db.Column(db.String(50), default='worker_skeleton')
+    mode = db.Column(db.String(30), default='skeleton')
+    status = db.Column(db.String(20), default='queued')
+    celery_task_id = db.Column(db.String(100))
+    batch_name = db.Column(db.String(120))
+    keyword_limit = db.Column(db.Integer, default=10)
+    activity_id = db.Column(db.Integer)
+    item_count = db.Column(db.Integer, default=0)
+    message = db.Column(db.String(300))
+    params_payload = db.Column(db.Text)
+    result_payload = db.Column(db.Text)
+    started_at = db.Column(db.DateTime)
+    finished_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class DataSourceLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey('data_source_task.id'), nullable=False)
+    level = db.Column(db.String(20), default='info')
+    message = db.Column(db.String(300), nullable=False)
+    detail = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+
+class AssetGenerationTask(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    registration_id = db.Column(db.Integer)
+    topic_id = db.Column(db.Integer)
+    source_provider = db.Column(db.String(50), default='svg_fallback')
+    model_name = db.Column(db.String(100))
+    style_preset = db.Column(db.String(50), default='小红书图文')
+    image_count = db.Column(db.Integer, default=3)
+    status = db.Column(db.String(20), default='queued')
+    celery_task_id = db.Column(db.String(100))
+    title_hint = db.Column(db.String(200))
+    prompt_text = db.Column(db.Text)
+    selected_content = db.Column(db.Text)
+    message = db.Column(db.String(300))
+    result_payload = db.Column(db.Text)
+    started_at = db.Column(db.DateTime)
+    finished_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+
 class CorpusEntry(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
@@ -405,6 +515,52 @@ CORPUS_SEED_ENTRIES = [
     },
 ]
 
+DEFAULT_SITE_NAV_ITEMS = [
+    {'label': '话题广场', 'url': '/', 'icon': 'bi-collection', 'target': '_self'},
+    {'label': '我的报名', 'url': '/my_registration', 'icon': 'bi-person-check', 'target': '_self'},
+    {'label': '数据分析', 'url': '/data_analysis', 'icon': 'bi-bar-chart', 'target': '_self'},
+    {'label': '自动化中心', 'url': '/automation_center', 'icon': 'bi-lightning-charge', 'target': '_self'},
+    {'label': '活动管理', 'url': '/activity', 'icon': 'bi-calendar-event', 'target': '_self'},
+    {'label': '后台', 'url': '/admin', 'icon': 'bi-gear', 'target': '_self'},
+]
+
+DEFAULT_SITE_THEME = {
+    'theme_key': 'default',
+    'name': '福瑞红橙',
+    'primary_color': '#ff2442',
+    'primary_soft_color': '#ffe5e8',
+    'secondary_color': '#ff7a59',
+    'secondary_soft_color': '#fff3e8',
+    'nav_gradient_start': '#ff2442',
+    'nav_gradient_end': '#ff6b6b',
+    'hero_gradient_start': '#ff2442',
+    'hero_gradient_end': '#ff7a59',
+    'background_gradient_start': '#fff7f5',
+    'background_gradient_end': '#ffffff',
+    'surface_color': '#ffffff',
+    'text_color': '#1f2937',
+    'muted_text_color': '#6b7280',
+    'footer_text': '福瑞医科小红书任务管理系统',
+    'font_family': '-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif',
+}
+
+DEFAULT_HOME_PAGE_CONFIG = {
+    'page_key': 'home',
+    'site_name': '福瑞医科',
+    'page_title': '福瑞医科内容运营平台',
+    'hero_badge': '当前活动期',
+    'hero_title': '',
+    'hero_subtitle': '',
+    'announcement_title': '最新公告',
+    'trend_title': '最新热点',
+    'primary_section_title': '复方鳖甲软肝片话题',
+    'primary_section_icon': 'bi-capsule',
+    'secondary_section_title': 'FibroScan体检话题',
+    'secondary_section_icon': 'bi-heart-pulse',
+    'primary_topic_limit': 18,
+    'footer_text': '福瑞医科小红书任务管理系统',
+}
+
 
 def _admin_json_guard():
     if not session.get('admin_logged_in'):
@@ -432,6 +588,17 @@ def _default_topic_quota():
     return 30
 
 
+def _automation_keyword_seeds():
+    try:
+        setting = Settings.query.filter_by(key='automation_keyword_seeds').first()
+        parsed = _load_json_value(setting.value if setting else '', [])
+        if parsed:
+            return [str(item).strip() for item in parsed if str(item).strip()]
+    except Exception:
+        pass
+    return list(LIVER_KEYWORD_SEEDS)
+
+
 def _safe_int(value, default=0):
     try:
         return int(value)
@@ -444,6 +611,13 @@ def _safe_float(value, default=0.0):
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def _normalize_hex_color(value, default):
+    value = (value or '').strip()
+    if re.fullmatch(r'#[0-9a-fA-F]{6}', value):
+        return value.lower()
+    return default
 
 
 def _split_keywords(text):
@@ -480,7 +654,7 @@ def _parse_datetime(value):
     if not value:
         return None
     value = str(value).strip()
-    for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%Y/%m/%d %H:%M:%S', '%Y/%m/%d']:
+    for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M', '%Y-%m-%d', '%Y/%m/%d %H:%M:%S', '%Y/%m/%d']:
         try:
             return datetime.strptime(value, fmt)
         except ValueError:
@@ -495,6 +669,14 @@ def _parse_date(value):
         return datetime.strptime(str(value).strip(), '%Y-%m-%d').date()
     except ValueError:
         return None
+
+
+def _format_datetime(value):
+    return value.strftime('%Y-%m-%d %H:%M:%S') if value else ''
+
+
+def _format_datetime_local(value):
+    return value.strftime('%Y-%m-%dT%H:%M') if value else ''
 
 
 def _topic_idea_status_label(status):
@@ -557,6 +739,162 @@ def _serialize_activity(activity):
         'snapshot_count': len(activity.snapshots or []),
         'archived_at': activity.archived_at.strftime('%Y-%m-%d %H:%M:%S') if getattr(activity, 'archived_at', None) else '',
         'created_at': activity.created_at.strftime('%Y-%m-%d %H:%M:%S') if activity.created_at else '',
+    }
+
+
+def _load_json_value(raw_value, default):
+    if not raw_value:
+        return default
+    try:
+        parsed = json.loads(raw_value)
+    except Exception:
+        return default
+    return parsed if isinstance(parsed, type(default)) else default
+
+
+def _normalize_nav_items(items):
+    normalized = []
+    if not isinstance(items, list):
+        items = []
+    for raw_item in items[:8]:
+        if not isinstance(raw_item, dict):
+            continue
+        label = (raw_item.get('label') or '').strip()
+        url = (raw_item.get('url') or '').strip()
+        if not label or not url:
+            continue
+        normalized.append({
+            'label': label[:20],
+            'url': url[:300],
+            'icon': (raw_item.get('icon') or '').strip()[:50],
+            'target': '_blank' if (raw_item.get('target') or '').strip() == '_blank' else '_self',
+        })
+    return normalized or [dict(item) for item in DEFAULT_SITE_NAV_ITEMS]
+
+
+def _serialize_site_theme(theme):
+    return {
+        'id': theme.id,
+        'theme_key': theme.theme_key,
+        'name': theme.name,
+        'is_active': bool(theme.is_active),
+        'primary_color': theme.primary_color,
+        'primary_soft_color': theme.primary_soft_color,
+        'secondary_color': theme.secondary_color,
+        'secondary_soft_color': theme.secondary_soft_color,
+        'nav_gradient_start': theme.nav_gradient_start,
+        'nav_gradient_end': theme.nav_gradient_end,
+        'hero_gradient_start': theme.hero_gradient_start,
+        'hero_gradient_end': theme.hero_gradient_end,
+        'background_gradient_start': theme.background_gradient_start,
+        'background_gradient_end': theme.background_gradient_end,
+        'surface_color': theme.surface_color,
+        'text_color': theme.text_color,
+        'muted_text_color': theme.muted_text_color,
+        'footer_text': theme.footer_text or '',
+        'font_family': theme.font_family or DEFAULT_SITE_THEME['font_family'],
+        'created_at': _format_datetime(theme.created_at),
+        'updated_at': _format_datetime(theme.updated_at),
+    }
+
+
+def _serialize_site_page_config(config):
+    return {
+        'id': config.id,
+        'page_key': config.page_key,
+        'site_name': config.site_name or '',
+        'page_title': config.page_title or '',
+        'hero_badge': config.hero_badge or '',
+        'hero_title': config.hero_title or '',
+        'hero_subtitle': config.hero_subtitle or '',
+        'announcement_title': config.announcement_title or '',
+        'trend_title': config.trend_title or '',
+        'primary_section_title': config.primary_section_title or '',
+        'primary_section_icon': config.primary_section_icon or '',
+        'secondary_section_title': config.secondary_section_title or '',
+        'secondary_section_icon': config.secondary_section_icon or '',
+        'primary_topic_limit': config.primary_topic_limit or DEFAULT_HOME_PAGE_CONFIG['primary_topic_limit'],
+        'footer_text': config.footer_text or '',
+        'nav_items': _normalize_nav_items(_load_json_value(config.nav_items, [])),
+        'created_at': _format_datetime(config.created_at),
+        'updated_at': _format_datetime(config.updated_at),
+    }
+
+
+def _serialize_announcement(item):
+    return {
+        'id': item.id,
+        'title': item.title or '',
+        'content': item.content or '',
+        'link_url': item.link_url or '',
+        'button_text': item.button_text or '',
+        'priority': item.priority or 0,
+        'status': item.status or 'draft',
+        'starts_at': _format_datetime(item.starts_at),
+        'ends_at': _format_datetime(item.ends_at),
+        'starts_at_input': _format_datetime_local(item.starts_at),
+        'ends_at_input': _format_datetime_local(item.ends_at),
+        'created_at': _format_datetime(item.created_at),
+        'updated_at': _format_datetime(item.updated_at),
+    }
+
+
+def _serialize_data_source_log(item):
+    return {
+        'id': item.id,
+        'task_id': item.task_id,
+        'level': item.level or 'info',
+        'message': item.message or '',
+        'detail': item.detail or '',
+        'created_at': _format_datetime(item.created_at),
+    }
+
+
+def _serialize_data_source_task(task):
+    logs = DataSourceLog.query.filter_by(task_id=task.id).order_by(DataSourceLog.created_at.desc(), DataSourceLog.id.desc()).limit(5).all()
+    return {
+        'id': task.id,
+        'task_type': task.task_type,
+        'source_platform': task.source_platform or '',
+        'source_channel': task.source_channel or '',
+        'mode': task.mode or 'skeleton',
+        'status': task.status or 'queued',
+        'celery_task_id': task.celery_task_id or '',
+        'batch_name': task.batch_name or '',
+        'keyword_limit': task.keyword_limit or 0,
+        'activity_id': task.activity_id,
+        'item_count': task.item_count or 0,
+        'message': task.message or '',
+        'params_payload': task.params_payload or '',
+        'result_payload': task.result_payload or '',
+        'started_at': _format_datetime(task.started_at),
+        'finished_at': _format_datetime(task.finished_at),
+        'created_at': _format_datetime(task.created_at),
+        'updated_at': _format_datetime(task.updated_at),
+        'recent_logs': [_serialize_data_source_log(item) for item in logs],
+    }
+
+
+def _serialize_asset_generation_task(task):
+    return {
+        'id': task.id,
+        'registration_id': task.registration_id,
+        'topic_id': task.topic_id,
+        'source_provider': task.source_provider or 'svg_fallback',
+        'model_name': task.model_name or '',
+        'style_preset': task.style_preset or '小红书图文',
+        'image_count': task.image_count or 0,
+        'status': task.status or 'queued',
+        'celery_task_id': task.celery_task_id or '',
+        'title_hint': task.title_hint or '',
+        'prompt_text': task.prompt_text or '',
+        'selected_content': task.selected_content or '',
+        'message': task.message or '',
+        'result_payload': _load_json_value(task.result_payload, []),
+        'started_at': _format_datetime(task.started_at),
+        'finished_at': _format_datetime(task.finished_at),
+        'created_at': _format_datetime(task.created_at),
+        'updated_at': _format_datetime(task.updated_at),
     }
 
 
@@ -923,6 +1261,48 @@ def _serialize_creator_account(account):
         'created_at': account.created_at.strftime('%Y-%m-%d %H:%M:%S') if account.created_at else '',
         'updated_at': account.updated_at.strftime('%Y-%m-%d %H:%M:%S') if account.updated_at else '',
     }
+
+
+def _get_active_site_theme():
+    theme = SiteTheme.query.filter_by(is_active=True).order_by(SiteTheme.updated_at.desc(), SiteTheme.id.desc()).first()
+    if theme:
+        return theme
+    return SiteTheme.query.order_by(SiteTheme.id.asc()).first()
+
+
+def _get_site_page_config(page_key='home'):
+    return SitePageConfig.query.filter_by(page_key=page_key).first()
+
+
+def _list_announcements(include_inactive=False, limit=None):
+    query = Announcement.query
+    if not include_inactive:
+        now = datetime.now()
+        query = query.filter_by(status='active')
+        query = query.filter(or_(Announcement.starts_at.is_(None), Announcement.starts_at <= now))
+        query = query.filter(or_(Announcement.ends_at.is_(None), Announcement.ends_at >= now))
+    query = query.order_by(Announcement.priority.asc(), Announcement.updated_at.desc(), Announcement.id.desc())
+    if limit:
+        query = query.limit(limit)
+    return query.all()
+
+
+def _append_data_source_log(task_id, message, level='info', detail=None):
+    detail_text = ''
+    if detail is not None:
+        if isinstance(detail, str):
+            detail_text = detail
+        else:
+            try:
+                detail_text = json.dumps(detail, ensure_ascii=False)
+            except TypeError:
+                detail_text = str(detail)
+    db.session.add(DataSourceLog(
+        task_id=task_id,
+        level=level,
+        message=(message or '')[:300],
+        detail=detail_text,
+    ))
 
 
 def _apply_creator_post_range(query, args):
@@ -1580,6 +1960,83 @@ def _build_creative_pack(topic, selected_content=''):
     return pack
 
 
+def _build_graphic_article_bundle(topic, selected_content=''):
+    creative_pack = _build_creative_pack(topic, selected_content)
+    topic_name = topic.topic_name or '肝病管理'
+    keywords = _split_keywords(topic.keywords or topic_name)
+    content_title = _extract_title_from_version(selected_content) if selected_content else topic_name
+    raw_body = _extract_body_from_version(selected_content) if selected_content else ''
+    raw_body = re.sub(r'^(正文|内文)\s*[：:]\s*', '', (raw_body or '').strip())
+    if not raw_body:
+        raw_body = f'这篇内容围绕“{topic_name}”展开，先讲真实场景，再拆重点，最后给出复查或管理建议。'
+
+    body_sentences = [item.strip() for item in re.split(r'[。！？\n]+', raw_body) if item and item.strip()]
+    body_excerpt = '。'.join(body_sentences[:3]).strip()
+    if body_excerpt and not body_excerpt.endswith(('。', '！', '？')):
+        body_excerpt += '。'
+
+    tag_text = ' '.join([f'#{item}' for item in keywords[:4]])
+    bundles = []
+    for index, asset in enumerate(creative_pack, start=1):
+        bullet_lines = [item.strip() for item in (asset.get('bullets') or []) if item and item.strip()]
+        support_text = '；'.join(bullet_lines[:3])
+        publish_title = (asset.get('title') or content_title or topic_name).strip()[:18]
+        publish_body = body_excerpt
+        if support_text:
+            publish_body = f'{publish_body}\n\n这版我想重点放在：{support_text}。'
+        publish_body = f"{publish_body}\n\n封面我会用“{asset.get('type') or '知识卡片'}”这个版式，方便一眼看懂重点。"
+        publish_body = f"{publish_body}\n\n你们更想看哪一类延展内容？"
+
+        full_copy = f"标题：{publish_title}\n内文：{publish_body}\n\n推荐标签：{tag_text or '#肝病管理'}"
+        bundles.append({
+            'id': index,
+            'asset': asset,
+            'publish_title': publish_title,
+            'publish_body': publish_body,
+            'full_copy': full_copy,
+            'tag_text': tag_text or '#肝病管理',
+            'cover_title': asset.get('title') or publish_title,
+            'card_type': asset.get('type') or '知识卡片',
+            'summary': support_text or asset.get('subtitle') or '',
+        })
+    return bundles
+
+
+def _build_asset_generation_prompt(topic, selected_content='', style_preset='小红书图文', title_hint=''):
+    topic_name = topic.topic_name or '肝病管理'
+    keywords = _split_keywords(topic.keywords or topic_name)
+    primary_keyword = keywords[0] if keywords else topic_name
+    clean_title = (title_hint or '').strip() or _extract_title_from_version(selected_content) or topic_name
+    body = _extract_body_from_version(selected_content) if selected_content else ''
+    body = re.sub(r'^(正文|内文)\s*[：:]\s*', '', (body or '').strip())
+    support_points = _extract_content_points(body) if body else []
+    point_text = '；'.join(support_points[:3]) if support_points else f'围绕{primary_keyword}做清晰信息表达'
+    return (
+        f'{style_preset}，适合小红书封面与配图，主题“{clean_title}”，'
+        f'核心关键词：{primary_keyword}，风格要求：干净、真实、医疗信息清楚、不过度营销。'
+        f'画面重点：{point_text}。配色建议与当前话题一致，保留收藏感和截图传播感。'
+    )
+
+
+def _build_asset_generation_fallback_results(topic, selected_content='', image_count=3):
+    creative_pack = _build_creative_pack(topic, selected_content)
+    results = []
+    for idx, asset in enumerate(creative_pack[:max(image_count, 1)], start=1):
+        results.append({
+            'index': idx,
+            'type': asset.get('type') or '知识卡片',
+            'title': asset.get('title') or '',
+            'subtitle': asset.get('subtitle') or '',
+            'image_prompt': asset.get('image_prompt') or '',
+            'preview_url': asset.get('svg_data_uri') or '',
+            'download_name': asset.get('download_name') or f'asset_{idx}.svg',
+            'provider': 'svg_fallback',
+            'format': 'svg',
+            'bullets': asset.get('bullets') or [],
+        })
+    return results
+
+
 def _build_dashboard_stats(activity_id, args):
     range_info = _resolve_analysis_range(args)
     topics, registrations, submissions = _load_activity_scope(activity_id, range_info)
@@ -1806,13 +2263,58 @@ def _build_dashboard_stats(activity_id, args):
 
 @app.route('/')
 def index():
-    # 获取当前活动
     activity = Activity.query.filter_by(status='published').order_by(Activity.created_at.desc()).first()
     if not activity:
         activities = Activity.query.order_by(Activity.created_at.desc()).all()
         if activities:
             activity = activities[0]
-    return render_template('index.html', activity=activity)
+
+    page_config = _get_site_page_config('home')
+    theme = _get_active_site_theme()
+    site_config = _serialize_site_page_config(page_config) if page_config else {
+        **DEFAULT_HOME_PAGE_CONFIG,
+        'nav_items': [dict(item) for item in DEFAULT_SITE_NAV_ITEMS],
+    }
+    site_theme = _serialize_site_theme(theme) if theme else dict(DEFAULT_SITE_THEME)
+
+    split_index = _normalize_quota(site_config.get('primary_topic_limit'), default=DEFAULT_HOME_PAGE_CONFIG['primary_topic_limit'], min_value=1, max_value=120)
+    all_topics = list(activity.topics) if activity else []
+    primary_topics = all_topics[:split_index]
+    secondary_topics = all_topics[split_index:]
+    first_available_topic = next((topic for topic in all_topics if (topic.filled or 0) < (topic.quota or 0)), None)
+    announcements = [_serialize_announcement(item) for item in _list_announcements(limit=4)]
+    trend_notes = [{
+        'id': note.id,
+        'title': note.title or '',
+        'keyword': note.keyword or '',
+        'source_platform': note.source_platform or '',
+        'likes': note.likes or 0,
+        'favorites': note.favorites or 0,
+        'comments': note.comments or 0,
+        'views': note.views or 0,
+        'link': note.link or '',
+    } for note in TrendNote.query.order_by(TrendNote.created_at.desc()).limit(6).all()]
+
+    hero_title = (site_config.get('hero_title') or '').strip() or (activity.title if activity else '')
+    hero_subtitle = (site_config.get('hero_subtitle') or '').strip() or (activity.description if activity else '')
+    hero_badge = (site_config.get('hero_badge') or '').strip() or (activity.name if activity else '内容运营平台')
+
+    return render_template(
+        'index.html',
+        activity=activity,
+        primary_topics=primary_topics,
+        secondary_topics=secondary_topics,
+        first_available_topic=first_available_topic,
+        announcements=announcements,
+        trend_notes=trend_notes,
+        site_config={
+            **site_config,
+            'hero_title': hero_title,
+            'hero_subtitle': hero_subtitle,
+            'hero_badge': hero_badge,
+        },
+        site_theme=site_theme,
+    )
 
 @app.route('/topic/<int:topic_id>')
 def topic_detail(topic_id):
@@ -1873,6 +2375,190 @@ def profile_by_phone():
             'group_num': reg.group_num or ''
         }
     })
+
+
+@app.route('/api/admin/site-config', methods=['GET', 'POST'])
+def admin_site_config():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    created_defaults = False
+    page_config = _get_site_page_config('home')
+    if not page_config:
+        page_config = SitePageConfig(
+            page_key=DEFAULT_HOME_PAGE_CONFIG['page_key'],
+            site_name=DEFAULT_HOME_PAGE_CONFIG['site_name'],
+            page_title=DEFAULT_HOME_PAGE_CONFIG['page_title'],
+            hero_badge=DEFAULT_HOME_PAGE_CONFIG['hero_badge'],
+            hero_title=DEFAULT_HOME_PAGE_CONFIG['hero_title'],
+            hero_subtitle=DEFAULT_HOME_PAGE_CONFIG['hero_subtitle'],
+            announcement_title=DEFAULT_HOME_PAGE_CONFIG['announcement_title'],
+            trend_title=DEFAULT_HOME_PAGE_CONFIG['trend_title'],
+            primary_section_title=DEFAULT_HOME_PAGE_CONFIG['primary_section_title'],
+            primary_section_icon=DEFAULT_HOME_PAGE_CONFIG['primary_section_icon'],
+            secondary_section_title=DEFAULT_HOME_PAGE_CONFIG['secondary_section_title'],
+            secondary_section_icon=DEFAULT_HOME_PAGE_CONFIG['secondary_section_icon'],
+            primary_topic_limit=DEFAULT_HOME_PAGE_CONFIG['primary_topic_limit'],
+            footer_text=DEFAULT_HOME_PAGE_CONFIG['footer_text'],
+            nav_items=json.dumps(DEFAULT_SITE_NAV_ITEMS, ensure_ascii=False),
+        )
+        db.session.add(page_config)
+        created_defaults = True
+
+    theme = _get_active_site_theme()
+    if not theme:
+        theme = SiteTheme(theme_key=DEFAULT_SITE_THEME['theme_key'], name=DEFAULT_SITE_THEME['name'], is_active=True)
+        for field, default_value in DEFAULT_SITE_THEME.items():
+            if field in {'theme_key', 'name'}:
+                continue
+            setattr(theme, field, default_value)
+        db.session.add(theme)
+        created_defaults = True
+    if created_defaults:
+        db.session.commit()
+    elif page_config.id is None or theme.id is None:
+        db.session.flush()
+
+    if request.method == 'POST':
+        payload = request.json or {}
+        config_data = payload.get('page_config') if isinstance(payload.get('page_config'), dict) else payload
+        theme_data = payload.get('theme') if isinstance(payload.get('theme'), dict) else {}
+
+        page_config.site_name = (config_data.get('site_name') or DEFAULT_HOME_PAGE_CONFIG['site_name']).strip()[:100]
+        page_config.page_title = (config_data.get('page_title') or DEFAULT_HOME_PAGE_CONFIG['page_title']).strip()[:200]
+        page_config.hero_badge = (config_data.get('hero_badge') or '').strip()[:100]
+        page_config.hero_title = (config_data.get('hero_title') or '').strip()[:200]
+        page_config.hero_subtitle = (config_data.get('hero_subtitle') or '').strip()
+        page_config.announcement_title = (config_data.get('announcement_title') or DEFAULT_HOME_PAGE_CONFIG['announcement_title']).strip()[:100]
+        page_config.trend_title = (config_data.get('trend_title') or DEFAULT_HOME_PAGE_CONFIG['trend_title']).strip()[:100]
+        page_config.primary_section_title = (config_data.get('primary_section_title') or DEFAULT_HOME_PAGE_CONFIG['primary_section_title']).strip()[:100]
+        page_config.primary_section_icon = (config_data.get('primary_section_icon') or DEFAULT_HOME_PAGE_CONFIG['primary_section_icon']).strip()[:50]
+        page_config.secondary_section_title = (config_data.get('secondary_section_title') or DEFAULT_HOME_PAGE_CONFIG['secondary_section_title']).strip()[:100]
+        page_config.secondary_section_icon = (config_data.get('secondary_section_icon') or DEFAULT_HOME_PAGE_CONFIG['secondary_section_icon']).strip()[:50]
+        page_config.primary_topic_limit = _normalize_quota(
+            config_data.get('primary_topic_limit'),
+            default=DEFAULT_HOME_PAGE_CONFIG['primary_topic_limit'],
+            min_value=1,
+            max_value=120,
+        )
+        page_config.footer_text = (config_data.get('footer_text') or DEFAULT_HOME_PAGE_CONFIG['footer_text']).strip()[:200]
+        page_config.nav_items = json.dumps(_normalize_nav_items(config_data.get('nav_items')), ensure_ascii=False)
+
+        theme.name = (theme_data.get('name') or theme.name or DEFAULT_SITE_THEME['name']).strip()[:100]
+        for field, default_value in DEFAULT_SITE_THEME.items():
+            if field in {'theme_key', 'name'}:
+                continue
+            if field == 'font_family':
+                setattr(theme, field, (theme_data.get(field) or theme.font_family or default_value).strip()[:200])
+                continue
+            if field == 'footer_text':
+                setattr(theme, field, (theme_data.get(field) or page_config.footer_text or default_value).strip()[:200])
+                continue
+            setattr(theme, field, _normalize_hex_color(theme_data.get(field), getattr(theme, field) or default_value))
+        theme.is_active = True
+        SiteTheme.query.filter(SiteTheme.id != theme.id).update({'is_active': False}, synchronize_session=False)
+
+        db.session.flush()
+        _log_operation('save_site_config', 'site_page_config', target_id=page_config.id, message='更新网站门户配置', detail={
+            'page_key': page_config.page_key,
+            'theme_id': theme.id,
+            'site_name': page_config.site_name,
+            'nav_count': len(_normalize_nav_items(config_data.get('nav_items'))),
+        })
+        db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'page_config': _serialize_site_page_config(page_config),
+        'theme': _serialize_site_theme(theme),
+    })
+
+
+@app.route('/api/admin/announcements', methods=['GET', 'POST'])
+def admin_announcements():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    if request.method == 'POST':
+        payload = request.json or {}
+        announcement_id = _safe_int(payload.get('id'), 0)
+        if announcement_id > 0:
+            announcement = Announcement.query.get_or_404(announcement_id)
+        else:
+            announcement = Announcement()
+            db.session.add(announcement)
+
+        title = (payload.get('title') or '').strip()
+        content = (payload.get('content') or '').strip()
+        if not title:
+            return jsonify({'success': False, 'message': '公告标题不能为空'})
+        if not content:
+            return jsonify({'success': False, 'message': '公告内容不能为空'})
+
+        status = (payload.get('status') or 'draft').strip()
+        if status not in {'draft', 'active', 'archived'}:
+            return jsonify({'success': False, 'message': '不支持的公告状态'})
+
+        announcement.title = title[:200]
+        announcement.content = content
+        announcement.link_url = (payload.get('link_url') or '').strip()[:500]
+        announcement.button_text = (payload.get('button_text') or '').strip()[:50]
+        announcement.priority = max(_safe_int(payload.get('priority'), 100), 0)
+        announcement.status = status
+        announcement.starts_at = _parse_datetime(payload.get('starts_at'))
+        announcement.ends_at = _parse_datetime(payload.get('ends_at'))
+
+        db.session.flush()
+        _log_operation('save_announcement', 'announcement', target_id=announcement.id, message='保存网站公告', detail={
+            'title': announcement.title,
+            'status': announcement.status,
+            'priority': announcement.priority,
+        })
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': '公告已保存',
+            'item': _serialize_announcement(announcement),
+        })
+
+    status = (request.args.get('status') or '').strip()
+    query = Announcement.query
+    if status:
+        query = query.filter_by(status=status)
+    items = query.order_by(Announcement.priority.asc(), Announcement.updated_at.desc(), Announcement.id.desc()).all()
+    return jsonify({
+        'success': True,
+        'items': [_serialize_announcement(item) for item in items]
+    })
+
+
+@app.route('/api/admin/announcements/<int:announcement_id>/status', methods=['POST'])
+def update_announcement_status(announcement_id):
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    payload = request.json or {}
+    status = (payload.get('status') or '').strip()
+    if status not in {'draft', 'active', 'archived'}:
+        return jsonify({'success': False, 'message': '不支持的公告状态'})
+
+    announcement = Announcement.query.get_or_404(announcement_id)
+    announcement.status = status
+    _log_operation('update_status', 'announcement', target_id=announcement.id, message='更新公告状态', detail={
+        'title': announcement.title,
+        'status': status,
+    })
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': '公告状态已更新',
+        'item': _serialize_announcement(announcement),
+    })
+
 
 @app.route('/api/register', methods=['POST'])
 def register():
@@ -2399,6 +3085,24 @@ def generate_creative_pack():
         'assets': creative_pack
     })
 
+
+@app.route('/api/generate_graphic_article_bundle', methods=['POST'])
+def generate_graphic_article_bundle():
+    data = request.json or {}
+    registration_id = data.get('registration_id')
+    selected_content = (data.get('selected_content') or '').strip()
+
+    reg = Registration.query.get(registration_id)
+    if not reg:
+        return jsonify({'success': False, 'message': '报名信息不存在'})
+
+    bundles = _build_graphic_article_bundle(reg.topic, selected_content)
+    return jsonify({
+        'success': True,
+        'topic': reg.topic.topic_name,
+        'items': bundles,
+    })
+
 def _to_non_negative_int(value, field_name):
     try:
         v = int(value)
@@ -2842,8 +3546,15 @@ def automation_overview():
             'trend_notes': TrendNote.query.count(),
             'topic_ideas': TopicIdea.query.count(),
             'published_ideas': TopicIdea.query.filter_by(status='published').count(),
+            'data_source_tasks': DataSourceTask.query.count(),
+            'running_data_source_tasks': DataSourceTask.query.filter(DataSourceTask.status.in_(['queued', 'running'])).count(),
+            'asset_generation_tasks': AssetGenerationTask.query.count(),
         },
-        'default_keywords': LIVER_KEYWORD_SEEDS,
+        'default_keywords': _automation_keyword_seeds(),
+        'capabilities': {
+            'image_provider_configured': bool((os.environ.get('ASSET_IMAGE_API_URL') or '').strip() and (os.environ.get('ASSET_IMAGE_API_KEY') or '').strip()),
+            'image_provider_name': (os.environ.get('ASSET_IMAGE_PROVIDER') or 'svg_fallback').strip() or 'svg_fallback',
+        },
         'latest_batches': [
             row.import_batch for row in TrendNote.query
             .filter(TrendNote.import_batch.isnot(None))
@@ -2851,6 +3562,61 @@ def automation_overview():
             .limit(10)
             .all()
         ]
+    })
+
+
+@app.route('/api/admin/data-source-tasks')
+def list_data_source_tasks():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    task_type = (request.args.get('task_type') or '').strip()
+    status = (request.args.get('status') or '').strip()
+    limit = min(max(_safe_int(request.args.get('limit'), 20), 1), 100)
+
+    query = DataSourceTask.query
+    if task_type:
+        query = query.filter_by(task_type=task_type)
+    if status:
+        query = query.filter_by(status=status)
+
+    items = query.order_by(DataSourceTask.created_at.desc(), DataSourceTask.id.desc()).limit(limit).all()
+    return jsonify({
+        'success': True,
+        'items': [_serialize_data_source_task(item) for item in items]
+    })
+
+
+@app.route('/api/admin/assets/tasks')
+def list_asset_generation_tasks():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    status = (request.args.get('status') or '').strip()
+    limit = min(max(_safe_int(request.args.get('limit'), 20), 1), 100)
+    query = AssetGenerationTask.query
+    if status:
+        query = query.filter_by(status=status)
+
+    items = query.order_by(AssetGenerationTask.created_at.desc(), AssetGenerationTask.id.desc()).limit(limit).all()
+    return jsonify({
+        'success': True,
+        'items': [_serialize_asset_generation_task(item) for item in items]
+    })
+
+
+@app.route('/api/asset_tasks/<int:task_id>')
+def asset_generation_task_detail(task_id):
+    task = AssetGenerationTask.query.get_or_404(task_id)
+    registration_id = _safe_int(request.args.get('registration_id'), 0)
+    if task.registration_id:
+        if not registration_id or task.registration_id != registration_id:
+            return jsonify({'success': False, 'message': '任务归属不匹配'}), 403
+    return jsonify({
+        'success': True,
+        'item': _serialize_asset_generation_task(task)
     })
 
 
@@ -2977,6 +3743,41 @@ def _parse_trend_payload(raw_payload):
             'summary': parts[8] if len(parts) > 8 else '',
         })
     return items
+
+
+def _build_hotword_skeleton_rows(keywords, source_platform='小红书', source_channel='Worker骨架', batch_name=''):
+    rows = []
+    templates = [
+        '体检后最容易忽视的3个点',
+        '门诊咨询量上升的真实问题',
+        '最近一周讨论度明显提升',
+        '用户最常追问的复查场景',
+        '适合继续延展的内容方向',
+    ]
+    for idx, keyword in enumerate(keywords, start=1):
+        title = f'{keyword}{templates[(idx - 1) % len(templates)]}'
+        rows.append({
+            'keyword': keyword,
+            'title': title,
+            'link': '',
+            'views': 4200 + idx * 830,
+            'likes': 160 + idx * 25,
+            'favorites': 72 + idx * 12,
+            'comments': 18 + idx * 5,
+            'author': f'热点样例账号{idx}',
+            'summary': f'Worker 骨架模式生成，供热点池、候选话题生成和后续真实数据源接入联调使用。关键词：{keyword}',
+            'source_platform': source_platform,
+            'source_channel': source_channel,
+            'import_batch': batch_name,
+            'topic_category': '热点骨架',
+            'publish_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'raw_payload': {
+                'mode': 'skeleton',
+                'keyword_rank': idx,
+                'batch_name': batch_name,
+            }
+        })
+    return rows
 
 
 @app.route('/api/trends/import', methods=['POST'])
@@ -4135,6 +4936,132 @@ def trigger_worker_ping():
     })
 
 
+@app.route('/api/jobs/hotwords/run', methods=['POST'])
+def trigger_hotword_sync_job():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    payload = request.json or {}
+    source_platform = (payload.get('source_platform') or '小红书').strip()
+    source_channel = (payload.get('source_channel') or 'Worker骨架').strip()
+    mode = (payload.get('mode') or 'skeleton').strip() or 'skeleton'
+    keyword_limit = min(max(_safe_int(payload.get('keyword_limit'), 10), 1), 30)
+    batch_name = (payload.get('batch_name') or datetime.now().strftime('hotword_%Y%m%d_%H%M%S')).strip()[:120]
+    raw_keywords = payload.get('keywords')
+    if isinstance(raw_keywords, list):
+        keyword_items = [str(item).strip() for item in raw_keywords if str(item).strip()]
+    else:
+        keyword_items = _split_keywords(raw_keywords or '')
+    keywords = keyword_items[:keyword_limit] if keyword_items else _automation_keyword_seeds()[:keyword_limit]
+
+    task_record = DataSourceTask(
+        task_type='hotword_sync',
+        source_platform=source_platform,
+        source_channel=source_channel,
+        mode=mode,
+        status='queued',
+        batch_name=batch_name,
+        keyword_limit=len(keywords),
+        activity_id=_safe_int(payload.get('activity_id'), 0) or None,
+        message='等待 Worker 执行热点抓取骨架',
+        params_payload=json.dumps({
+            'keywords': keywords,
+            'keyword_limit': keyword_limit,
+            'source_platform': source_platform,
+            'source_channel': source_channel,
+            'mode': mode,
+            'batch_name': batch_name,
+        }, ensure_ascii=False),
+    )
+    db.session.add(task_record)
+    db.session.flush()
+    _append_data_source_log(task_record.id, '已创建热点抓取任务，等待 Worker 处理', detail={
+        'keywords': keywords,
+        'source_platform': source_platform,
+        'source_channel': source_channel,
+        'mode': mode,
+        'batch_name': batch_name,
+    })
+
+    from celery_app import sync_hotwords_job
+
+    async_task = sync_hotwords_job.delay(task_record.id)
+    task_record.celery_task_id = async_task.id
+    task_record.updated_at = datetime.now()
+    _log_operation('dispatch_job', 'data_source_task', target_id=task_record.id, message='触发热点抓取 Worker 任务', detail={
+        'task_id': async_task.id,
+        'job': 'jobs.hotwords.sync',
+        'source_platform': source_platform,
+        'batch_name': batch_name,
+        'keyword_count': len(keywords),
+    })
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': f'已触发热点抓取任务，关键词 {len(keywords)} 个',
+        'task_id': async_task.id,
+        'job': 'jobs.hotwords.sync',
+        'data_source_task_id': task_record.id,
+    })
+
+
+@app.route('/api/jobs/assets/generate', methods=['POST'])
+def trigger_asset_generation_job():
+    data = request.json or {}
+    registration_id = _safe_int(data.get('registration_id'), 0)
+    reg = Registration.query.get(registration_id) if registration_id else None
+    if not reg:
+        return jsonify({'success': False, 'message': '报名信息不存在'})
+
+    selected_content = (data.get('selected_content') or '').strip()
+    style_preset = (data.get('style_preset') or '小红书图文').strip()[:50]
+    image_count = min(max(_safe_int(data.get('image_count'), 3), 1), 4)
+    title_hint = (data.get('title_hint') or _extract_title_from_version(selected_content) or reg.topic.topic_name).strip()[:200]
+    prompt_text = _build_asset_generation_prompt(
+        reg.topic,
+        selected_content=selected_content,
+        style_preset=style_preset,
+        title_hint=title_hint,
+    )
+
+    task = AssetGenerationTask(
+        registration_id=reg.id,
+        topic_id=reg.topic_id,
+        source_provider=(os.environ.get('ASSET_IMAGE_PROVIDER') or 'svg_fallback').strip() or 'svg_fallback',
+        model_name=(os.environ.get('ASSET_IMAGE_MODEL') or '').strip()[:100],
+        style_preset=style_preset,
+        image_count=image_count,
+        status='queued',
+        title_hint=title_hint,
+        prompt_text=prompt_text,
+        selected_content=selected_content,
+        message='等待 Worker 生成图片任务',
+    )
+    db.session.add(task)
+    db.session.flush()
+    _log_operation('dispatch_job', 'asset_generation_task', target_id=task.id, message='触发图片生成任务', detail={
+        'registration_id': reg.id,
+        'topic_id': reg.topic_id,
+        'style_preset': style_preset,
+        'image_count': image_count,
+        'source_provider': task.source_provider,
+    })
+
+    from celery_app import generate_asset_images_job
+
+    async_task = generate_asset_images_job.delay(task.id)
+    task.celery_task_id = async_task.id
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': f'已创建图片生成任务，预计输出 {image_count} 张',
+        'task_id': async_task.id,
+        'asset_task_id': task.id,
+        'job': 'jobs.assets.generate',
+    })
+
+
 @app.route('/api/jobs/topic_ideas/generate', methods=['POST'])
 def trigger_generate_topic_ideas_job():
     guard = _admin_json_guard()
@@ -4195,7 +5122,7 @@ def get_job_history():
     from celery_app import celery
 
     limit = min(max(_safe_int(request.args.get('limit'), 20), 1), 200)
-    logs = OperationLog.query.filter(OperationLog.action.in_(['dispatch_job', 'worker_generate'])).order_by(
+    logs = OperationLog.query.filter(OperationLog.action.in_(['dispatch_job', 'worker_generate', 'worker_sync', 'worker_generate_asset'])).order_by(
         OperationLog.created_at.desc(),
         OperationLog.id.desc()
     ).limit(limit).all()
@@ -4601,6 +5528,45 @@ def init_db():
             synchronize_session=False
         )
         db.session.commit()
+
+        if SiteTheme.query.count() == 0:
+            site_theme = SiteTheme(theme_key=DEFAULT_SITE_THEME['theme_key'], name=DEFAULT_SITE_THEME['name'], is_active=True)
+            for field, value in DEFAULT_SITE_THEME.items():
+                if field in {'theme_key', 'name'}:
+                    continue
+                setattr(site_theme, field, value)
+            db.session.add(site_theme)
+            db.session.commit()
+        elif not SiteTheme.query.filter_by(is_active=True).first():
+            first_theme = SiteTheme.query.order_by(SiteTheme.id.asc()).first()
+            if first_theme:
+                first_theme.is_active = True
+                db.session.commit()
+
+        home_page_config = SitePageConfig.query.filter_by(page_key=DEFAULT_HOME_PAGE_CONFIG['page_key']).first()
+        if not home_page_config:
+            home_page_config = SitePageConfig(
+                page_key=DEFAULT_HOME_PAGE_CONFIG['page_key'],
+                site_name=DEFAULT_HOME_PAGE_CONFIG['site_name'],
+                page_title=DEFAULT_HOME_PAGE_CONFIG['page_title'],
+                hero_badge=DEFAULT_HOME_PAGE_CONFIG['hero_badge'],
+                hero_title=DEFAULT_HOME_PAGE_CONFIG['hero_title'],
+                hero_subtitle=DEFAULT_HOME_PAGE_CONFIG['hero_subtitle'],
+                announcement_title=DEFAULT_HOME_PAGE_CONFIG['announcement_title'],
+                trend_title=DEFAULT_HOME_PAGE_CONFIG['trend_title'],
+                primary_section_title=DEFAULT_HOME_PAGE_CONFIG['primary_section_title'],
+                primary_section_icon=DEFAULT_HOME_PAGE_CONFIG['primary_section_icon'],
+                secondary_section_title=DEFAULT_HOME_PAGE_CONFIG['secondary_section_title'],
+                secondary_section_icon=DEFAULT_HOME_PAGE_CONFIG['secondary_section_icon'],
+                primary_topic_limit=DEFAULT_HOME_PAGE_CONFIG['primary_topic_limit'],
+                footer_text=DEFAULT_HOME_PAGE_CONFIG['footer_text'],
+                nav_items=json.dumps(DEFAULT_SITE_NAV_ITEMS, ensure_ascii=False),
+            )
+            db.session.add(home_page_config)
+            db.session.commit()
+        elif not home_page_config.nav_items:
+            home_page_config.nav_items = json.dumps(DEFAULT_SITE_NAV_ITEMS, ensure_ascii=False)
+            db.session.commit()
 
         # 如果没有活动，创建默认活动
         if Activity.query.count() == 0:
