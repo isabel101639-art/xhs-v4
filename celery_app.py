@@ -256,6 +256,7 @@ def sync_hotwords_job(data_source_task_id):
 @celery.task(name='jobs.assets.generate')
 def generate_asset_images_job(asset_task_id):
     from app import (
+        _image_provider_capabilities,
         _build_asset_generation_fallback_results,
         _log_operation,
         AssetGenerationTask,
@@ -287,11 +288,13 @@ def generate_asset_images_job(asset_task_id):
             'asset_task_id': asset_task_id,
         }
 
-    api_url = (os.environ.get('ASSET_IMAGE_API_URL') or '').strip()
+    capabilities = _image_provider_capabilities()
+    api_url = (capabilities.get('image_provider_api_url') or '').strip()
     api_key = (os.environ.get('ASSET_IMAGE_API_KEY') or '').strip()
-    provider = (os.environ.get('ASSET_IMAGE_PROVIDER') or task.source_provider or 'svg_fallback').strip() or 'svg_fallback'
-    model_name = (os.environ.get('ASSET_IMAGE_MODEL') or task.model_name or '').strip()
-    image_size = (os.environ.get('ASSET_IMAGE_SIZE') or '1024x1536').strip()
+    provider = (capabilities.get('image_provider_name') or task.source_provider or 'svg_fallback').strip() or 'svg_fallback'
+    model_name = (capabilities.get('image_provider_model') or task.model_name or '').strip()
+    image_size = (capabilities.get('image_provider_size') or '1024x1536').strip()
+    timeout_seconds = min(max(int(capabilities.get('image_timeout_seconds') or 90), 10), 300)
 
     def normalize_external_results(payload):
         candidates = []
@@ -322,33 +325,108 @@ def generate_asset_images_job(asset_task_id):
                 continue
             if not isinstance(item, dict):
                 continue
-            if item.get('b64_json'):
-                normalized.append({
-                    'index': index,
-                    'type': task.style_preset or 'AI图片',
-                    'title': task.title_hint or f'AI生成图{index}',
+                if item.get('b64_json'):
+                    normalized.append({
+                        'index': index,
+                        'type': task.style_preset or 'AI图片',
+                        'title': task.title_hint or f'AI生成图{index}',
                     'subtitle': '',
                     'image_prompt': task.prompt_text or '',
                     'preview_url': f"data:image/png;base64,{item.get('b64_json')}",
                     'download_name': f'asset_task_{task.id}_{index}.png',
-                    'provider': provider,
-                    'format': 'png',
-                    'bullets': [],
-                })
-            elif item.get('url') or item.get('image_url'):
-                normalized.append({
-                    'index': index,
-                    'type': task.style_preset or 'AI图片',
-                    'title': task.title_hint or f'AI生成图{index}',
+                        'provider': provider,
+                        'format': 'png',
+                        'bullets': [],
+                    })
+                elif item.get('image_base64'):
+                    normalized.append({
+                        'index': index,
+                        'type': task.style_preset or 'AI图片',
+                        'title': task.title_hint or f'AI生成图{index}',
+                        'subtitle': '',
+                        'image_prompt': task.prompt_text or '',
+                        'preview_url': f"data:image/png;base64,{item.get('image_base64')}",
+                        'download_name': f'asset_task_{task.id}_{index}.png',
+                        'provider': provider,
+                        'format': 'png',
+                        'bullets': [],
+                    })
+                elif item.get('url') or item.get('image_url'):
+                    normalized.append({
+                        'index': index,
+                        'type': task.style_preset or 'AI图片',
+                        'title': task.title_hint or f'AI生成图{index}',
                     'subtitle': '',
                     'image_prompt': task.prompt_text or '',
                     'preview_url': item.get('url') or item.get('image_url'),
                     'download_name': f'asset_task_{task.id}_{index}.png',
-                    'provider': provider,
-                    'format': 'url',
-                    'bullets': [],
-                })
+                        'provider': provider,
+                        'format': 'url',
+                        'bullets': [],
+                    })
+                elif isinstance(item.get('content'), list):
+                    for content_item in item.get('content') or []:
+                        if not isinstance(content_item, dict):
+                            continue
+                        image_base64 = content_item.get('image_base64') or content_item.get('b64_json')
+                        image_url = content_item.get('image_url') or content_item.get('url')
+                        if image_base64:
+                            normalized.append({
+                                'index': index,
+                                'type': task.style_preset or 'AI图片',
+                                'title': task.title_hint or f'AI生成图{index}',
+                                'subtitle': '',
+                                'image_prompt': task.prompt_text or '',
+                                'preview_url': f"data:image/png;base64,{image_base64}",
+                                'download_name': f'asset_task_{task.id}_{index}.png',
+                                'provider': provider,
+                                'format': 'png',
+                                'bullets': [],
+                            })
+                            break
+                        if image_url:
+                            normalized.append({
+                                'index': index,
+                                'type': task.style_preset or 'AI图片',
+                                'title': task.title_hint or f'AI生成图{index}',
+                                'subtitle': '',
+                                'image_prompt': task.prompt_text or '',
+                                'preview_url': image_url,
+                                'download_name': f'asset_task_{task.id}_{index}.png',
+                                'provider': provider,
+                                'format': 'url',
+                                'bullets': [],
+                            })
+                            break
         return normalized
+
+    def build_request_payload():
+        safe_count = task.image_count or 3
+        if provider in {'openai', 'openai_compatible'}:
+            return {
+                'model': model_name or 'gpt-image-1',
+                'prompt': task.prompt_text or '',
+                'n': safe_count,
+                'size': image_size,
+                'response_format': 'b64_json',
+            }
+        if provider in {'generic_json', 'custom_json'}:
+            return {
+                'model': model_name or 'image-default',
+                'prompt': task.prompt_text or '',
+                'image_count': safe_count,
+                'size': image_size,
+                'style': task.style_preset or '小红书图文',
+                'response_format': 'b64_json',
+            }
+        return {
+            'model': model_name or 'image-default',
+            'prompt': task.prompt_text or '',
+            'image_count': safe_count,
+            'size': image_size,
+            'style': task.style_preset or '小红书图文',
+            'response_format': 'b64_json',
+        }
 
     task.status = 'running'
     task.started_at = datetime.now()
@@ -365,15 +443,8 @@ def generate_asset_images_job(asset_task_id):
                 'Authorization': f'Bearer {api_key}',
                 'Content-Type': 'application/json',
             }
-            payload = {
-                'model': model_name or 'image-default',
-                'prompt': task.prompt_text or '',
-                'image_count': task.image_count or 3,
-                'size': image_size,
-                'style': task.style_preset or '小红书图文',
-                'response_format': 'b64_json',
-            }
-            response = requests.post(api_url, json=payload, headers=headers, timeout=90)
+            payload = build_request_payload()
+            response = requests.post(api_url, json=payload, headers=headers, timeout=timeout_seconds)
             response.raise_for_status()
             results = normalize_external_results(response.json())
             if results:

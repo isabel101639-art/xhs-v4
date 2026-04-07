@@ -68,6 +68,18 @@ ASSET_IMAGE_MODEL=
 ASSET_IMAGE_SIZE=1024x1536
 ```
 
+其中 `ASSET_IMAGE_PROVIDER` 当前可用建议值：
+
+1. `svg_fallback`
+2. `openai`
+3. `openai_compatible`
+4. `generic_json`
+
+说明：
+
+1. `API Key` 仍建议留在 Zeabur 环境变量
+2. `Provider / API URL / 模型 / 尺寸 / 热点默认参数` 现在可在后台自动化中心直接维护
+
 ### 2.3 新增 Beat 服务
 
 如果你要启用自动调度，再新增一个服务：
@@ -153,6 +165,7 @@ Beat 需要复用这些变量：
 6. 报名成功页能生成图文创作包
 7. 图片任务能返回结果
 8. 自动调度开启后能看到定时派发记录
+9. 自动化中心“运行诊断”里环境项为已配置
 
 ## 7. 当前最值得继续做的两项
 

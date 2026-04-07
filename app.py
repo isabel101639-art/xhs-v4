@@ -578,6 +578,19 @@ DEFAULT_HOME_PAGE_CONFIG = {
     'footer_text': '福瑞医科小红书任务管理系统',
 }
 
+AUTOMATION_RUNTIME_CONFIG_DEFAULTS = {
+    'hotword_source_platform': '小红书',
+    'hotword_source_channel': 'Worker骨架',
+    'hotword_keyword_limit': 10,
+    'image_provider': 'svg_fallback',
+    'image_api_url': '',
+    'image_model': '',
+    'image_size': '1024x1536',
+    'image_timeout_seconds': 90,
+    'image_style_preset': '小红书图文',
+    'image_prompt_suffix': '',
+}
+
 
 def _default_automation_schedules(default_quota=30):
     return [
@@ -642,6 +655,22 @@ def _automation_keyword_seeds():
     except Exception:
         pass
     return list(LIVER_KEYWORD_SEEDS)
+
+
+def _automation_runtime_config():
+    config = dict(AUTOMATION_RUNTIME_CONFIG_DEFAULTS)
+    try:
+        setting = Settings.query.filter_by(key='automation_runtime_config').first()
+        parsed = _load_json_value(setting.value if setting else '', {})
+        if isinstance(parsed, dict):
+            for key in config.keys():
+                value = parsed.get(key)
+                if value in [None, '']:
+                    continue
+                config[key] = value
+    except Exception:
+        pass
+    return config
 
 
 def _safe_int(value, default=0):
@@ -959,6 +988,29 @@ def _serialize_automation_schedule(item):
         'last_celery_task_id': item.last_celery_task_id or '',
         'created_at': _format_datetime(item.created_at),
         'updated_at': _format_datetime(item.updated_at),
+    }
+
+
+def _image_provider_capabilities():
+    runtime_config = _automation_runtime_config()
+    provider = (os.environ.get('ASSET_IMAGE_PROVIDER') or str(runtime_config.get('image_provider') or 'svg_fallback')).strip() or 'svg_fallback'
+    api_url = (os.environ.get('ASSET_IMAGE_API_URL') or str(runtime_config.get('image_api_url') or '')).strip()
+    api_key = (os.environ.get('ASSET_IMAGE_API_KEY') or '').strip()
+    model_name = (os.environ.get('ASSET_IMAGE_MODEL') or str(runtime_config.get('image_model') or '')).strip()
+    image_size = (os.environ.get('ASSET_IMAGE_SIZE') or str(runtime_config.get('image_size') or '1024x1536')).strip()
+    timeout_seconds = min(max(_safe_int(runtime_config.get('image_timeout_seconds'), 90), 10), 300)
+    configured = bool(api_url and api_key)
+    return {
+        'image_provider_configured': configured,
+        'image_provider_name': provider,
+        'image_provider_api_url': api_url,
+        'image_provider_model': model_name,
+        'image_provider_size': image_size,
+        'image_timeout_seconds': timeout_seconds,
+        'image_style_preset': str(runtime_config.get('image_style_preset') or '小红书图文'),
+        'image_prompt_suffix': str(runtime_config.get('image_prompt_suffix') or ''),
+        'api_key_configured': bool(api_key),
+        'fallback_mode': not configured or provider == 'svg_fallback',
     }
 
 
@@ -2073,6 +2125,7 @@ def _build_graphic_article_bundle(topic, selected_content=''):
 
 
 def _build_asset_generation_prompt(topic, selected_content='', style_preset='小红书图文', title_hint=''):
+    runtime_config = _automation_runtime_config()
     topic_name = topic.topic_name or '肝病管理'
     keywords = _split_keywords(topic.keywords or topic_name)
     primary_keyword = keywords[0] if keywords else topic_name
@@ -2081,11 +2134,15 @@ def _build_asset_generation_prompt(topic, selected_content='', style_preset='小
     body = re.sub(r'^(正文|内文)\s*[：:]\s*', '', (body or '').strip())
     support_points = _extract_content_points(body) if body else []
     point_text = '；'.join(support_points[:3]) if support_points else f'围绕{primary_keyword}做清晰信息表达'
-    return (
+    prompt = (
         f'{style_preset}，适合小红书封面与配图，主题“{clean_title}”，'
         f'核心关键词：{primary_keyword}，风格要求：干净、真实、医疗信息清楚、不过度营销。'
         f'画面重点：{point_text}。配色建议与当前话题一致，保留收藏感和截图传播感。'
     )
+    prompt_suffix = str(runtime_config.get('image_prompt_suffix') or '').strip()
+    if prompt_suffix:
+        prompt = f'{prompt} {prompt_suffix}'
+    return prompt
 
 
 def _build_asset_generation_fallback_results(topic, selected_content='', image_count=3):
@@ -3620,12 +3677,10 @@ def automation_overview():
             'running_data_source_tasks': DataSourceTask.query.filter(DataSourceTask.status.in_(['queued', 'running'])).count(),
             'asset_generation_tasks': AssetGenerationTask.query.count(),
             'automation_schedules': AutomationSchedule.query.count(),
+            'enabled_schedules': AutomationSchedule.query.filter_by(enabled=True).count(),
         },
         'default_keywords': _automation_keyword_seeds(),
-        'capabilities': {
-            'image_provider_configured': bool((os.environ.get('ASSET_IMAGE_API_URL') or '').strip() and (os.environ.get('ASSET_IMAGE_API_KEY') or '').strip()),
-            'image_provider_name': (os.environ.get('ASSET_IMAGE_PROVIDER') or 'svg_fallback').strip() or 'svg_fallback',
-        },
+        'capabilities': _image_provider_capabilities(),
         'latest_batches': [
             row.import_batch for row in TrendNote.query
             .filter(TrendNote.import_batch.isnot(None))
@@ -3656,6 +3711,101 @@ def list_data_source_tasks():
     return jsonify({
         'success': True,
         'items': [_serialize_data_source_task(item) for item in items]
+    })
+
+
+@app.route('/api/admin/runtime-diagnostics')
+def runtime_diagnostics():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    schedules = AutomationSchedule.query.order_by(AutomationSchedule.id.asc()).all()
+    next_runs = [{
+        'job_key': item.job_key,
+        'name': item.name,
+        'enabled': bool(item.enabled),
+        'next_run_at': _format_datetime(item.next_run_at),
+        'last_status': item.last_status or 'idle',
+    } for item in schedules[:10]]
+
+    recent_jobs = OperationLog.query.filter(OperationLog.action.in_([
+        'dispatch_job', 'worker_generate', 'worker_sync', 'worker_generate_asset', 'scheduler_tick'
+    ])).order_by(OperationLog.created_at.desc()).limit(10).all()
+
+    return jsonify({
+        'success': True,
+        'runtime': {
+            'database_backend': 'sqlite' if _is_sqlite_backend() else 'postgresql',
+            'database_url_configured': bool((os.environ.get('DATABASE_URL') or '').strip()),
+            'redis_url_configured': bool((os.environ.get('REDIS_URL') or '').strip()),
+            'celery_broker_configured': bool((os.environ.get('CELERY_BROKER_URL') or '').strip()),
+            'celery_backend_configured': bool((os.environ.get('CELERY_RESULT_BACKEND') or '').strip()),
+            'secret_key_configured': bool((os.environ.get('SECRET_KEY') or '').strip()),
+            'deepseek_configured': bool((os.environ.get('DEEPSEEK_API_KEY') or '').strip()),
+            'preferred_url_scheme': os.environ.get('PREFERRED_URL_SCHEME', 'https'),
+            'session_cookie_secure': _env_flag('SESSION_COOKIE_SECURE', False),
+            'default_topic_quota': _default_topic_quota(),
+            'beat_enabled': _coerce_bool(os.environ.get('ENABLE_AUTOMATION_BEAT', 'true')),
+        },
+        'capabilities': _image_provider_capabilities(),
+        'counts': {
+            'activities': Activity.query.count(),
+            'topics': Topic.query.count(),
+            'registrations': Registration.query.count(),
+            'submissions': Submission.query.count(),
+            'trend_notes': TrendNote.query.count(),
+            'corpus_entries': CorpusEntry.query.count(),
+            'topic_ideas': TopicIdea.query.count(),
+            'data_source_tasks': DataSourceTask.query.count(),
+            'asset_generation_tasks': AssetGenerationTask.query.count(),
+            'schedules': AutomationSchedule.query.count(),
+            'enabled_schedules': AutomationSchedule.query.filter_by(enabled=True).count(),
+        },
+        'schedules': next_runs,
+        'recent_jobs': [_serialize_operation_log(item) for item in recent_jobs],
+    })
+
+
+@app.route('/api/admin/automation-config', methods=['GET', 'POST'])
+def automation_config():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    if request.method == 'POST':
+        data = request.json or {}
+        current = _automation_runtime_config()
+        next_config = dict(current)
+        next_config['hotword_source_platform'] = (data.get('hotword_source_platform') or current['hotword_source_platform']).strip()[:50]
+        next_config['hotword_source_channel'] = (data.get('hotword_source_channel') or current['hotword_source_channel']).strip()[:50]
+        next_config['hotword_keyword_limit'] = min(max(_safe_int(data.get('hotword_keyword_limit'), current['hotword_keyword_limit']), 1), 30)
+        next_config['image_provider'] = (data.get('image_provider') or current['image_provider']).strip()[:50]
+        next_config['image_api_url'] = (data.get('image_api_url') or current['image_api_url']).strip()[:500]
+        next_config['image_model'] = (data.get('image_model') or current['image_model']).strip()[:100]
+        next_config['image_size'] = (data.get('image_size') or current['image_size']).strip()[:50]
+        next_config['image_timeout_seconds'] = min(max(_safe_int(data.get('image_timeout_seconds'), current['image_timeout_seconds']), 10), 300)
+        next_config['image_style_preset'] = (data.get('image_style_preset') or current['image_style_preset']).strip()[:50]
+        next_config['image_prompt_suffix'] = (data.get('image_prompt_suffix') or current['image_prompt_suffix']).strip()[:500]
+
+        setting = Settings.query.filter_by(key='automation_runtime_config').first()
+        if not setting:
+            setting = Settings(key='automation_runtime_config', value='{}')
+            db.session.add(setting)
+        setting.value = json.dumps(next_config, ensure_ascii=False)
+        _log_operation('save', 'automation_runtime_config', message='更新自动化运维配置', detail=next_config)
+        db.session.commit()
+
+    runtime_config = _automation_runtime_config()
+    capabilities = _image_provider_capabilities()
+    return jsonify({
+        'success': True,
+        'config': runtime_config,
+        'capabilities': capabilities,
+        'notes': {
+            'api_key_managed_by_env': True,
+            'api_key_configured': capabilities.get('api_key_configured', False),
+        }
     })
 
 
@@ -3963,10 +4113,11 @@ def _build_hotword_skeleton_rows(keywords, source_platform='小红书', source_c
 
 
 def _dispatch_hotword_sync(payload, actor='system'):
-    source_platform = (payload.get('source_platform') or '小红书').strip()
-    source_channel = (payload.get('source_channel') or 'Worker骨架').strip()
+    runtime_config = _automation_runtime_config()
+    source_platform = (payload.get('source_platform') or str(runtime_config.get('hotword_source_platform') or '小红书')).strip()
+    source_channel = (payload.get('source_channel') or str(runtime_config.get('hotword_source_channel') or 'Worker骨架')).strip()
     mode = (payload.get('mode') or 'skeleton').strip() or 'skeleton'
-    keyword_limit = min(max(_safe_int(payload.get('keyword_limit'), 10), 1), 30)
+    keyword_limit = min(max(_safe_int(payload.get('keyword_limit'), runtime_config.get('hotword_keyword_limit') or 10), 1), 30)
     batch_name = (payload.get('batch_name') or datetime.now().strftime('hotword_%Y%m%d_%H%M%S')).strip()[:120]
     raw_keywords = payload.get('keywords')
     if isinstance(raw_keywords, list):
@@ -4050,13 +4201,14 @@ def _dispatch_topic_idea_generation(payload, actor='system'):
 
 
 def _dispatch_asset_generation(payload, actor='system'):
+    runtime_config = _automation_runtime_config()
     registration_id = _safe_int(payload.get('registration_id'), 0)
     reg = Registration.query.get(registration_id) if registration_id else None
     if not reg:
         raise ValueError('报名信息不存在')
 
     selected_content = (payload.get('selected_content') or '').strip()
-    style_preset = (payload.get('style_preset') or '小红书图文').strip()[:50]
+    style_preset = (payload.get('style_preset') or str(runtime_config.get('image_style_preset') or '小红书图文')).strip()[:50]
     image_count = min(max(_safe_int(payload.get('image_count'), 3), 1), 4)
     title_hint = (payload.get('title_hint') or _extract_title_from_version(selected_content) or reg.topic.topic_name).strip()[:200]
     prompt_text = _build_asset_generation_prompt(
@@ -4069,8 +4221,8 @@ def _dispatch_asset_generation(payload, actor='system'):
     task = AssetGenerationTask(
         registration_id=reg.id,
         topic_id=reg.topic_id,
-        source_provider=(os.environ.get('ASSET_IMAGE_PROVIDER') or 'svg_fallback').strip() or 'svg_fallback',
-        model_name=(os.environ.get('ASSET_IMAGE_MODEL') or '').strip()[:100],
+        source_provider=(os.environ.get('ASSET_IMAGE_PROVIDER') or str(runtime_config.get('image_provider') or 'svg_fallback')).strip() or 'svg_fallback',
+        model_name=(os.environ.get('ASSET_IMAGE_MODEL') or str(runtime_config.get('image_model') or '')).strip()[:100],
         style_preset=style_preset,
         image_count=image_count,
         status='queued',
@@ -5757,6 +5909,14 @@ def init_db():
         if not default_quota_setting:
             default_quota_setting = Settings(key='default_topic_quota', value='30')
             db.session.add(default_quota_setting)
+            db.session.commit()
+        automation_runtime_setting = Settings.query.filter_by(key='automation_runtime_config').first()
+        if not automation_runtime_setting:
+            automation_runtime_setting = Settings(
+                key='automation_runtime_config',
+                value=json.dumps(AUTOMATION_RUNTIME_CONFIG_DEFAULTS, ensure_ascii=False)
+            )
+            db.session.add(automation_runtime_setting)
             db.session.commit()
         default_quota = _default_topic_quota()
 
