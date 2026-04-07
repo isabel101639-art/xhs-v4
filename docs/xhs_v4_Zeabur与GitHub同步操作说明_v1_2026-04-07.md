@@ -25,7 +25,8 @@
 当前还差：
 
 1. 单独的 `worker` 服务
-2. 如果要启用真实文生图，还需要补图片模型变量
+2. 单独的 `beat` 服务
+3. 如果要启用真实文生图，还需要补图片模型变量
 
 ## 2. Zeabur 下一步
 
@@ -67,6 +68,24 @@ ASSET_IMAGE_MODEL=
 ASSET_IMAGE_SIZE=1024x1536
 ```
 
+### 2.3 新增 Beat 服务
+
+如果你要启用自动调度，再新增一个服务：
+
+1. 服务名：`xhs-v4-beat`
+2. 代码来源：与 `xhs-v4` 相同仓库
+3. 启动命令：`./docker/entrypoint-beat.sh`
+
+Beat 需要复用这些变量：
+
+1. `DATABASE_URL`
+2. `REDIS_URL`
+3. `CELERY_BROKER_URL`
+4. `CELERY_RESULT_BACKEND`
+5. `SECRET_KEY`
+6. `ENABLE_AUTOMATION_BEAT`
+7. `CELERY_BEAT_LOG_LEVEL`
+
 ## 3. GitHub Desktop 同步步骤
 
 ### 3.1 本地提交
@@ -98,11 +117,13 @@ ASSET_IMAGE_SIZE=1024x1536
 1. 先推送 `web` 代码
 2. 确认 `xhs-v4` Web 服务部署成功
 3. 再新增 `xhs-v4-worker`
-4. 在自动化中心先点一次 `检测 Worker`
-5. 再测试：
+4. 再新增 `xhs-v4-beat`
+5. 在自动化中心先点一次 `检测 Worker`
+6. 再测试：
    - 候选话题异步生成
    - 热点抓取骨架任务
    - 图片生成任务
+   - 自动调度配置
 
 ## 5. 当前代码已支持的云端能力
 
@@ -113,6 +134,7 @@ ASSET_IMAGE_SIZE=1024x1536
 3. 热点抓取 Worker 骨架任务
 4. 图片生成 Worker 任务
 5. 报名成功页一键图文创作包
+6. 自动调度配置、暂停/恢复、立即执行
 
 其中图片任务逻辑为：
 
@@ -130,6 +152,7 @@ ASSET_IMAGE_SIZE=1024x1536
 5. 热点抓取任务能产生热点样例
 6. 报名成功页能生成图文创作包
 7. 图片任务能返回结果
+8. 自动调度开启后能看到定时派发记录
 
 ## 7. 当前最值得继续做的两项
 

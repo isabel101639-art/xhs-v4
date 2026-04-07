@@ -308,6 +308,23 @@ class AssetGenerationTask(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
 
+class AutomationSchedule(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    job_key = db.Column(db.String(80), unique=True, nullable=False)
+    name = db.Column(db.String(120), nullable=False)
+    task_type = db.Column(db.String(50), nullable=False)
+    enabled = db.Column(db.Boolean, default=False)
+    interval_minutes = db.Column(db.Integer, default=60)
+    params_payload = db.Column(db.Text)
+    next_run_at = db.Column(db.DateTime)
+    last_run_at = db.Column(db.DateTime)
+    last_status = db.Column(db.String(20), default='idle')
+    last_message = db.Column(db.String(300))
+    last_celery_task_id = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+
 class CorpusEntry(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
@@ -560,6 +577,34 @@ DEFAULT_HOME_PAGE_CONFIG = {
     'primary_topic_limit': 18,
     'footer_text': '福瑞医科小红书任务管理系统',
 }
+
+
+def _default_automation_schedules(default_quota=30):
+    return [
+        {
+            'job_key': 'hotword_sync_daily',
+            'name': '热点抓取骨架巡检',
+            'task_type': 'hotword_sync',
+            'enabled': False,
+            'interval_minutes': 360,
+            'params_payload': json.dumps({
+                'source_platform': '小红书',
+                'source_channel': 'Scheduler骨架',
+                'keyword_limit': 10,
+            }, ensure_ascii=False),
+        },
+        {
+            'job_key': 'topic_ideas_daily',
+            'name': '候选话题自动生成',
+            'task_type': 'topic_idea_generate',
+            'enabled': False,
+            'interval_minutes': 1440,
+            'params_payload': json.dumps({
+                'count': 80,
+                'quota': default_quota,
+            }, ensure_ascii=False),
+        },
+    ]
 
 
 def _admin_json_guard():
@@ -895,6 +940,25 @@ def _serialize_asset_generation_task(task):
         'finished_at': _format_datetime(task.finished_at),
         'created_at': _format_datetime(task.created_at),
         'updated_at': _format_datetime(task.updated_at),
+    }
+
+
+def _serialize_automation_schedule(item):
+    return {
+        'id': item.id,
+        'job_key': item.job_key,
+        'name': item.name,
+        'task_type': item.task_type,
+        'enabled': bool(item.enabled),
+        'interval_minutes': item.interval_minutes or 0,
+        'params_payload': _load_json_value(item.params_payload, {}),
+        'next_run_at': _format_datetime(item.next_run_at),
+        'last_run_at': _format_datetime(item.last_run_at),
+        'last_status': item.last_status or 'idle',
+        'last_message': item.last_message or '',
+        'last_celery_task_id': item.last_celery_task_id or '',
+        'created_at': _format_datetime(item.created_at),
+        'updated_at': _format_datetime(item.updated_at),
     }
 
 
@@ -1303,6 +1367,12 @@ def _append_data_source_log(task_id, message, level='info', detail=None):
         message=(message or '')[:300],
         detail=detail_text,
     ))
+
+
+def _next_schedule_time(interval_minutes, base_time=None):
+    base = base_time or datetime.now()
+    minutes = max(_safe_int(interval_minutes, 60), 1)
+    return base + timedelta(minutes=minutes)
 
 
 def _apply_creator_post_range(query, args):
@@ -3549,6 +3619,7 @@ def automation_overview():
             'data_source_tasks': DataSourceTask.query.count(),
             'running_data_source_tasks': DataSourceTask.query.filter(DataSourceTask.status.in_(['queued', 'running'])).count(),
             'asset_generation_tasks': AssetGenerationTask.query.count(),
+            'automation_schedules': AutomationSchedule.query.count(),
         },
         'default_keywords': _automation_keyword_seeds(),
         'capabilities': {
@@ -3607,6 +3678,32 @@ def list_asset_generation_tasks():
     })
 
 
+@app.route('/api/admin/assets/tasks/<int:task_id>/retry', methods=['POST'])
+def retry_asset_generation_task(task_id):
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    task = AssetGenerationTask.query.get_or_404(task_id)
+    payload = {
+        'registration_id': task.registration_id,
+        'selected_content': task.selected_content or '',
+        'style_preset': task.style_preset or '小红书图文',
+        'image_count': task.image_count or 3,
+        'title_hint': task.title_hint or '',
+    }
+    try:
+        dispatched = _dispatch_asset_generation(payload, actor=_current_actor())
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)})
+    return jsonify({
+        'success': True,
+        'message': '已重新派发图片生成任务',
+        'task_id': dispatched['task_id'],
+        'asset_task_id': dispatched['task_record'].id,
+    })
+
+
 @app.route('/api/asset_tasks/<int:task_id>')
 def asset_generation_task_detail(task_id):
     task = AssetGenerationTask.query.get_or_404(task_id)
@@ -3617,6 +3714,91 @@ def asset_generation_task_detail(task_id):
     return jsonify({
         'success': True,
         'item': _serialize_asset_generation_task(task)
+    })
+
+
+@app.route('/api/admin/data-source-tasks/<int:task_id>/retry', methods=['POST'])
+def retry_data_source_task(task_id):
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    task = DataSourceTask.query.get_or_404(task_id)
+    payload = _load_json_value(task.params_payload, {})
+    payload['source_platform'] = payload.get('source_platform') or task.source_platform or '小红书'
+    payload['source_channel'] = payload.get('source_channel') or task.source_channel or 'Worker骨架'
+    payload['mode'] = payload.get('mode') or task.mode or 'skeleton'
+    payload['batch_name'] = f"{task.batch_name or 'retry'}_retry_{datetime.now().strftime('%H%M%S')}"
+    dispatched = _dispatch_hotword_sync(payload, actor=_current_actor())
+    return jsonify({
+        'success': True,
+        'message': '已重新派发热点抓取任务',
+        'task_id': dispatched['task_id'],
+        'data_source_task_id': dispatched['task_record'].id,
+    })
+
+
+@app.route('/api/admin/schedules')
+def list_automation_schedules():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    items = AutomationSchedule.query.order_by(AutomationSchedule.id.asc()).all()
+    return jsonify({
+        'success': True,
+        'items': [_serialize_automation_schedule(item) for item in items]
+    })
+
+
+@app.route('/api/admin/schedules/<int:schedule_id>', methods=['POST'])
+def save_automation_schedule(schedule_id):
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    schedule = AutomationSchedule.query.get_or_404(schedule_id)
+    data = request.json or {}
+    previous_enabled = bool(schedule.enabled)
+    schedule.enabled = _coerce_bool(data.get('enabled'))
+    schedule.interval_minutes = min(max(_safe_int(data.get('interval_minutes'), schedule.interval_minutes or 60), 1), 10080)
+    params_payload = data.get('params_payload')
+    if isinstance(params_payload, dict):
+        schedule.params_payload = json.dumps(params_payload, ensure_ascii=False)
+    if schedule.enabled and (not previous_enabled or not schedule.next_run_at):
+        schedule.next_run_at = _next_schedule_time(schedule.interval_minutes)
+    if not schedule.enabled:
+        schedule.last_status = 'paused'
+        schedule.last_message = '已暂停自动调度'
+    _log_operation('save_schedule', 'automation_schedule', target_id=schedule.id, message='更新自动化调度配置', detail={
+        'job_key': schedule.job_key,
+        'enabled': bool(schedule.enabled),
+        'interval_minutes': schedule.interval_minutes,
+    })
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': '调度配置已保存',
+        'item': _serialize_automation_schedule(schedule),
+    })
+
+
+@app.route('/api/admin/schedules/<int:schedule_id>/run', methods=['POST'])
+def run_automation_schedule(schedule_id):
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    schedule = AutomationSchedule.query.get_or_404(schedule_id)
+    try:
+        dispatched = _dispatch_automation_schedule(schedule, actor=_current_actor())
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)})
+    return jsonify({
+        'success': True,
+        'message': '已立即执行调度任务',
+        'task_id': dispatched.get('task_id', ''),
+        'item': _serialize_automation_schedule(schedule),
     })
 
 
@@ -3778,6 +3960,171 @@ def _build_hotword_skeleton_rows(keywords, source_platform='小红书', source_c
             }
         })
     return rows
+
+
+def _dispatch_hotword_sync(payload, actor='system'):
+    source_platform = (payload.get('source_platform') or '小红书').strip()
+    source_channel = (payload.get('source_channel') or 'Worker骨架').strip()
+    mode = (payload.get('mode') or 'skeleton').strip() or 'skeleton'
+    keyword_limit = min(max(_safe_int(payload.get('keyword_limit'), 10), 1), 30)
+    batch_name = (payload.get('batch_name') or datetime.now().strftime('hotword_%Y%m%d_%H%M%S')).strip()[:120]
+    raw_keywords = payload.get('keywords')
+    if isinstance(raw_keywords, list):
+        keyword_items = [str(item).strip() for item in raw_keywords if str(item).strip()]
+    else:
+        keyword_items = _split_keywords(raw_keywords or '')
+    keywords = keyword_items[:keyword_limit] if keyword_items else _automation_keyword_seeds()[:keyword_limit]
+
+    task_record = DataSourceTask(
+        task_type='hotword_sync',
+        source_platform=source_platform,
+        source_channel=source_channel,
+        mode=mode,
+        status='queued',
+        batch_name=batch_name,
+        keyword_limit=len(keywords),
+        activity_id=_safe_int(payload.get('activity_id'), 0) or None,
+        message='等待 Worker 执行热点抓取骨架',
+        params_payload=json.dumps({
+            'keywords': keywords,
+            'keyword_limit': keyword_limit,
+            'source_platform': source_platform,
+            'source_channel': source_channel,
+            'mode': mode,
+            'batch_name': batch_name,
+        }, ensure_ascii=False),
+    )
+    db.session.add(task_record)
+    db.session.flush()
+    _append_data_source_log(task_record.id, '已创建热点抓取任务，等待 Worker 处理', detail={
+        'keywords': keywords,
+        'source_platform': source_platform,
+        'source_channel': source_channel,
+        'mode': mode,
+        'batch_name': batch_name,
+    })
+
+    from celery_app import sync_hotwords_job
+
+    async_task = sync_hotwords_job.delay(task_record.id)
+    task_record.celery_task_id = async_task.id
+    task_record.updated_at = datetime.now()
+    _log_operation('dispatch_job', 'data_source_task', target_id=task_record.id, message='触发热点抓取 Worker 任务', detail={
+        'task_id': async_task.id,
+        'job': 'jobs.hotwords.sync',
+        'source_platform': source_platform,
+        'batch_name': batch_name,
+        'keyword_count': len(keywords),
+        'actor': actor,
+    })
+    db.session.commit()
+    return {
+        'task_record': task_record,
+        'task_id': async_task.id,
+        'keyword_count': len(keywords),
+    }
+
+
+def _dispatch_topic_idea_generation(payload, actor='system'):
+    count = min(max(_safe_int(payload.get('count'), 80), 1), 120)
+    activity_id = _safe_int(payload.get('activity_id'), 0) or None
+    quota = _normalize_quota(payload.get('quota'))
+
+    from celery_app import generate_topic_ideas_job
+
+    async_task = generate_topic_ideas_job.delay(count=count, activity_id=activity_id, quota=quota)
+    _log_operation('dispatch_job', 'topic_idea', message='触发异步生成候选话题', detail={
+        'task_id': async_task.id,
+        'count': count,
+        'activity_id': activity_id,
+        'quota': quota,
+        'actor': actor,
+    })
+    db.session.commit()
+    return {
+        'task_id': async_task.id,
+        'count': count,
+        'activity_id': activity_id,
+        'quota': quota,
+    }
+
+
+def _dispatch_asset_generation(payload, actor='system'):
+    registration_id = _safe_int(payload.get('registration_id'), 0)
+    reg = Registration.query.get(registration_id) if registration_id else None
+    if not reg:
+        raise ValueError('报名信息不存在')
+
+    selected_content = (payload.get('selected_content') or '').strip()
+    style_preset = (payload.get('style_preset') or '小红书图文').strip()[:50]
+    image_count = min(max(_safe_int(payload.get('image_count'), 3), 1), 4)
+    title_hint = (payload.get('title_hint') or _extract_title_from_version(selected_content) or reg.topic.topic_name).strip()[:200]
+    prompt_text = _build_asset_generation_prompt(
+        reg.topic,
+        selected_content=selected_content,
+        style_preset=style_preset,
+        title_hint=title_hint,
+    )
+
+    task = AssetGenerationTask(
+        registration_id=reg.id,
+        topic_id=reg.topic_id,
+        source_provider=(os.environ.get('ASSET_IMAGE_PROVIDER') or 'svg_fallback').strip() or 'svg_fallback',
+        model_name=(os.environ.get('ASSET_IMAGE_MODEL') or '').strip()[:100],
+        style_preset=style_preset,
+        image_count=image_count,
+        status='queued',
+        title_hint=title_hint,
+        prompt_text=prompt_text,
+        selected_content=selected_content,
+        message='等待 Worker 生成图片任务',
+    )
+    db.session.add(task)
+    db.session.flush()
+    _log_operation('dispatch_job', 'asset_generation_task', target_id=task.id, message='触发图片生成任务', detail={
+        'registration_id': reg.id,
+        'topic_id': reg.topic_id,
+        'style_preset': style_preset,
+        'image_count': image_count,
+        'source_provider': task.source_provider,
+        'actor': actor,
+    })
+
+    from celery_app import generate_asset_images_job
+
+    async_task = generate_asset_images_job.delay(task.id)
+    task.celery_task_id = async_task.id
+    db.session.commit()
+    return {
+        'task_record': task,
+        'task_id': async_task.id,
+        'image_count': image_count,
+    }
+
+
+def _dispatch_automation_schedule(schedule, actor='system'):
+    params = _load_json_value(schedule.params_payload, {})
+    schedule.last_run_at = datetime.now()
+    schedule.next_run_at = _next_schedule_time(schedule.interval_minutes, schedule.last_run_at)
+
+    if schedule.task_type == 'hotword_sync':
+        dispatched = _dispatch_hotword_sync(params, actor=actor)
+        schedule.last_celery_task_id = dispatched['task_id']
+        schedule.last_status = 'queued'
+        schedule.last_message = f'已派发热点抓取任务 {dispatched["task_record"].id}'
+    elif schedule.task_type == 'topic_idea_generate':
+        dispatched = _dispatch_topic_idea_generation(params, actor=actor)
+        schedule.last_celery_task_id = dispatched['task_id']
+        schedule.last_status = 'queued'
+        schedule.last_message = f'已派发候选话题任务，生成 {dispatched["count"]} 个'
+    else:
+        schedule.last_status = 'failed'
+        schedule.last_message = f'未知任务类型：{schedule.task_type}'
+        db.session.commit()
+        raise ValueError(f'未知任务类型：{schedule.task_type}')
+
+    db.session.commit()
+    return dispatched
 
 
 @app.route('/api/trends/import', methods=['POST'])
@@ -4943,121 +5290,28 @@ def trigger_hotword_sync_job():
         return guard
 
     payload = request.json or {}
-    source_platform = (payload.get('source_platform') or '小红书').strip()
-    source_channel = (payload.get('source_channel') or 'Worker骨架').strip()
-    mode = (payload.get('mode') or 'skeleton').strip() or 'skeleton'
-    keyword_limit = min(max(_safe_int(payload.get('keyword_limit'), 10), 1), 30)
-    batch_name = (payload.get('batch_name') or datetime.now().strftime('hotword_%Y%m%d_%H%M%S')).strip()[:120]
-    raw_keywords = payload.get('keywords')
-    if isinstance(raw_keywords, list):
-        keyword_items = [str(item).strip() for item in raw_keywords if str(item).strip()]
-    else:
-        keyword_items = _split_keywords(raw_keywords or '')
-    keywords = keyword_items[:keyword_limit] if keyword_items else _automation_keyword_seeds()[:keyword_limit]
-
-    task_record = DataSourceTask(
-        task_type='hotword_sync',
-        source_platform=source_platform,
-        source_channel=source_channel,
-        mode=mode,
-        status='queued',
-        batch_name=batch_name,
-        keyword_limit=len(keywords),
-        activity_id=_safe_int(payload.get('activity_id'), 0) or None,
-        message='等待 Worker 执行热点抓取骨架',
-        params_payload=json.dumps({
-            'keywords': keywords,
-            'keyword_limit': keyword_limit,
-            'source_platform': source_platform,
-            'source_channel': source_channel,
-            'mode': mode,
-            'batch_name': batch_name,
-        }, ensure_ascii=False),
-    )
-    db.session.add(task_record)
-    db.session.flush()
-    _append_data_source_log(task_record.id, '已创建热点抓取任务，等待 Worker 处理', detail={
-        'keywords': keywords,
-        'source_platform': source_platform,
-        'source_channel': source_channel,
-        'mode': mode,
-        'batch_name': batch_name,
-    })
-
-    from celery_app import sync_hotwords_job
-
-    async_task = sync_hotwords_job.delay(task_record.id)
-    task_record.celery_task_id = async_task.id
-    task_record.updated_at = datetime.now()
-    _log_operation('dispatch_job', 'data_source_task', target_id=task_record.id, message='触发热点抓取 Worker 任务', detail={
-        'task_id': async_task.id,
-        'job': 'jobs.hotwords.sync',
-        'source_platform': source_platform,
-        'batch_name': batch_name,
-        'keyword_count': len(keywords),
-    })
-    db.session.commit()
+    dispatched = _dispatch_hotword_sync(payload, actor=_current_actor())
     return jsonify({
         'success': True,
-        'message': f'已触发热点抓取任务，关键词 {len(keywords)} 个',
-        'task_id': async_task.id,
+        'message': f'已触发热点抓取任务，关键词 {dispatched["keyword_count"]} 个',
+        'task_id': dispatched['task_id'],
         'job': 'jobs.hotwords.sync',
-        'data_source_task_id': task_record.id,
+        'data_source_task_id': dispatched['task_record'].id,
     })
 
 
 @app.route('/api/jobs/assets/generate', methods=['POST'])
 def trigger_asset_generation_job():
     data = request.json or {}
-    registration_id = _safe_int(data.get('registration_id'), 0)
-    reg = Registration.query.get(registration_id) if registration_id else None
-    if not reg:
-        return jsonify({'success': False, 'message': '报名信息不存在'})
-
-    selected_content = (data.get('selected_content') or '').strip()
-    style_preset = (data.get('style_preset') or '小红书图文').strip()[:50]
-    image_count = min(max(_safe_int(data.get('image_count'), 3), 1), 4)
-    title_hint = (data.get('title_hint') or _extract_title_from_version(selected_content) or reg.topic.topic_name).strip()[:200]
-    prompt_text = _build_asset_generation_prompt(
-        reg.topic,
-        selected_content=selected_content,
-        style_preset=style_preset,
-        title_hint=title_hint,
-    )
-
-    task = AssetGenerationTask(
-        registration_id=reg.id,
-        topic_id=reg.topic_id,
-        source_provider=(os.environ.get('ASSET_IMAGE_PROVIDER') or 'svg_fallback').strip() or 'svg_fallback',
-        model_name=(os.environ.get('ASSET_IMAGE_MODEL') or '').strip()[:100],
-        style_preset=style_preset,
-        image_count=image_count,
-        status='queued',
-        title_hint=title_hint,
-        prompt_text=prompt_text,
-        selected_content=selected_content,
-        message='等待 Worker 生成图片任务',
-    )
-    db.session.add(task)
-    db.session.flush()
-    _log_operation('dispatch_job', 'asset_generation_task', target_id=task.id, message='触发图片生成任务', detail={
-        'registration_id': reg.id,
-        'topic_id': reg.topic_id,
-        'style_preset': style_preset,
-        'image_count': image_count,
-        'source_provider': task.source_provider,
-    })
-
-    from celery_app import generate_asset_images_job
-
-    async_task = generate_asset_images_job.delay(task.id)
-    task.celery_task_id = async_task.id
-    db.session.commit()
+    try:
+        dispatched = _dispatch_asset_generation(data, actor=_current_actor())
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)})
     return jsonify({
         'success': True,
-        'message': f'已创建图片生成任务，预计输出 {image_count} 张',
-        'task_id': async_task.id,
-        'asset_task_id': task.id,
+        'message': f'已创建图片生成任务，预计输出 {dispatched["image_count"]} 张',
+        'task_id': dispatched['task_id'],
+        'asset_task_id': dispatched['task_record'].id,
         'job': 'jobs.assets.generate',
     })
 
@@ -5069,24 +5323,11 @@ def trigger_generate_topic_ideas_job():
         return guard
 
     data = request.json or {}
-    count = min(max(_safe_int(data.get('count'), 80), 1), 120)
-    activity_id = data.get('activity_id')
-    quota = _normalize_quota(data.get('quota'))
-
-    from celery_app import generate_topic_ideas_job
-
-    task = generate_topic_ideas_job.delay(count=count, activity_id=activity_id, quota=quota)
-    _log_operation('dispatch_job', 'topic_idea', message='触发异步生成候选话题', detail={
-        'task_id': task.id,
-        'count': count,
-        'activity_id': activity_id,
-        'quota': quota,
-    })
-    db.session.commit()
+    dispatched = _dispatch_topic_idea_generation(data, actor=_current_actor())
     return jsonify({
         'success': True,
         'message': '已触发异步生成候选话题任务',
-        'task_id': task.id,
+        'task_id': dispatched['task_id'],
         'job': 'jobs.generate_topic_ideas',
     })
 
@@ -5567,6 +5808,24 @@ def init_db():
         elif not home_page_config.nav_items:
             home_page_config.nav_items = json.dumps(DEFAULT_SITE_NAV_ITEMS, ensure_ascii=False)
             db.session.commit()
+
+        existing_schedule_keys = {item.job_key for item in AutomationSchedule.query.all()}
+        for row in _default_automation_schedules(default_quota):
+            if row['job_key'] in existing_schedule_keys:
+                continue
+            schedule = AutomationSchedule(
+                job_key=row['job_key'],
+                name=row['name'],
+                task_type=row['task_type'],
+                enabled=row['enabled'],
+                interval_minutes=row['interval_minutes'],
+                params_payload=row['params_payload'],
+                next_run_at=_next_schedule_time(row['interval_minutes']),
+                last_status='paused' if not row['enabled'] else 'idle',
+                last_message='等待首次执行' if row['enabled'] else '默认暂停，需手动开启',
+            )
+            db.session.add(schedule)
+        db.session.commit()
 
         # 如果没有活动，创建默认活动
         if Activity.query.count() == 0:

@@ -32,6 +32,12 @@ def make_celery(app):
 
 
 celery = make_celery(flask_app)
+celery.conf.beat_schedule = {
+    'automation-scheduler-tick': {
+        'task': 'jobs.scheduler.tick',
+        'schedule': 60.0,
+    }
+}
 
 
 @celery.task(name='system.ping')
@@ -39,6 +45,58 @@ def ping():
     return {
         'message': 'pong',
         'service': 'worker',
+    }
+
+
+@celery.task(name='jobs.scheduler.tick')
+def scheduler_tick():
+    from app import (
+        _dispatch_automation_schedule,
+        _log_operation,
+        AutomationSchedule,
+        db,
+        datetime,
+        os,
+    )
+
+    enabled_flag = str(os.environ.get('ENABLE_AUTOMATION_BEAT', 'true')).strip().lower() in {'1', 'true', 'yes', 'y', 'on'}
+    if not enabled_flag:
+        return {
+            'success': True,
+            'message': 'automation beat disabled by env',
+            'dispatched': 0,
+        }
+
+    now = datetime.now()
+    schedules = AutomationSchedule.query.filter_by(enabled=True).all()
+    dispatched = []
+    for schedule in schedules:
+        if schedule.next_run_at and schedule.next_run_at > now:
+            continue
+        try:
+            result = _dispatch_automation_schedule(schedule, actor='scheduler')
+            dispatched.append({
+                'schedule_id': schedule.id,
+                'job_key': schedule.job_key,
+                'task_id': result.get('task_id', ''),
+            })
+        except Exception as exc:
+            schedule.last_run_at = now
+            schedule.last_status = 'failed'
+            schedule.last_message = str(exc)[:300]
+            db.session.commit()
+
+    if dispatched:
+        _log_operation('scheduler_tick', 'automation_schedule', message='Scheduler 自动派发任务', detail={
+            'count': len(dispatched),
+            'items': dispatched,
+        })
+        db.session.commit()
+
+    return {
+        'success': True,
+        'dispatched': len(dispatched),
+        'items': dispatched,
     }
 
 

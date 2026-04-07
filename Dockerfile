@@ -17,7 +17,7 @@ RUN pip install --upgrade pip \
 
 COPY . /app
 
-RUN chmod +x /app/docker/entrypoint-web.sh /app/docker/entrypoint-worker.sh \
+RUN chmod +x /app/docker/entrypoint-web.sh /app/docker/entrypoint-worker.sh /app/docker/entrypoint-beat.sh \
     && useradd --create-home --shell /bin/sh appuser \
     && chown -R appuser:appuser /app
 

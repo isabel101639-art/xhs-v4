@@ -408,6 +408,33 @@
         </div>
 
         <div class="panel p-4 mb-4">
+            <div class="section-title">自动调度配置</div>
+            <div class="subtle mb-3">这里控制“自动热点巡检”“自动候选话题生成”等周期任务。开启后需要配合独立 `beat` 服务一起运行。</div>
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                <button class="btn btn-outline-primary" onclick="loadSchedules()">刷新调度配置</button>
+                <div id="scheduleMsg" class="subtle d-flex align-items-center"></div>
+            </div>
+            <div class="table-wrap">
+                <table class="table data-table align-middle">
+                    <thead>
+                        <tr>
+                            <th>任务</th>
+                            <th>状态</th>
+                            <th>频率</th>
+                            <th>下次执行</th>
+                            <th>最近执行</th>
+                            <th>参数</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scheduleTableBody">
+                        <tr><td colspan="7" class="text-center text-muted">暂无调度配置</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="panel p-4 mb-4">
             <div class="section-title">任务历史</div>
             <div class="d-flex gap-2 flex-wrap mb-3">
                 <input id="jobHistoryLimit" class="form-control" style="max-width: 200px;" value="20" placeholder="条数">
@@ -664,6 +691,9 @@
                             <div class="subtle mt-2">任务ID：${item.id} ｜ Worker：${escapeHtml(item.celery_task_id || '-')}</div>
                             <pre style="white-space: pre-wrap; word-break: break-word; font-size:12px;">${escapeHtml(JSON.stringify(item.result_payload || [], null, 2))}</pre>
                         </details>
+                        <div class="mt-2">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="retryAssetTask(${item.id})">重试</button>
+                        </div>
                     </td>
                 </tr>
             `).join('') || '<tr><td colspan="6" class="text-center text-muted">暂无图片任务</td></tr>';
@@ -697,12 +727,52 @@
                         <div class="subtle">${escapeHtml(item.started_at || '-')} ~ ${escapeHtml(item.finished_at || '-')}</div>
                     </td>
                     <td>
+                        <div class="mb-2">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="retryDataSourceTask(${item.id})">重试</button>
+                        </div>
                         ${(item.recent_logs || []).map((log) => `
                             <div class="subtle mb-2"><strong>${escapeHtml(log.level || 'info')}</strong>｜${escapeHtml(log.message || '')}</div>
                         `).join('') || '<span class="text-muted">暂无日志</span>'}
                     </td>
                 </tr>
             `).join('') || '<tr><td colspan="7" class="text-center text-muted">暂无抓取任务</td></tr>';
+        }
+
+        async function loadSchedules() {
+            const res = await fetch('/api/admin/schedules');
+            const data = await res.json();
+            const body = document.getElementById('scheduleTableBody');
+            body.innerHTML = (data.items || []).map((item) => `
+                <tr>
+                    <td>
+                        <strong>${escapeHtml(item.name || '-')}</strong>
+                        <div class="subtle">${escapeHtml(item.task_type || '-')}</div>
+                    </td>
+                    <td>
+                        <span class="badge ${item.enabled ? 'bg-success' : 'bg-secondary'}">${item.enabled ? '已启用' : '已暂停'}</span>
+                        <div class="subtle mt-1">${escapeHtml(item.last_status || 'idle')}</div>
+                    </td>
+                    <td>${item.interval_minutes || 0} 分钟</td>
+                    <td>${escapeHtml(item.next_run_at || '-')}</td>
+                    <td>
+                        <div>${escapeHtml(item.last_run_at || '-')}</div>
+                        <div class="subtle">${escapeHtml(item.last_message || '-')}</div>
+                    </td>
+                    <td>
+                        <details>
+                            <summary>查看</summary>
+                            <pre style="white-space: pre-wrap; word-break: break-word; font-size:12px;">${escapeHtml(JSON.stringify(item.params_payload || {}, null, 2))}</pre>
+                        </details>
+                    </td>
+                    <td>
+                        <div class="d-flex flex-column gap-2">
+                            <button class="btn btn-sm btn-outline-primary" onclick="runScheduleNow(${item.id})">立即执行</button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="toggleSchedule(${item.id}, ${item.enabled ? 'false' : 'true'})">${item.enabled ? '暂停' : '启用'}</button>
+                            <button class="btn btn-sm btn-outline-dark" onclick='editSchedule(${item.id}, ${item.interval_minutes || 60}, ${JSON.stringify(JSON.stringify(item.params_payload || {}))})'>调整频率</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="7" class="text-center text-muted">暂无调度配置</td></tr>';
         }
 
         async function loadTrends() {
@@ -1044,6 +1114,93 @@
             }
         }
 
+        async function retryDataSourceTask(taskId) {
+            const res = await fetch(`/api/admin/data-source-tasks/${taskId}/retry`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({})
+            });
+            const data = await res.json();
+            document.getElementById('hotwordJobMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadDataSourceTasks();
+                loadJobHistory();
+            }
+        }
+
+        async function retryAssetTask(taskId) {
+            const res = await fetch(`/api/admin/assets/tasks/${taskId}/retry`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({})
+            });
+            const data = await res.json();
+            document.getElementById('jobMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadAssetTasks();
+                loadJobHistory();
+            }
+        }
+
+        async function toggleSchedule(scheduleId, enabled) {
+            const res = await fetch(`/api/admin/schedules/${scheduleId}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ enabled: enabled === 'true' })
+            });
+            const data = await res.json();
+            document.getElementById('scheduleMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadSchedules();
+            }
+        }
+
+        async function runScheduleNow(scheduleId) {
+            const res = await fetch(`/api/admin/schedules/${scheduleId}/run`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({})
+            });
+            const data = await res.json();
+            document.getElementById('scheduleMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadSchedules();
+                loadOverview();
+                loadJobHistory();
+                loadDataSourceTasks();
+            }
+        }
+
+        async function editSchedule(scheduleId, currentInterval, rawParams) {
+            const nextInterval = window.prompt('请输入执行频率（分钟）', currentInterval || 60);
+            if (nextInterval === null) return;
+            const nextParams = window.prompt('请输入任务参数 JSON', rawParams || '{}');
+            if (nextParams === null) return;
+
+            let paramsPayload = {};
+            try {
+                paramsPayload = JSON.parse(nextParams);
+            } catch (e) {
+                document.getElementById('scheduleMsg').textContent = '参数 JSON 格式不正确';
+                return;
+            }
+
+            const res = await fetch(`/api/admin/schedules/${scheduleId}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    enabled: true,
+                    interval_minutes: parseInt(nextInterval, 10),
+                    params_payload: paramsPayload
+                })
+            });
+            const data = await res.json();
+            document.getElementById('scheduleMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadSchedules();
+            }
+        }
+
         async function queryJobStatus() {
             const taskId = (document.getElementById('jobTaskId').value || '').trim();
             if (!taskId) {
@@ -1087,6 +1244,7 @@
                     loadJobHistory();
                     loadDataSourceTasks();
                     loadAssetTasks();
+                    loadSchedules();
                 }, 15000);
             }
         }
@@ -1153,6 +1311,7 @@
         loadJobHistory();
         loadDataSourceTasks();
         loadAssetTasks();
+        loadSchedules();
         document.getElementById('autoRefreshJobs')?.addEventListener('change', syncJobAutoRefresh);
     </script>
 </body>

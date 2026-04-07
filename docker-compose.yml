@@ -76,6 +76,28 @@ services:
       redis:
         condition: service_healthy
 
+  beat:
+    build:
+      context: .
+    command: ["./docker/entrypoint-beat.sh"]
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-xhs_v4}:${POSTGRES_PASSWORD:-change_me}@postgres:5432/${POSTGRES_DB:-xhs_v4}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
+      ENABLE_AUTOMATION_BEAT: ${ENABLE_AUTOMATION_BEAT:-true}
+      CELERY_BEAT_LOG_LEVEL: ${CELERY_BEAT_LOG_LEVEL:-info}
+      FLASK_DEBUG: 0
+      DEFAULT_TOPIC_QUOTA: ${DEFAULT_TOPIC_QUOTA:-30}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   nginx:
     image: nginx:stable-alpine
     restart: unless-stopped
