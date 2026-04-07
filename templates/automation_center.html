@@ -558,6 +558,15 @@
             <div class="subtle mb-3">图片任务成功后会自动沉淀到资产库。这里可以做筛选、预览，并把资产推入候选池或正式池。</div>
             <div class="row g-3 mb-3">
                 <div class="col-md-3">
+                    <label class="form-label subtle">图库分类</label>
+                    <select id="assetLibraryTypeFilter" class="form-select" onchange="loadAssetLibrary()">
+                        <option value="">全部</option>
+                        <option value="generated">生成资产</option>
+                        <option value="product">产品图库</option>
+                        <option value="content">内容素材库</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
                     <label class="form-label subtle">池状态筛选</label>
                     <select id="assetLibraryPoolFilter" class="form-select" onchange="loadAssetLibrary()">
                         <option value="">全部</option>
@@ -567,7 +576,7 @@
                         <option value="archived">归档池</option>
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label subtle">提供方筛选</label>
                     <select id="assetLibraryProviderFilter" class="form-select" onchange="loadAssetLibrary()">
                         <option value="">全部</option>
@@ -575,9 +584,10 @@
                         <option value="openai">openai</option>
                         <option value="openai_compatible">openai_compatible</option>
                         <option value="generic_json">generic_json</option>
+                        <option value="manual_upload">manual_upload</option>
                     </select>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-2">
                     <label class="form-label subtle">关键词筛选</label>
                     <input id="assetLibraryKeywordFilter" class="form-control" placeholder="标题 / 标签 / 话题" oninput="loadAssetLibrary()">
                 </div>
@@ -585,12 +595,78 @@
                     <label class="form-label subtle">条数</label>
                     <input id="assetLibraryLimitFilter" type="number" min="1" max="100" value="30" class="form-control" onchange="loadAssetLibrary()">
                 </div>
+                <div class="col-md-12 d-flex gap-2 flex-wrap">
+                    <button class="btn btn-outline-primary" onclick="loadAssetLibrary()">刷新资产库</button>
+                    <button class="btn btn-outline-secondary" onclick="exportAssetLibrary()">导出资产库</button>
+                </div>
+            </div>
+
+            <div class="detail-card mb-3">
+                <div class="section-title mb-2">手工新增资产</div>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label subtle">图库分类</label>
+                        <select id="assetLibraryFormType" class="form-select">
+                            <option value="product">产品图库</option>
+                            <option value="content">内容素材库</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label subtle">资产类型</label>
+                        <input id="assetLibraryFormAssetType" class="form-control" placeholder="如 产品图 / 知识卡片">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label subtle">来源提供方</label>
+                        <input id="assetLibraryFormProvider" class="form-control" value="manual_upload">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label subtle">池状态</label>
+                        <select id="assetLibraryFormPoolStatus" class="form-select">
+                            <option value="reserve">储备池</option>
+                            <option value="candidate">候选池</option>
+                            <option value="formal">正式池</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label subtle">标题</label>
+                        <input id="assetLibraryFormTitle" class="form-control" placeholder="如 脂肪肝误区对照图">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label subtle">副标题</label>
+                        <input id="assetLibraryFormSubtitle" class="form-control" placeholder="如 适合首页封面或科普图文">
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label subtle">预览链接</label>
+                        <input id="assetLibraryFormPreviewUrl" class="form-control" placeholder="可填 data:image/... 或公网图片链接">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label subtle">下载名</label>
+                        <input id="assetLibraryFormDownloadName" class="form-control" placeholder="asset.png">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label subtle">标签</label>
+                        <input id="assetLibraryFormTags" class="form-control" placeholder="如 脂肪肝,首页封面,产品图">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label subtle">模型名</label>
+                        <input id="assetLibraryFormModelName" class="form-control" placeholder="可选">
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label subtle">Prompt / 备注</label>
+                        <textarea id="assetLibraryFormPromptText" rows="2" class="form-control" placeholder="记录该资产的来源说明或生成提示词"></textarea>
+                    </div>
+                    <div class="col-12 d-flex gap-2 flex-wrap">
+                        <button class="btn btn-accent" onclick="saveAssetLibraryItem()">保存到资产库</button>
+                        <div id="assetLibraryMsg" class="subtle d-flex align-items-center"></div>
+                    </div>
+                </div>
             </div>
             <div class="table-wrap">
                 <table class="table data-table align-middle">
                     <thead>
                         <tr>
                             <th>预览</th>
+                            <th>分类</th>
                             <th>标题</th>
                             <th>来源</th>
                             <th>池状态</th>
@@ -599,7 +675,7 @@
                         </tr>
                     </thead>
                     <tbody id="assetLibraryTableBody">
-                        <tr><td colspan="6" class="text-center text-muted">暂无图片资产</td></tr>
+                        <tr><td colspan="7" class="text-center text-muted">暂无图片资产</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1006,10 +1082,12 @@
 
         async function loadAssetLibrary() {
             const params = new URLSearchParams();
+            const libraryType = document.getElementById('assetLibraryTypeFilter')?.value;
             const poolStatus = document.getElementById('assetLibraryPoolFilter')?.value;
             const provider = document.getElementById('assetLibraryProviderFilter')?.value;
             const keyword = document.getElementById('assetLibraryKeywordFilter')?.value?.trim();
             const limit = document.getElementById('assetLibraryLimitFilter')?.value || '30';
+            if (libraryType) params.set('library_type', libraryType);
             if (poolStatus) params.set('pool_status', poolStatus);
             if (provider) params.set('source_provider', provider);
             if (keyword) params.set('keyword', keyword);
@@ -1021,6 +1099,7 @@
             body.innerHTML = (data.items || []).map((item) => `
                 <tr>
                     <td>${item.preview_url ? `<img class="asset-preview" src="${item.preview_url}" alt="${escapeHtml(item.title || '')}" style="max-width:120px;">` : '<span class="text-muted">无预览</span>'}</td>
+                    <td>${escapeHtml(item.library_type_label || item.library_type || '-')}</td>
                     <td>
                         <strong>${escapeHtml(item.title || '-')}</strong>
                         <div class="subtle">${escapeHtml(item.topic_name || '-')}</div>
@@ -1037,7 +1116,54 @@
                         </div>
                     </td>
                 </tr>
-            `).join('') || '<tr><td colspan="6" class="text-center text-muted">暂无图片资产</td></tr>';
+            `).join('') || '<tr><td colspan="7" class="text-center text-muted">暂无图片资产</td></tr>';
+        }
+
+        async function saveAssetLibraryItem() {
+            const payload = {
+                library_type: document.getElementById('assetLibraryFormType').value,
+                asset_type: document.getElementById('assetLibraryFormAssetType').value.trim(),
+                source_provider: document.getElementById('assetLibraryFormProvider').value.trim(),
+                pool_status: document.getElementById('assetLibraryFormPoolStatus').value,
+                title: document.getElementById('assetLibraryFormTitle').value.trim(),
+                subtitle: document.getElementById('assetLibraryFormSubtitle').value.trim(),
+                preview_url: document.getElementById('assetLibraryFormPreviewUrl').value.trim(),
+                download_name: document.getElementById('assetLibraryFormDownloadName').value.trim(),
+                tags: document.getElementById('assetLibraryFormTags').value.trim(),
+                model_name: document.getElementById('assetLibraryFormModelName').value.trim(),
+                prompt_text: document.getElementById('assetLibraryFormPromptText').value.trim()
+            };
+            const res = await fetch('/api/admin/assets/library', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            document.getElementById('assetLibraryMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                document.getElementById('assetLibraryFormTitle').value = '';
+                document.getElementById('assetLibraryFormSubtitle').value = '';
+                document.getElementById('assetLibraryFormPreviewUrl').value = '';
+                document.getElementById('assetLibraryFormDownloadName').value = '';
+                document.getElementById('assetLibraryFormTags').value = '';
+                document.getElementById('assetLibraryFormModelName').value = '';
+                document.getElementById('assetLibraryFormPromptText').value = '';
+                loadAssetLibrary();
+                loadOverview();
+            }
+        }
+
+        function exportAssetLibrary() {
+            const params = new URLSearchParams();
+            const libraryType = document.getElementById('assetLibraryTypeFilter')?.value;
+            const poolStatus = document.getElementById('assetLibraryPoolFilter')?.value;
+            const provider = document.getElementById('assetLibraryProviderFilter')?.value;
+            const keyword = document.getElementById('assetLibraryKeywordFilter')?.value?.trim();
+            if (libraryType) params.set('library_type', libraryType);
+            if (poolStatus) params.set('pool_status', poolStatus);
+            if (provider) params.set('source_provider', provider);
+            if (keyword) params.set('keyword', keyword);
+            window.open(`/api/admin/assets/library/export?${params.toString()}`, '_blank');
         }
 
         async function loadDiagnostics() {

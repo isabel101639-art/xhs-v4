@@ -1009,6 +1009,11 @@ def _serialize_asset_library_item(item, detail=False):
     reg = Registration.query.get(item.registration_id) if item.registration_id else None
     topic = Topic.query.get(item.topic_id) if item.topic_id else None
     payload_json = _load_json_value(item.raw_payload, {})
+    type_label_map = {
+        'generated': '生成资产',
+        'product': '产品图库',
+        'content': '内容素材库',
+    }
     return {
         'id': item.id,
         'asset_generation_task_id': item.asset_generation_task_id,
@@ -1017,6 +1022,7 @@ def _serialize_asset_library_item(item, detail=False):
         'topic_id': item.topic_id,
         'topic_name': topic.topic_name if topic else '',
         'library_type': item.library_type or 'generated',
+        'library_type_label': type_label_map.get(item.library_type or 'generated', item.library_type or 'generated'),
         'asset_type': item.asset_type or '',
         'title': item.title or '',
         'subtitle': item.subtitle or '',
@@ -3985,12 +3991,15 @@ def list_asset_library():
     if guard:
         return guard
 
+    library_type = (request.args.get('library_type') or '').strip()
     pool_status = (request.args.get('pool_status') or '').strip()
     source_provider = (request.args.get('source_provider') or '').strip()
     keyword = (request.args.get('keyword') or '').strip()
     limit = min(max(_safe_int(request.args.get('limit'), 30), 1), 100)
 
     query = AssetLibrary.query
+    if library_type:
+        query = query.filter_by(library_type=library_type)
     if pool_status:
         query = query.filter_by(pool_status=pool_status)
     if source_provider:
@@ -4007,6 +4016,116 @@ def list_asset_library():
         'success': True,
         'items': [_serialize_asset_library_item(item) for item in items]
     })
+
+
+@app.route('/api/admin/assets/library', methods=['POST'])
+def save_asset_library_item():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    data = request.json or {}
+    library_type = (data.get('library_type') or 'content').strip()
+    if library_type not in {'generated', 'product', 'content'}:
+        return jsonify({'success': False, 'message': '不支持的图库类型'})
+
+    title = (data.get('title') or '').strip()
+    preview_url = (data.get('preview_url') or '').strip()
+    if not title:
+        return jsonify({'success': False, 'message': '资产标题不能为空'})
+    if not preview_url:
+        return jsonify({'success': False, 'message': '预览链接不能为空'})
+
+    item = AssetLibrary(
+        library_type=library_type,
+        asset_type=(data.get('asset_type') or '知识卡片').strip()[:50],
+        title=title[:200],
+        subtitle=(data.get('subtitle') or '').strip()[:300],
+        source_provider=(data.get('source_provider') or 'manual_upload').strip()[:50],
+        model_name=(data.get('model_name') or '').strip()[:100],
+        pool_status=(data.get('pool_status') or 'reserve').strip()[:20],
+        status='active',
+        tags=(data.get('tags') or '').strip()[:300],
+        prompt_text=(data.get('prompt_text') or '').strip(),
+        preview_url=preview_url,
+        download_name=(data.get('download_name') or '').strip()[:200],
+        raw_payload=json.dumps({
+            'manual': True,
+            'library_type': library_type,
+            'preview_url': preview_url,
+        }, ensure_ascii=False),
+    )
+    db.session.add(item)
+    db.session.flush()
+    _log_operation('create', 'asset_library', target_id=item.id, message='手工新增图片资产', detail={
+        'title': item.title,
+        'library_type': item.library_type,
+        'asset_type': item.asset_type,
+        'pool_status': item.pool_status,
+    })
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': '图片资产已入库',
+        'item': _serialize_asset_library_item(item)
+    })
+
+
+@app.route('/api/admin/assets/library/export')
+def export_asset_library():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    library_type = (request.args.get('library_type') or '').strip()
+    pool_status = (request.args.get('pool_status') or '').strip()
+    source_provider = (request.args.get('source_provider') or '').strip()
+    keyword = (request.args.get('keyword') or '').strip()
+
+    query = AssetLibrary.query
+    if library_type:
+        query = query.filter_by(library_type=library_type)
+    if pool_status:
+        query = query.filter_by(pool_status=pool_status)
+    if source_provider:
+        query = query.filter_by(source_provider=source_provider)
+    if keyword:
+        query = query.filter(or_(
+            AssetLibrary.title.contains(keyword),
+            AssetLibrary.subtitle.contains(keyword),
+            AssetLibrary.tags.contains(keyword),
+        ))
+
+    items = query.order_by(AssetLibrary.created_at.desc(), AssetLibrary.id.desc()).all()
+    rows = ['图库类型,资产类型,标题,副标题,来源提供方,模型,池状态,标签,预览链接,创建时间']
+    for item in items:
+        serialized = _serialize_asset_library_item(item)
+        rows.append(','.join([
+            (serialized.get('library_type_label') or '').replace(',', ' '),
+            (serialized.get('asset_type') or '').replace(',', ' '),
+            (serialized.get('title') or '').replace(',', ' '),
+            (serialized.get('subtitle') or '').replace(',', ' '),
+            (serialized.get('source_provider') or '').replace(',', ' '),
+            (serialized.get('model_name') or '').replace(',', ' '),
+            (serialized.get('pool_status_label') or '').replace(',', ' '),
+            (serialized.get('tags') or '').replace(',', ' '),
+            (serialized.get('preview_url') or '').replace(',', ' '),
+            (serialized.get('created_at') or '').replace(',', ' '),
+        ]))
+
+    _log_operation('export', 'asset_library', message='导出图片资产库', detail={
+        'library_type': library_type,
+        'pool_status': pool_status,
+        'source_provider': source_provider,
+        'keyword': keyword,
+        'count': len(items),
+    })
+    db.session.commit()
+    content = '\n'.join(rows)
+    return content, 200, {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename=asset_library.csv'
+    }
 
 
 @app.route('/api/admin/assets/library/<int:item_id>')
