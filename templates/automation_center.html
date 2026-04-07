@@ -81,6 +81,25 @@
             padding: 14px 16px;
         }
 
+        .detail-card {
+            border-radius: 16px;
+            border: 1px solid rgba(239, 78, 69, 0.12);
+            background: #fffdfc;
+            padding: 16px;
+        }
+
+        .json-box {
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: 12px;
+            background: #fff;
+            border: 1px solid #efe4df;
+            border-radius: 12px;
+            padding: 12px;
+            max-height: 260px;
+            overflow: auto;
+        }
+
         .table-wrap {
             overflow-x: auto;
         }
@@ -266,9 +285,11 @@
                 <div class="col-12 d-flex gap-2 flex-wrap">
                     <button class="btn btn-accent" onclick="saveAutomationConfig()">保存运维配置</button>
                     <button class="btn btn-outline-primary" onclick="loadAutomationConfig()">刷新运维配置</button>
+                    <button class="btn btn-outline-secondary" onclick="loadAutomationConfigPreview()">刷新请求预览</button>
                     <div id="automationConfigNote" class="subtle d-flex align-items-center"></div>
                 </div>
             </div>
+            <div id="automationConfigPreview" class="detail-card mt-3 text-muted">加载后展示热点任务与图片任务的请求预览。</div>
         </div>
 
         <div class="row g-4">
@@ -432,6 +453,32 @@
                 </div>
             </div>
             <div id="hotwordJobMsg" class="subtle mb-3"></div>
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label subtle">状态筛选</label>
+                    <select id="dataSourceStatusFilter" class="form-select" onchange="loadDataSourceTasks()">
+                        <option value="">全部</option>
+                        <option value="queued">queued</option>
+                        <option value="running">running</option>
+                        <option value="success">success</option>
+                        <option value="failed">failed</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label subtle">平台筛选</label>
+                    <select id="dataSourcePlatformFilter" class="form-select" onchange="loadDataSourceTasks()">
+                        <option value="">全部平台</option>
+                        <option value="小红书">小红书</option>
+                        <option value="抖音">抖音</option>
+                        <option value="千瓜数据">千瓜数据</option>
+                        <option value="其他平台">其他平台</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label subtle">条数</label>
+                    <input id="dataSourceLimitFilter" type="number" min="1" max="100" value="20" class="form-control" onchange="loadDataSourceTasks()">
+                </div>
+            </div>
             <div class="table-wrap">
                 <table class="table data-table align-middle">
                     <thead>
@@ -450,6 +497,7 @@
                     </tbody>
                 </table>
             </div>
+            <div id="dataSourceTaskDetail" class="detail-card mt-3 text-muted">点击某条抓取任务查看结构化详情。</div>
         </div>
 
         <div class="panel p-4 mb-4">
@@ -458,6 +506,32 @@
             <div class="d-flex gap-2 flex-wrap mb-3">
                 <button class="btn btn-outline-primary" onclick="loadAssetTasks()">刷新图片任务</button>
                 <div id="assetTaskCapability" class="subtle d-flex align-items-center"></div>
+            </div>
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label subtle">状态筛选</label>
+                    <select id="assetTaskStatusFilter" class="form-select" onchange="loadAssetTasks()">
+                        <option value="">全部</option>
+                        <option value="queued">queued</option>
+                        <option value="running">running</option>
+                        <option value="success">success</option>
+                        <option value="failed">failed</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label subtle">提供方筛选</label>
+                    <select id="assetTaskProviderFilter" class="form-select" onchange="loadAssetTasks()">
+                        <option value="">全部</option>
+                        <option value="svg_fallback">svg_fallback</option>
+                        <option value="openai">openai</option>
+                        <option value="openai_compatible">openai_compatible</option>
+                        <option value="generic_json">generic_json</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label subtle">条数</label>
+                    <input id="assetTaskLimitFilter" type="number" min="1" max="100" value="20" class="form-control" onchange="loadAssetTasks()">
+                </div>
             </div>
             <div class="table-wrap">
                 <table class="table data-table align-middle">
@@ -476,6 +550,7 @@
                     </tbody>
                 </table>
             </div>
+            <div id="assetTaskDetail" class="detail-card mt-3 text-muted">点击某条图片任务查看预览和请求详情。</div>
         </div>
 
         <div class="panel p-4 mb-4">
@@ -664,6 +739,8 @@
     <script>
         let jobHistoryTimer = null;
         let automationConfigCache = null;
+        let dataSourceTaskCache = {};
+        let assetTaskCache = {};
 
         function escapeHtml(text) {
             return (text || '').replace(/[&<>"']/g, (char) => ({
@@ -772,6 +849,32 @@
                 return;
             }
             fillAutomationConfig(data.config || {}, data.notes || {});
+            loadAutomationConfigPreview();
+        }
+
+        async function loadAutomationConfigPreview() {
+            const res = await fetch('/api/admin/automation-config/preview');
+            const data = await res.json();
+            const wrap = document.getElementById('automationConfigPreview');
+            if (!data.success) {
+                wrap.textContent = data.message || '预览加载失败';
+                return;
+            }
+            wrap.innerHTML = `
+                <div class="row g-3">
+                    <div class="col-lg-5">
+                        <strong>热点任务预览</strong>
+                        <div class="subtle mt-2">平台：${escapeHtml(data.hotword_preview?.source_platform || '-')}</div>
+                        <div class="subtle">渠道：${escapeHtml(data.hotword_preview?.source_channel || '-')}</div>
+                        <div class="subtle">关键词数量：${data.hotword_preview?.keyword_limit || 0}</div>
+                        <div class="subtle">预览关键词：${escapeHtml((data.hotword_preview?.keywords || []).join('、'))}</div>
+                    </div>
+                    <div class="col-lg-7">
+                        <strong>图片请求预览</strong>
+                        <div class="json-box mt-2">${escapeHtml(JSON.stringify(data.image_request_preview || {}, null, 2))}</div>
+                    </div>
+                </div>
+            `;
         }
 
         async function saveAutomationConfig() {
@@ -801,12 +904,21 @@
             document.getElementById('automationConfigNote').textContent = '自动化运维配置已保存';
             loadOverview();
             loadDiagnostics();
+            loadAutomationConfigPreview();
         }
 
         async function loadAssetTasks() {
-            const res = await fetch('/api/admin/assets/tasks?limit=20');
+            const params = new URLSearchParams();
+            const status = document.getElementById('assetTaskStatusFilter')?.value;
+            const provider = document.getElementById('assetTaskProviderFilter')?.value;
+            const limit = document.getElementById('assetTaskLimitFilter')?.value || '20';
+            if (status) params.set('status', status);
+            if (provider) params.set('source_provider', provider);
+            if (limit) params.set('limit', limit);
+            const res = await fetch(`/api/admin/assets/tasks?${params.toString()}`);
             const data = await res.json();
             const body = document.getElementById('assetTaskTableBody');
+            assetTaskCache = Object.fromEntries((data.items || []).map((item) => [item.id, item]));
             body.innerHTML = (data.items || []).map((item) => `
                 <tr>
                     <td>${item.created_at || '-'}</td>
@@ -829,7 +941,8 @@
                             <div class="subtle mt-2">任务ID：${item.id} ｜ Worker：${escapeHtml(item.celery_task_id || '-')}</div>
                             <pre style="white-space: pre-wrap; word-break: break-word; font-size:12px;">${escapeHtml(JSON.stringify(item.result_payload || [], null, 2))}</pre>
                         </details>
-                        <div class="mt-2">
+                        <div class="mt-2 d-flex gap-2 flex-wrap">
+                            <button class="btn btn-sm btn-outline-primary" onclick="showAssetTaskDetail(${item.id})">详情</button>
                             <button class="btn btn-sm btn-outline-secondary" onclick="retryAssetTask(${item.id})">重试</button>
                         </div>
                     </td>
@@ -890,9 +1003,17 @@
         }
 
         async function loadDataSourceTasks() {
-            const res = await fetch('/api/admin/data-source-tasks?limit=20');
+            const params = new URLSearchParams();
+            const status = document.getElementById('dataSourceStatusFilter')?.value;
+            const sourcePlatform = document.getElementById('dataSourcePlatformFilter')?.value;
+            const limit = document.getElementById('dataSourceLimitFilter')?.value || '20';
+            if (status) params.set('status', status);
+            if (sourcePlatform) params.set('source_platform', sourcePlatform);
+            if (limit) params.set('limit', limit);
+            const res = await fetch(`/api/admin/data-source-tasks?${params.toString()}`);
             const data = await res.json();
             const body = document.getElementById('dataSourceTaskTableBody');
+            dataSourceTaskCache = Object.fromEntries((data.items || []).map((item) => [item.id, item]));
             body.innerHTML = (data.items || []).map((item) => `
                 <tr>
                     <td>${item.created_at || '-'}</td>
@@ -917,7 +1038,8 @@
                         <div class="subtle">${escapeHtml(item.started_at || '-')} ~ ${escapeHtml(item.finished_at || '-')}</div>
                     </td>
                     <td>
-                        <div class="mb-2">
+                        <div class="mb-2 d-flex gap-2 flex-wrap">
+                            <button class="btn btn-sm btn-outline-primary" onclick="showDataSourceTaskDetail(${item.id})">详情</button>
                             <button class="btn btn-sm btn-outline-secondary" onclick="retryDataSourceTask(${item.id})">重试</button>
                         </div>
                         ${(item.recent_logs || []).map((log) => `
@@ -926,6 +1048,85 @@
                     </td>
                 </tr>
             `).join('') || '<tr><td colspan="7" class="text-center text-muted">暂无抓取任务</td></tr>';
+        }
+
+        async function showDataSourceTaskDetail(taskId) {
+            const cached = dataSourceTaskCache[taskId];
+            const detailWrap = document.getElementById('dataSourceTaskDetail');
+            if (cached && cached.params_payload_json) {
+                detailWrap.innerHTML = `
+                    <div class="row g-3">
+                        <div class="col-lg-4">
+                            <strong>${escapeHtml(cached.task_type || '-')}</strong>
+                            <div class="subtle mt-2">平台：${escapeHtml(cached.source_platform || '-')}</div>
+                            <div class="subtle">状态：${escapeHtml(cached.status || '-')}</div>
+                            <div class="subtle">批次：${escapeHtml(cached.batch_name || '-')}</div>
+                            <div class="subtle">结果条数：${cached.item_count || 0}</div>
+                        </div>
+                        <div class="col-lg-4">
+                            <strong>请求参数</strong>
+                            <div class="json-box mt-2">${escapeHtml(JSON.stringify(cached.params_payload_json || {}, null, 2))}</div>
+                        </div>
+                        <div class="col-lg-4">
+                            <strong>任务结果</strong>
+                            <div class="json-box mt-2">${escapeHtml(JSON.stringify(cached.result_payload_json || {}, null, 2))}</div>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            const res = await fetch(`/api/admin/data-source-tasks/${taskId}`);
+            const data = await res.json();
+            if (!data.success) {
+                detailWrap.textContent = data.message || '抓取任务详情加载失败';
+                return;
+            }
+            const item = data.item || {};
+            dataSourceTaskCache[taskId] = item;
+            showDataSourceTaskDetail(taskId);
+        }
+
+        async function showAssetTaskDetail(taskId) {
+            const cached = assetTaskCache[taskId];
+            const detailWrap = document.getElementById('assetTaskDetail');
+            if (cached && cached.result_payload) {
+                detailWrap.innerHTML = `
+                    <div class="row g-3">
+                        <div class="col-lg-4">
+                            <strong>${escapeHtml(cached.title_hint || '图片任务')}</strong>
+                            <div class="subtle mt-2">报名人：${escapeHtml(cached.registration_name || '-')}</div>
+                            <div class="subtle">话题：${escapeHtml(cached.topic_name || '-')}</div>
+                            <div class="subtle">Provider：${escapeHtml(cached.source_provider || '-')}</div>
+                            <div class="subtle">状态：${escapeHtml(cached.status || '-')}</div>
+                        </div>
+                        <div class="col-lg-4">
+                            <strong>请求提示词</strong>
+                            <div class="json-box mt-2">${escapeHtml(cached.prompt_text || '')}</div>
+                        </div>
+                        <div class="col-lg-4">
+                            <strong>结果预览</strong>
+                            <div class="mt-2">
+                                ${(cached.result_payload || []).slice(0, 2).map((asset) => `
+                                    <div class="mb-3">
+                                        <div class="subtle mb-1">${escapeHtml(asset.title || asset.type || '图片结果')}</div>
+                                        ${asset.preview_url ? `<img class="asset-preview" src="${asset.preview_url}" alt="${escapeHtml(asset.title || '')}">` : '<div class="subtle">无预览</div>'}
+                                    </div>
+                                `).join('') || '<div class="subtle">暂无结果</div>'}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            const res = await fetch(`/api/admin/assets/tasks/${taskId}`);
+            const data = await res.json();
+            if (!data.success) {
+                detailWrap.textContent = data.message || '图片任务详情加载失败';
+                return;
+            }
+            const item = data.item || {};
+            assetTaskCache[taskId] = item;
+            showAssetTaskDetail(taskId);
         }
 
         async function loadSchedules() {
@@ -1497,6 +1698,7 @@
 
         loadOverview();
         loadAutomationConfig();
+        loadAutomationConfigPreview();
         loadTrends();
         loadCorpus();
         loadIdeas();

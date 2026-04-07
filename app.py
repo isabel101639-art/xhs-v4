@@ -924,8 +924,11 @@ def _serialize_data_source_log(item):
     }
 
 
-def _serialize_data_source_task(task):
-    logs = DataSourceLog.query.filter_by(task_id=task.id).order_by(DataSourceLog.created_at.desc(), DataSourceLog.id.desc()).limit(5).all()
+def _serialize_data_source_task(task, detail=False):
+    logs_limit = 50 if detail else 5
+    logs = DataSourceLog.query.filter_by(task_id=task.id).order_by(DataSourceLog.created_at.desc(), DataSourceLog.id.desc()).limit(logs_limit).all()
+    params_json = _load_json_value(task.params_payload, {})
+    result_json = _load_json_value(task.result_payload, {})
     return {
         'id': task.id,
         'task_type': task.task_type,
@@ -940,7 +943,9 @@ def _serialize_data_source_task(task):
         'item_count': task.item_count or 0,
         'message': task.message or '',
         'params_payload': task.params_payload or '',
+        'params_payload_json': params_json,
         'result_payload': task.result_payload or '',
+        'result_payload_json': result_json,
         'started_at': _format_datetime(task.started_at),
         'finished_at': _format_datetime(task.finished_at),
         'created_at': _format_datetime(task.created_at),
@@ -949,11 +954,16 @@ def _serialize_data_source_task(task):
     }
 
 
-def _serialize_asset_generation_task(task):
+def _serialize_asset_generation_task(task, detail=False):
+    reg = Registration.query.get(task.registration_id) if task.registration_id else None
+    topic = Topic.query.get(task.topic_id) if task.topic_id else None
     return {
         'id': task.id,
         'registration_id': task.registration_id,
         'topic_id': task.topic_id,
+        'registration_name': reg.name if reg else '',
+        'registration_phone': reg.phone if reg else '',
+        'topic_name': topic.topic_name if topic else '',
         'source_provider': task.source_provider or 'svg_fallback',
         'model_name': task.model_name or '',
         'style_preset': task.style_preset or '小红书图文',
@@ -969,6 +979,7 @@ def _serialize_asset_generation_task(task):
         'finished_at': _format_datetime(task.finished_at),
         'created_at': _format_datetime(task.created_at),
         'updated_at': _format_datetime(task.updated_at),
+        'selected_content_preview': _truncate_text(task.selected_content or '', 120) if not detail else task.selected_content or '',
     }
 
 
@@ -2162,6 +2173,40 @@ def _build_asset_generation_fallback_results(topic, selected_content='', image_c
             'bullets': asset.get('bullets') or [],
         })
     return results
+
+
+def _build_asset_provider_request_preview(provider, model_name, prompt_text, image_size, style_preset='小红书图文', image_count=3):
+    safe_provider = (provider or 'svg_fallback').strip() or 'svg_fallback'
+    safe_model = (model_name or '').strip()
+    safe_prompt = (prompt_text or '').strip()
+    safe_size = (image_size or '1024x1536').strip() or '1024x1536'
+    safe_style = (style_preset or '小红书图文').strip() or '小红书图文'
+    safe_count = min(max(_safe_int(image_count, 3), 1), 4)
+
+    if safe_provider in {'openai', 'openai_compatible'}:
+        return {
+            'model': safe_model or 'gpt-image-1',
+            'prompt': safe_prompt,
+            'n': safe_count,
+            'size': safe_size,
+            'response_format': 'b64_json',
+        }
+    if safe_provider in {'generic_json', 'custom_json'}:
+        return {
+            'model': safe_model or 'image-default',
+            'prompt': safe_prompt,
+            'image_count': safe_count,
+            'size': safe_size,
+            'style': safe_style,
+            'response_format': 'b64_json',
+        }
+    return {
+        'mode': 'svg_fallback',
+        'prompt': safe_prompt,
+        'image_count': safe_count,
+        'style': safe_style,
+        'size': safe_size,
+    }
 
 
 def _build_dashboard_stats(activity_id, args):
@@ -3699,6 +3744,7 @@ def list_data_source_tasks():
 
     task_type = (request.args.get('task_type') or '').strip()
     status = (request.args.get('status') or '').strip()
+    source_platform = (request.args.get('source_platform') or '').strip()
     limit = min(max(_safe_int(request.args.get('limit'), 20), 1), 100)
 
     query = DataSourceTask.query
@@ -3706,11 +3752,26 @@ def list_data_source_tasks():
         query = query.filter_by(task_type=task_type)
     if status:
         query = query.filter_by(status=status)
+    if source_platform:
+        query = query.filter_by(source_platform=source_platform)
 
     items = query.order_by(DataSourceTask.created_at.desc(), DataSourceTask.id.desc()).limit(limit).all()
     return jsonify({
         'success': True,
         'items': [_serialize_data_source_task(item) for item in items]
+    })
+
+
+@app.route('/api/admin/data-source-tasks/<int:task_id>')
+def data_source_task_detail(task_id):
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    task = DataSourceTask.query.get_or_404(task_id)
+    return jsonify({
+        'success': True,
+        'item': _serialize_data_source_task(task, detail=True),
     })
 
 
@@ -3809,6 +3870,40 @@ def automation_config():
     })
 
 
+@app.route('/api/admin/automation-config/preview')
+def automation_config_preview():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    runtime_config = _automation_runtime_config()
+    capabilities = _image_provider_capabilities()
+    hotword_preview = {
+        'source_platform': runtime_config.get('hotword_source_platform'),
+        'source_channel': runtime_config.get('hotword_source_channel'),
+        'keyword_limit': runtime_config.get('hotword_keyword_limit'),
+        'keywords': _automation_keyword_seeds()[:min(max(_safe_int(runtime_config.get('hotword_keyword_limit'), 10), 1), 10)],
+    }
+    image_prompt_preview = (
+        '小红书封面图，主题“脂肪肝别忽视”，医疗健康视觉，信息块清晰，'
+        '突出脂肪肝管理，色彩克制。'
+    )
+    image_request_preview = _build_asset_provider_request_preview(
+        capabilities.get('image_provider_name'),
+        capabilities.get('image_provider_model'),
+        image_prompt_preview + (' ' + capabilities.get('image_prompt_suffix', '') if capabilities.get('image_prompt_suffix') else ''),
+        capabilities.get('image_provider_size'),
+        capabilities.get('image_style_preset'),
+        image_count=3,
+    )
+    return jsonify({
+        'success': True,
+        'hotword_preview': hotword_preview,
+        'image_request_preview': image_request_preview,
+        'capabilities': capabilities,
+    })
+
+
 @app.route('/api/admin/assets/tasks')
 def list_asset_generation_tasks():
     guard = _admin_json_guard()
@@ -3816,15 +3911,31 @@ def list_asset_generation_tasks():
         return guard
 
     status = (request.args.get('status') or '').strip()
+    source_provider = (request.args.get('source_provider') or '').strip()
     limit = min(max(_safe_int(request.args.get('limit'), 20), 1), 100)
     query = AssetGenerationTask.query
     if status:
         query = query.filter_by(status=status)
+    if source_provider:
+        query = query.filter_by(source_provider=source_provider)
 
     items = query.order_by(AssetGenerationTask.created_at.desc(), AssetGenerationTask.id.desc()).limit(limit).all()
     return jsonify({
         'success': True,
         'items': [_serialize_asset_generation_task(item) for item in items]
+    })
+
+
+@app.route('/api/admin/assets/tasks/<int:task_id>')
+def admin_asset_generation_task_detail(task_id):
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    task = AssetGenerationTask.query.get_or_404(task_id)
+    return jsonify({
+        'success': True,
+        'item': _serialize_asset_generation_task(task, detail=True),
     })
 
 

@@ -257,6 +257,7 @@ def sync_hotwords_job(data_source_task_id):
 def generate_asset_images_job(asset_task_id):
     from app import (
         _image_provider_capabilities,
+        _build_asset_provider_request_preview,
         _build_asset_generation_fallback_results,
         _log_operation,
         AssetGenerationTask,
@@ -400,34 +401,6 @@ def generate_asset_images_job(asset_task_id):
                             break
         return normalized
 
-    def build_request_payload():
-        safe_count = task.image_count or 3
-        if provider in {'openai', 'openai_compatible'}:
-            return {
-                'model': model_name or 'gpt-image-1',
-                'prompt': task.prompt_text or '',
-                'n': safe_count,
-                'size': image_size,
-                'response_format': 'b64_json',
-            }
-        if provider in {'generic_json', 'custom_json'}:
-            return {
-                'model': model_name or 'image-default',
-                'prompt': task.prompt_text or '',
-                'image_count': safe_count,
-                'size': image_size,
-                'style': task.style_preset or '小红书图文',
-                'response_format': 'b64_json',
-            }
-        return {
-            'model': model_name or 'image-default',
-            'prompt': task.prompt_text or '',
-            'image_count': safe_count,
-            'size': image_size,
-            'style': task.style_preset or '小红书图文',
-            'response_format': 'b64_json',
-        }
-
     task.status = 'running'
     task.started_at = datetime.now()
     task.message = 'Worker 正在生成图片'
@@ -443,7 +416,14 @@ def generate_asset_images_job(asset_task_id):
                 'Authorization': f'Bearer {api_key}',
                 'Content-Type': 'application/json',
             }
-            payload = build_request_payload()
+            payload = _build_asset_provider_request_preview(
+                provider,
+                model_name,
+                task.prompt_text or '',
+                image_size,
+                task.style_preset or '小红书图文',
+                image_count=task.image_count or 3,
+            )
             response = requests.post(api_url, json=payload, headers=headers, timeout=timeout_seconds)
             response.raise_for_status()
             results = normalize_external_results(response.json())
