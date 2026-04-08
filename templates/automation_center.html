@@ -803,9 +803,11 @@
                     <thead>
                         <tr>
                             <th>来源</th>
+                            <th>模板</th>
                             <th>关键词</th>
                             <th>标题</th>
                             <th>状态</th>
+                            <th>评分</th>
                             <th>互动</th>
                             <th>传播量</th>
                             <th>作者</th>
@@ -1548,12 +1550,14 @@
             body.innerHTML = (data.items || []).map((item) => `
                 <tr>
                     <td>${escapeHtml(item.source_platform)}<div class="subtle">${escapeHtml(item.source_channel)}</div></td>
+                    <td>${escapeHtml(item.source_template_key || '-')}</td>
                     <td>${escapeHtml(item.keyword || '-')}</td>
                     <td>
                         ${item.link ? `<a href="${escapeHtml(item.link)}" target="_blank">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)}
                         <div class="subtle">${escapeHtml((item.summary || '').slice(0, 60))}</div>
                     </td>
                     <td><span class="badge ${poolStatusClass(item.pool_status)}">${escapeHtml(item.pool_status_label || item.pool_status || '储备池')}</span></td>
+                    <td>${item.hot_score || item.score || 0}</td>
                     <td>${item.interactions || 0}</td>
                     <td>${item.views || 0}</td>
                     <td>${escapeHtml(item.author || '-')}</td>
@@ -1566,7 +1570,7 @@
                         </div>
                     </td>
                 </tr>
-            `).join('') || '<tr><td colspan="9" class="text-center text-muted">暂无热点数据</td></tr>';
+            `).join('') || '<tr><td colspan="11" class="text-center text-muted">暂无热点数据</td></tr>';
         }
 
         async function loadCorpus() {
@@ -1694,7 +1698,7 @@
             }
             wrap.innerHTML = `
                 <div><strong>模板：</strong>${escapeHtml(data.template?.label || '-')}</div>
-                <div class="subtle mb-3">原始 ${data.raw_count || 0} 条，标准化 ${data.normalized_count || 0} 条</div>
+                <div class="subtle mb-3">原始 ${data.raw_count || 0} 条，标准化 ${data.normalized_count || 0} 条，预计重复 ${data.estimated_duplicate_count || 0} 条</div>
                 <div class="table-wrap">
                     <table class="table data-table align-middle">
                         <thead>

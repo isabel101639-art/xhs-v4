@@ -365,6 +365,7 @@ class TrendNote(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     source_platform = db.Column(db.String(50), default='小红书')
     source_channel = db.Column(db.String(50), default='手动导入')
+    source_template_key = db.Column(db.String(50), default='generic_lines')
     import_batch = db.Column(db.String(100))
     keyword = db.Column(db.String(200))
     topic_category = db.Column(db.String(100))
@@ -375,6 +376,8 @@ class TrendNote(db.Model):
     likes = db.Column(db.Integer, default=0)
     favorites = db.Column(db.Integer, default=0)
     comments = db.Column(db.Integer, default=0)
+    hot_score = db.Column(db.Integer, default=0)
+    source_rank = db.Column(db.Integer, default=0)
     publish_time = db.Column(db.DateTime)
     summary = db.Column(db.Text)
     raw_payload = db.Column(db.Text)
@@ -1386,6 +1389,7 @@ def _serialize_trend_note(note):
         'id': note.id,
         'source_platform': note.source_platform,
         'source_channel': note.source_channel,
+        'source_template_key': note.source_template_key or 'generic_lines',
         'import_batch': note.import_batch or '',
         'keyword': note.keyword or '',
         'title': note.title,
@@ -1396,7 +1400,9 @@ def _serialize_trend_note(note):
         'favorites': note.favorites or 0,
         'comments': note.comments or 0,
         'interactions': (note.likes or 0) + (note.favorites or 0) + (note.comments or 0),
-        'score': _trend_score(note),
+        'hot_score': note.hot_score or _trend_score(note),
+        'source_rank': note.source_rank or 0,
+        'score': note.hot_score or _trend_score(note),
         'summary': note.summary or '',
         'pool_status': note.pool_status or 'reserve',
         'pool_status_label': _pool_status_label(note.pool_status or 'reserve'),
@@ -5249,6 +5255,7 @@ def import_trends():
         note = TrendNote(
             source_platform=(item.get('source_platform') or source_platform).strip(),
             source_channel=(item.get('source_channel') or source_channel).strip(),
+            source_template_key=template_key,
             import_batch=batch_name,
             keyword=(item.get('keyword') or '').strip(),
             topic_category=(item.get('topic_category') or '').strip(),
@@ -5259,6 +5266,8 @@ def import_trends():
             likes=_safe_int(item.get('likes')),
             favorites=_safe_int(item.get('favorites')),
             comments=_safe_int(item.get('comments')),
+            hot_score=_safe_int(item.get('hot_score')),
+            source_rank=_safe_int(item.get('normalized_rank')),
             publish_time=_parse_datetime(item.get('publish_time')),
             summary=(item.get('summary') or '').strip(),
             raw_payload=json.dumps(item, ensure_ascii=False)
@@ -5306,11 +5315,24 @@ def preview_trends_import():
         batch_name=batch_name,
     )
     preview_items = normalized_items[:10]
+    duplicate_count = 0
+    for item in normalized_items:
+        link = (item.get('link') or '').strip()
+        title = (item.get('title') or '').strip()
+        keyword = (item.get('keyword') or '').strip()
+        duplicate = None
+        if link:
+            duplicate = TrendNote.query.filter_by(link=link).first()
+        if not duplicate and title:
+            duplicate = TrendNote.query.filter_by(title=title, keyword=keyword).first()
+        if duplicate:
+            duplicate_count += 1
     return jsonify({
         'success': True,
         'template': _hotword_source_template_meta(template_key),
         'raw_count': len(items),
         'normalized_count': len(normalized_items),
+        'estimated_duplicate_count': duplicate_count,
         'items': preview_items,
     })
 
@@ -5336,7 +5358,7 @@ def list_trends():
     if pool_status:
         query = query.filter_by(pool_status=pool_status)
 
-    notes = query.order_by(TrendNote.created_at.desc()).limit(120).all()
+    notes = query.order_by(TrendNote.hot_score.desc(), TrendNote.created_at.desc()).limit(120).all()
     return jsonify({
         'success': True,
         'items': [_serialize_trend_note(note) for note in notes]
@@ -6764,8 +6786,15 @@ def init_db():
 
                 cursor.execute("PRAGMA table_info(trend_note)")
                 trend_columns = {row[1] for row in cursor.fetchall()}
-                if 'pool_status' not in trend_columns:
-                    cursor.execute("ALTER TABLE trend_note ADD COLUMN pool_status VARCHAR(20) DEFAULT 'reserve'")
+                trend_required_columns = {
+                    'pool_status': "VARCHAR(20) DEFAULT 'reserve'",
+                    'source_template_key': "VARCHAR(50) DEFAULT 'generic_lines'",
+                    'hot_score': 'INTEGER DEFAULT 0',
+                    'source_rank': 'INTEGER DEFAULT 0',
+                }
+                for col, col_type in trend_required_columns.items():
+                    if col not in trend_columns:
+                        cursor.execute(f"ALTER TABLE trend_note ADD COLUMN {col} {col_type}")
 
                 cursor.execute("PRAGMA table_info(submission)")
                 existing_columns = {row[1] for row in cursor.fetchall()}
@@ -6829,6 +6858,9 @@ def init_db():
                 cursor.execute("UPDATE activity SET source_type = COALESCE(source_type, 'manual')")
                 cursor.execute("UPDATE corpus_entry SET pool_status = COALESCE(pool_status, 'reserve')")
                 cursor.execute("UPDATE trend_note SET pool_status = COALESCE(pool_status, 'reserve')")
+                cursor.execute("UPDATE trend_note SET source_template_key = COALESCE(source_template_key, 'generic_lines')")
+                cursor.execute("UPDATE trend_note SET hot_score = COALESCE(hot_score, 0)")
+                cursor.execute("UPDATE trend_note SET source_rank = COALESCE(source_rank, 0)")
 
                 conn.commit()
             finally:
@@ -6853,6 +6885,18 @@ def init_db():
         )
         TrendNote.query.filter(TrendNote.pool_status.is_(None)).update(
             {'pool_status': 'reserve'},
+            synchronize_session=False
+        )
+        TrendNote.query.filter(TrendNote.source_template_key.is_(None)).update(
+            {'source_template_key': 'generic_lines'},
+            synchronize_session=False
+        )
+        TrendNote.query.filter(TrendNote.hot_score.is_(None)).update(
+            {'hot_score': 0},
+            synchronize_session=False
+        )
+        TrendNote.query.filter(TrendNote.source_rank.is_(None)).update(
+            {'source_rank': 0},
             synchronize_session=False
         )
         TopicIdea.query.filter(or_(TopicIdea.status.is_(None), TopicIdea.status == '', TopicIdea.status == 'draft')).update(
