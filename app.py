@@ -1915,6 +1915,48 @@ def _admin_permission_guard(permission_key):
     return None
 
 
+def _build_readiness_checks():
+    env_checks = [
+        {'key': 'DATABASE_URL', 'ok': bool((os.environ.get('DATABASE_URL') or '').strip()), 'message': '数据库连接'},
+        {'key': 'REDIS_URL', 'ok': bool((os.environ.get('REDIS_URL') or '').strip()), 'message': 'Redis 连接'},
+        {'key': 'CELERY_BROKER_URL', 'ok': bool((os.environ.get('CELERY_BROKER_URL') or '').strip()), 'message': 'Celery Broker'},
+        {'key': 'CELERY_RESULT_BACKEND', 'ok': bool((os.environ.get('CELERY_RESULT_BACKEND') or '').strip()), 'message': 'Celery Result Backend'},
+        {'key': 'SECRET_KEY', 'ok': bool((os.environ.get('SECRET_KEY') or '').strip()), 'message': '会话密钥'},
+        {'key': 'ADMIN_USERNAME', 'ok': bool((os.environ.get('ADMIN_USERNAME') or '').strip()), 'message': '管理员用户名'},
+        {'key': 'ADMIN_PASSWORD', 'ok': bool((os.environ.get('ADMIN_PASSWORD') or '').strip()), 'message': '管理员密码'},
+        {'key': 'DEEPSEEK_API_KEY', 'ok': bool((os.environ.get('DEEPSEEK_API_KEY') or '').strip()), 'message': '文案模型 Key'},
+    ]
+
+    data_checks = [
+        {'key': 'activities', 'ok': Activity.query.count() > 0, 'message': f'活动数 {Activity.query.count()}'},
+        {'key': 'topics', 'ok': Topic.query.count() > 0, 'message': f'话题数 {Topic.query.count()}'},
+        {'key': 'corpus_entries', 'ok': CorpusEntry.query.count() > 0, 'message': f'语料数 {CorpusEntry.query.count()}'},
+        {'key': 'trend_notes', 'ok': TrendNote.query.count() > 0, 'message': f'热点数 {TrendNote.query.count()}'},
+        {'key': 'admin_users', 'ok': AdminUser.query.count() > 0, 'message': f'管理员用户 {AdminUser.query.count()}'},
+        {'key': 'roles', 'ok': RolePermission.query.count() > 0, 'message': f'角色数 {RolePermission.query.count()}'},
+    ]
+
+    capability = _image_provider_capabilities()
+    service_checks = [
+        {'key': 'image_provider', 'ok': True, 'message': f'图片 provider：{capability.get("image_provider_name")}'},
+        {'key': 'image_provider_ready', 'ok': capability.get('image_provider_configured') or capability.get('fallback_mode'), 'message': '图片任务可运行'},
+        {'key': 'beat_enabled', 'ok': _coerce_bool(os.environ.get('ENABLE_AUTOMATION_BEAT', 'true')), 'message': 'Beat 开关'},
+    ]
+
+    all_checks = env_checks + data_checks + service_checks
+    ready_count = len([item for item in all_checks if item['ok']])
+    return {
+        'summary': {
+            'total': len(all_checks),
+            'passed': ready_count,
+            'failed': len(all_checks) - ready_count,
+        },
+        'env_checks': env_checks,
+        'data_checks': data_checks,
+        'service_checks': service_checks,
+    }
+
+
 def _next_schedule_time(interval_minutes, base_time=None):
     base = base_time or datetime.now()
     minutes = max(_safe_int(interval_minutes, 60), 1)
@@ -4528,6 +4570,19 @@ def runtime_diagnostics():
         },
         'schedules': next_runs,
         'recent_jobs': [_serialize_operation_log(item) for item in recent_jobs],
+    })
+
+
+@app.route('/api/admin/readiness-check')
+def readiness_check():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    checks = _build_readiness_checks()
+    return jsonify({
+        'success': True,
+        **checks,
     })
 
 

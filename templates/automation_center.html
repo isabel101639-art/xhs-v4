@@ -454,6 +454,15 @@
         </div>
 
         <div class="panel p-4 mb-4">
+            <div class="section-title">上线检查</div>
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                <button class="btn btn-outline-primary" onclick="loadReadinessCheck()">刷新上线检查</button>
+                <div id="readinessMsg" class="subtle d-flex align-items-center"></div>
+            </div>
+            <div id="readinessWrap" class="mini-note">点击“刷新上线检查”查看当前环境是否适合进入联调或上线。</div>
+        </div>
+
+        <div class="panel p-4 mb-4">
             <div class="section-title">热点抓取任务骨架</div>
             <div class="subtle mb-3">这版先按 Worker skeleton 模式跑通“任务创建 → 异步执行 → 热点池落数 → 任务记录回显”。后续接真实 API 时，只需要替换 Worker 里的数据获取段。</div>
             <div class="row g-3 mb-3">
@@ -1324,6 +1333,38 @@
             `;
         }
 
+        async function loadReadinessCheck() {
+            const res = await fetch('/api/admin/readiness-check');
+            const data = await res.json();
+            const wrap = document.getElementById('readinessWrap');
+            if (!data.success) {
+                document.getElementById('readinessMsg').textContent = data.message || '上线检查失败';
+                return;
+            }
+            const summary = data.summary || {};
+            document.getElementById('readinessMsg').textContent = `通过 ${summary.passed || 0} / ${summary.total || 0}，未通过 ${summary.failed || 0}`;
+            const renderGroup = (title, items) => `
+                <div class="col-lg-4">
+                    <strong>${title}</strong>
+                    <div class="mt-2">
+                        ${(items || []).map((item) => `
+                            <div class="subtle mb-2">
+                                <span class="badge ${item.ok ? 'bg-success' : 'bg-danger'}">${item.ok ? 'OK' : '缺失'}</span>
+                                <span class="ms-2">${escapeHtml(item.message || item.key || '-')}</span>
+                            </div>
+                        `).join('') || '<div class="text-muted">暂无</div>'}
+                    </div>
+                </div>
+            `;
+            wrap.innerHTML = `
+                <div class="row g-3">
+                    ${renderGroup('环境变量', data.env_checks)}
+                    ${renderGroup('基础数据', data.data_checks)}
+                    ${renderGroup('服务能力', data.service_checks)}
+                </div>
+            `;
+        }
+
         async function loadDataSourceTasks() {
             const params = new URLSearchParams();
             const status = document.getElementById('dataSourceStatusFilter')?.value;
@@ -2063,6 +2104,7 @@
                     loadAssetLibrary();
                     loadSchedules();
                     loadDiagnostics();
+                    loadReadinessCheck();
                 }, 15000);
             }
         }
@@ -2134,6 +2176,7 @@
         loadAssetLibrary();
         loadSchedules();
         loadDiagnostics();
+        loadReadinessCheck();
         document.getElementById('autoRefreshJobs')?.addEventListener('change', syncJobAutoRefresh);
     </script>
 </body>
