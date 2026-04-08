@@ -53,17 +53,23 @@ Worker 需要复用 Web 服务的这些变量：
 如果后面要把图片任务从 SVG 兜底升级为真实 AI 出图，再补：
 
 1. `ASSET_IMAGE_PROVIDER`
-2. `ASSET_IMAGE_API_URL`
-3. `ASSET_IMAGE_API_KEY`
-4. `ASSET_IMAGE_MODEL`
-5. `ASSET_IMAGE_SIZE`
+2. `ASSET_IMAGE_API_BASE`
+3. `ASSET_IMAGE_API_URL`
+4. `ASSET_IMAGE_API_KEY`
+5. `ARK_API_KEY`
+6. `LAS_API_KEY`
+7. `ASSET_IMAGE_MODEL`
+8. `ASSET_IMAGE_SIZE`
 
 建议默认值参考：
 
 ```env
 ASSET_IMAGE_PROVIDER=svg_fallback
+ASSET_IMAGE_API_BASE=
 ASSET_IMAGE_API_URL=
 ASSET_IMAGE_API_KEY=
+ARK_API_KEY=
+LAS_API_KEY=
 ASSET_IMAGE_MODEL=
 ASSET_IMAGE_SIZE=1024x1536
 ```
@@ -71,9 +77,21 @@ ASSET_IMAGE_SIZE=1024x1536
 其中 `ASSET_IMAGE_PROVIDER` 当前可用建议值：
 
 1. `svg_fallback`
-2. `openai`
-3. `openai_compatible`
-4. `generic_json`
+2. `volcengine_ark`
+3. `volcengine_las`
+4. `openai`
+5. `openai_compatible`
+6. `generic_json`
+
+图片类型当前可在前台和后台选择：
+
+1. `medical_science`
+2. `poster`
+3. `checklist`
+4. `memo`
+5. `knowledge_card`
+6. `myth_compare`
+7. `flowchart`
 
 说明：
 

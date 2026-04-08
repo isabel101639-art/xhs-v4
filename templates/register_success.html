@@ -102,6 +102,24 @@
                 <!-- 合规检查结果 -->
                 <div id="complianceResult" class="mt-3"></div>
 
+                <div class="row g-3 mt-2">
+                    <div class="col-md-6">
+                        <label class="form-label">图片生成类型</label>
+                        <select class="form-select" id="assetStyleType">
+                            {% for item in asset_style_types %}
+                            <option value="{{ item.key }}">{{ item.label }}{% if item.description %}｜{{ item.description }}{% endif %}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">
+                            医学科普型会更贴近你提供的警示封面/症状总览样例；知识卡片型会更贴近白底细边框、结构图+箭头标签的收藏型讲解页样例。
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">图片数量</label>
+                        <input type="number" class="form-control" id="assetImageCount" min="1" max="4" value="3">
+                    </div>
+                </div>
+
                 <div class="mt-3">
                     <button class="copy-btn" type="button" onclick="generateCreativePack()" style="background:#ff8b2b;">
                         <i class="bi bi-image"></i> 生成封面/配图素材包
@@ -589,7 +607,8 @@
                     registration_id: {{ registration.id }},
                     selected_content: getSelectedContent(),
                     title_hint: selectedTitleText,
-                    image_count: 3
+                    style_type: document.getElementById('assetStyleType').value,
+                    image_count: parseInt(document.getElementById('assetImageCount').value || '3', 10)
                 })
             });
             const data = await res.json();

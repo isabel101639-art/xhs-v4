@@ -252,11 +252,14 @@
                 <div class="col-lg-3">
                     <label class="form-label subtle">图片提供方</label>
                     <select id="configImageProvider" class="form-select">
-                        <option value="svg_fallback">svg_fallback</option>
-                        <option value="openai">openai</option>
-                        <option value="openai_compatible">openai_compatible</option>
-                        <option value="generic_json">generic_json</option>
+                        {% for item in image_provider_options %}
+                        <option value="{{ item.key }}">{{ item.key }}</option>
+                        {% endfor %}
                     </select>
+                </div>
+                <div class="col-lg-5">
+                    <label class="form-label subtle">图片 API Base</label>
+                    <input id="configImageApiBase" class="form-control" placeholder="如 https://ark.cn-beijing.volces.com/api/v3">
                 </div>
                 <div class="col-lg-5">
                     <label class="form-label subtle">图片 API URL</label>
@@ -277,6 +280,18 @@
                 <div class="col-lg-3">
                     <label class="form-label subtle">默认图片风格</label>
                     <input id="configImageStylePreset" class="form-control" placeholder="小红书图文">
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label subtle">默认图片类型</label>
+                    <select id="configImageDefaultStyleType" class="form-select"></select>
+                    <div class="subtle mt-1">医学科普型偏你样例里的警示封面/症状总览图，知识卡片型偏白底细边框、结构图+标签框的收藏卡片。</div>
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label subtle">Prompt 优化模式</label>
+                    <select id="configImageOptimizePromptMode" class="form-select">
+                        <option value="standard">standard</option>
+                        <option value="fast">fast</option>
+                    </select>
                 </div>
                 <div class="col-lg-6">
                     <label class="form-label subtle">图片提示词补充</label>
@@ -522,10 +537,9 @@
                     <label class="form-label subtle">提供方筛选</label>
                     <select id="assetTaskProviderFilter" class="form-select" onchange="loadAssetTasks()">
                         <option value="">全部</option>
-                        <option value="svg_fallback">svg_fallback</option>
-                        <option value="openai">openai</option>
-                        <option value="openai_compatible">openai_compatible</option>
-                        <option value="generic_json">generic_json</option>
+                        {% for item in image_provider_options %}
+                        <option value="{{ item.key }}">{{ item.key }}</option>
+                        {% endfor %}
                     </select>
                 </div>
                 <div class="col-md-2">
@@ -580,10 +594,9 @@
                     <label class="form-label subtle">提供方筛选</label>
                     <select id="assetLibraryProviderFilter" class="form-select" onchange="loadAssetLibrary()">
                         <option value="">全部</option>
-                        <option value="svg_fallback">svg_fallback</option>
-                        <option value="openai">openai</option>
-                        <option value="openai_compatible">openai_compatible</option>
-                        <option value="generic_json">generic_json</option>
+                        {% for item in image_provider_options %}
+                        <option value="{{ item.key }}">{{ item.key }}</option>
+                        {% endfor %}
                         <option value="manual_upload">manual_upload</option>
                     </select>
                 </div>
@@ -924,6 +937,18 @@
             return map[status] || 'bg-light text-dark';
         }
 
+        function renderStyleTypeOptions(targetId, items, selectedValue) {
+            const select = document.getElementById(targetId);
+            if (!select) return;
+            const current = selectedValue || select.value;
+            select.innerHTML = (items || []).map((item) => `
+                <option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}${item.description ? `｜${escapeHtml(item.description)}` : ''}</option>
+            `).join('');
+            if (current) {
+                select.value = current;
+            }
+        }
+
         async function loadOverview() {
             const res = await fetch('/api/automation/overview');
             const data = await res.json();
@@ -944,17 +969,20 @@
             }
         }
 
-        function fillAutomationConfig(config, notes) {
+        function fillAutomationConfig(config, notes, styleTypes) {
             automationConfigCache = config || {};
             document.getElementById('configHotwordPlatform').value = config.hotword_source_platform || '小红书';
             document.getElementById('configHotwordChannel').value = config.hotword_source_channel || 'Worker骨架';
             document.getElementById('configHotwordKeywordLimit').value = config.hotword_keyword_limit || 10;
             document.getElementById('configImageProvider').value = config.image_provider || 'svg_fallback';
+            document.getElementById('configImageApiBase').value = config.image_api_base || '';
             document.getElementById('configImageApiUrl').value = config.image_api_url || '';
             document.getElementById('configImageModel').value = config.image_model || '';
             document.getElementById('configImageSize').value = config.image_size || '1024x1536';
             document.getElementById('configImageTimeout').value = config.image_timeout_seconds || 90;
             document.getElementById('configImageStylePreset').value = config.image_style_preset || '小红书图文';
+            renderStyleTypeOptions('configImageDefaultStyleType', styleTypes || [], config.image_default_style_type || 'medical_science');
+            document.getElementById('configImageOptimizePromptMode').value = config.image_optimize_prompt_mode || 'standard';
             document.getElementById('configImagePromptSuffix').value = config.image_prompt_suffix || '';
 
             const noteWrap = document.getElementById('automationConfigNote');
@@ -978,7 +1006,7 @@
                 document.getElementById('automationConfigNote').textContent = data.message || '加载自动化配置失败';
                 return;
             }
-            fillAutomationConfig(data.config || {}, data.notes || {});
+            fillAutomationConfig(data.config || {}, data.notes || {}, data.style_types || []);
             loadAutomationConfigPreview();
         }
 
@@ -999,7 +1027,14 @@
                         <div class="subtle">关键词数量：${data.hotword_preview?.keyword_limit || 0}</div>
                         <div class="subtle">预览关键词：${escapeHtml((data.hotword_preview?.keywords || []).join('、'))}</div>
                     </div>
-                    <div class="col-lg-7">
+                    <div class="col-lg-3">
+                        <strong>图片类型预览</strong>
+                        <div class="subtle mt-2">当前类型：${escapeHtml(data.style_meta?.label || '-')}</div>
+                        <div class="subtle">说明：${escapeHtml(data.style_meta?.description || '-')}</div>
+                        <div class="subtle">资产类型：${escapeHtml(data.style_meta?.asset_type || '-')}</div>
+                        <div class="subtle">默认尺寸：${escapeHtml(data.style_meta?.default_size || '-')}</div>
+                    </div>
+                    <div class="col-lg-4">
                         <strong>图片请求预览</strong>
                         <div class="json-box mt-2">${escapeHtml(JSON.stringify(data.image_request_preview || {}, null, 2))}</div>
                     </div>
@@ -1013,11 +1048,14 @@
                 hotword_source_channel: document.getElementById('configHotwordChannel').value.trim(),
                 hotword_keyword_limit: parseInt(document.getElementById('configHotwordKeywordLimit').value || '10', 10),
                 image_provider: document.getElementById('configImageProvider').value,
+                image_api_base: document.getElementById('configImageApiBase').value.trim(),
                 image_api_url: document.getElementById('configImageApiUrl').value.trim(),
                 image_model: document.getElementById('configImageModel').value.trim(),
                 image_size: document.getElementById('configImageSize').value.trim(),
                 image_timeout_seconds: parseInt(document.getElementById('configImageTimeout').value || '90', 10),
                 image_style_preset: document.getElementById('configImageStylePreset').value.trim(),
+                image_default_style_type: document.getElementById('configImageDefaultStyleType').value,
+                image_optimize_prompt_mode: document.getElementById('configImageOptimizePromptMode').value,
                 image_prompt_suffix: document.getElementById('configImagePromptSuffix').value.trim()
             };
             const res = await fetch('/api/admin/automation-config', {
@@ -1030,7 +1068,7 @@
                 document.getElementById('automationConfigNote').textContent = data.message || '保存自动化配置失败';
                 return;
             }
-            fillAutomationConfig(data.config || {}, data.notes || {});
+            fillAutomationConfig(data.config || {}, data.notes || {}, data.style_types || []);
             document.getElementById('automationConfigNote').textContent = '自动化运维配置已保存';
             loadOverview();
             loadDiagnostics();
@@ -1192,9 +1230,11 @@
                     <div class="col-lg-4">
                         <strong>图片提供方</strong>
                         <div class="subtle mt-2">Provider：${capabilities.image_provider_name || '-'}</div>
+                        <div class="subtle">API Base：${capabilities.image_provider_api_base || '-'}</div>
                         <div class="subtle">API URL：${capabilities.image_provider_api_url || '-'}</div>
                         <div class="subtle">模型：${capabilities.image_provider_model || '-'}</div>
                         <div class="subtle">尺寸：${capabilities.image_provider_size || '-'}</div>
+                        <div class="subtle">默认图片类型：${capabilities.image_default_style_type || '-'}</div>
                         <div class="subtle">超时：${capabilities.image_timeout_seconds || '-'} 秒</div>
                         <div class="subtle">API Key：${capabilities.api_key_configured ? '已配置' : '未配置'}</div>
                         <div class="subtle">真实图片接口：${capabilities.image_provider_configured ? '已配置' : '未配置'}</div>

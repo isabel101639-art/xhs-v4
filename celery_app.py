@@ -292,7 +292,12 @@ def generate_asset_images_job(asset_task_id):
 
     capabilities = _image_provider_capabilities()
     api_url = (capabilities.get('image_provider_api_url') or '').strip()
-    api_key = (os.environ.get('ASSET_IMAGE_API_KEY') or '').strip()
+    api_key = (
+        os.environ.get('ASSET_IMAGE_API_KEY')
+        or os.environ.get('ARK_API_KEY')
+        or os.environ.get('LAS_API_KEY')
+        or ''
+    ).strip()
     provider = (capabilities.get('image_provider_name') or task.source_provider or 'svg_fallback').strip() or 'svg_fallback'
     model_name = (capabilities.get('image_provider_model') or task.model_name or '').strip()
     image_size = (capabilities.get('image_provider_size') or '1024x1536').strip()
@@ -327,79 +332,80 @@ def generate_asset_images_job(asset_task_id):
                 continue
             if not isinstance(item, dict):
                 continue
-                if item.get('b64_json'):
-                    normalized.append({
-                        'index': index,
-                        'type': task.style_preset or 'AI图片',
-                        'title': task.title_hint or f'AI生成图{index}',
+
+            if item.get('b64_json'):
+                normalized.append({
+                    'index': index,
+                    'type': task.style_preset or 'AI图片',
+                    'title': task.title_hint or f'AI生成图{index}',
                     'subtitle': '',
                     'image_prompt': task.prompt_text or '',
                     'preview_url': f"data:image/png;base64,{item.get('b64_json')}",
                     'download_name': f'asset_task_{task.id}_{index}.png',
-                        'provider': provider,
-                        'format': 'png',
-                        'bullets': [],
-                    })
-                elif item.get('image_base64'):
-                    normalized.append({
-                        'index': index,
-                        'type': task.style_preset or 'AI图片',
-                        'title': task.title_hint or f'AI生成图{index}',
-                        'subtitle': '',
-                        'image_prompt': task.prompt_text or '',
-                        'preview_url': f"data:image/png;base64,{item.get('image_base64')}",
-                        'download_name': f'asset_task_{task.id}_{index}.png',
-                        'provider': provider,
-                        'format': 'png',
-                        'bullets': [],
-                    })
-                elif item.get('url') or item.get('image_url'):
-                    normalized.append({
-                        'index': index,
-                        'type': task.style_preset or 'AI图片',
-                        'title': task.title_hint or f'AI生成图{index}',
+                    'provider': provider,
+                    'format': 'png',
+                    'bullets': [],
+                })
+            elif item.get('image_base64'):
+                normalized.append({
+                    'index': index,
+                    'type': task.style_preset or 'AI图片',
+                    'title': task.title_hint or f'AI生成图{index}',
+                    'subtitle': '',
+                    'image_prompt': task.prompt_text or '',
+                    'preview_url': f"data:image/png;base64,{item.get('image_base64')}",
+                    'download_name': f'asset_task_{task.id}_{index}.png',
+                    'provider': provider,
+                    'format': 'png',
+                    'bullets': [],
+                })
+            elif item.get('url') or item.get('image_url'):
+                normalized.append({
+                    'index': index,
+                    'type': task.style_preset or 'AI图片',
+                    'title': task.title_hint or f'AI生成图{index}',
                     'subtitle': '',
                     'image_prompt': task.prompt_text or '',
                     'preview_url': item.get('url') or item.get('image_url'),
                     'download_name': f'asset_task_{task.id}_{index}.png',
-                        'provider': provider,
-                        'format': 'url',
-                        'bullets': [],
-                    })
-                elif isinstance(item.get('content'), list):
-                    for content_item in item.get('content') or []:
-                        if not isinstance(content_item, dict):
-                            continue
-                        image_base64 = content_item.get('image_base64') or content_item.get('b64_json')
-                        image_url = content_item.get('image_url') or content_item.get('url')
-                        if image_base64:
-                            normalized.append({
-                                'index': index,
-                                'type': task.style_preset or 'AI图片',
-                                'title': task.title_hint or f'AI生成图{index}',
-                                'subtitle': '',
-                                'image_prompt': task.prompt_text or '',
-                                'preview_url': f"data:image/png;base64,{image_base64}",
-                                'download_name': f'asset_task_{task.id}_{index}.png',
-                                'provider': provider,
-                                'format': 'png',
-                                'bullets': [],
-                            })
-                            break
-                        if image_url:
-                            normalized.append({
-                                'index': index,
-                                'type': task.style_preset or 'AI图片',
-                                'title': task.title_hint or f'AI生成图{index}',
-                                'subtitle': '',
-                                'image_prompt': task.prompt_text or '',
-                                'preview_url': image_url,
-                                'download_name': f'asset_task_{task.id}_{index}.png',
-                                'provider': provider,
-                                'format': 'url',
-                                'bullets': [],
-                            })
-                            break
+                    'provider': provider,
+                    'format': 'url',
+                    'bullets': [],
+                })
+            elif isinstance(item.get('content'), list):
+                for content_item in item.get('content') or []:
+                    if not isinstance(content_item, dict):
+                        continue
+                    image_base64 = content_item.get('image_base64') or content_item.get('b64_json')
+                    image_url = content_item.get('image_url') or content_item.get('url')
+                    if image_base64:
+                        normalized.append({
+                            'index': index,
+                            'type': task.style_preset or 'AI图片',
+                            'title': task.title_hint or f'AI生成图{index}',
+                            'subtitle': '',
+                            'image_prompt': task.prompt_text or '',
+                            'preview_url': f"data:image/png;base64,{image_base64}",
+                            'download_name': f'asset_task_{task.id}_{index}.png',
+                            'provider': provider,
+                            'format': 'png',
+                            'bullets': [],
+                        })
+                        break
+                    if image_url:
+                        normalized.append({
+                            'index': index,
+                            'type': task.style_preset or 'AI图片',
+                            'title': task.title_hint or f'AI生成图{index}',
+                            'subtitle': '',
+                            'image_prompt': task.prompt_text or '',
+                            'preview_url': image_url,
+                            'download_name': f'asset_task_{task.id}_{index}.png',
+                            'provider': provider,
+                            'format': 'url',
+                            'bullets': [],
+                        })
+                        break
         return normalized
 
     task.status = 'running'
@@ -445,6 +451,8 @@ def generate_asset_images_job(asset_task_id):
             topic,
             selected_content=task.selected_content or '',
             image_count=task.image_count or 3,
+            style_preset=task.style_preset or '',
+            title_hint=task.title_hint or '',
         )
 
     for item in results:

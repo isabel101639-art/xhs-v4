@@ -606,11 +606,156 @@ AUTOMATION_RUNTIME_CONFIG_DEFAULTS = {
     'hotword_keyword_limit': 10,
     'image_provider': 'svg_fallback',
     'image_api_url': '',
+    'image_api_base': '',
     'image_model': '',
     'image_size': '1024x1536',
     'image_timeout_seconds': 90,
     'image_style_preset': '小红书图文',
+    'image_default_style_type': 'medical_science',
+    'image_optimize_prompt_mode': 'standard',
     'image_prompt_suffix': '',
+}
+
+IMAGE_PROVIDER_OPTIONS = [
+    {'key': 'svg_fallback', 'label': 'SVG兜底'},
+    {'key': 'volcengine_ark', 'label': '火山方舟兼容模式'},
+    {'key': 'volcengine_las', 'label': '火山 LAS 接口'},
+    {'key': 'openai', 'label': 'OpenAI'},
+    {'key': 'openai_compatible', 'label': 'OpenAI兼容接口'},
+    {'key': 'generic_json', 'label': '通用JSON接口'},
+]
+
+ASSET_STYLE_TYPE_DEFINITIONS = [
+    {
+        'key': 'medical_science',
+        'label': '医学科普型',
+        'description': '适合封面警示、症状总览、检查解读、器官科普',
+        'asset_type': '医学科普图',
+        'default_size': '1536x2048',
+        'prompt_suffix': '整体是小红书医学科普封面气质，标题强、结论清楚、信息图层级明确。',
+        'default_bullets': ['问题先抛出来', '解释指标或误区', '最后给管理建议'],
+        'accent': '#ff7a59',
+        'bg': '#fff4ee',
+        'layout_hint': '顶部超大标题区，中部主体医学插画，下方结论条或标签区',
+        'visual_hint': '半写实医学手绘插画结合轻信息图风格，专业可信但不生硬',
+        'reference_hint': '参考小红书医疗健康警示封面、症状总览图、检查解读图的感觉',
+        'text_policy': '优先保留大标题和少量短标签；如果模型文字能力一般，就预留标题区和标签框，避免大段乱码中文',
+        'avoid_hint': '不要医院广告海报感，不要品牌露出，不要暗黑恐怖，不要赛博霓虹，不要复杂摄影背景',
+    },
+    {
+        'key': 'poster',
+        'label': '大字报',
+        'description': '适合强标题、情绪冲击、核心结论型封面',
+        'asset_type': '大字报',
+        'default_size': '1536x2048',
+        'prompt_suffix': '强调一个主标题，视觉冲击强，适合封面传播，信息点精简。',
+        'default_bullets': ['一句大结论', '一个关键提醒', '一条行动建议'],
+        'accent': '#ef4e45',
+        'bg': '#fff2f0',
+    },
+    {
+        'key': 'checklist',
+        'label': '清单',
+        'description': '适合步骤、提醒、准备事项和执行动作',
+        'asset_type': '清单',
+        'default_size': '1536x2048',
+        'prompt_suffix': '清单结构，条目感强，适合打勾式阅读体验。',
+        'default_bullets': ['先做什么', '中间检查什么', '最后复盘什么'],
+        'accent': '#2d8f5a',
+        'bg': '#f1fbf5',
+    },
+    {
+        'key': 'memo',
+        'label': '备忘录',
+        'description': '适合提醒、注意事项、门诊问答记录',
+        'asset_type': '备忘录',
+        'default_size': '1536x2048',
+        'prompt_suffix': '像随手记下来的重点备忘，便签感、记录感强，但整体要整洁。',
+        'default_bullets': ['今天先记住', '这类情况要留意', '复查前别忘了'],
+        'accent': '#5c6ac4',
+        'bg': '#f3f4ff',
+    },
+    {
+        'key': 'knowledge_card',
+        'label': '知识卡片型',
+        'description': '适合结构图、机制图、对比卡、收藏型内页',
+        'asset_type': '知识卡片',
+        'default_size': '1536x2048',
+        'prompt_suffix': '整体像小红书医学知识卡片内页，结构图完整，适合收藏转发。',
+        'default_bullets': ['一个知识点', '一个误区', '一个建议'],
+        'accent': '#4c91ff',
+        'bg': '#eef5ff',
+        'layout_hint': '白底或米白底卡片，四周细边框，顶部大标题，中部核心结构图，周围箭头标签和局部放大，下方总结信息条',
+        'visual_hint': '医学结构插画、机制流程图、局部放大和标签说明并存，整体干净、整齐、易收藏',
+        'reference_hint': '参考小红书医学知识卡片、机制图、对比讲解页的感觉',
+        'text_policy': '适合短标题、短标签、编号提示；尽量不要密集长段落，优先给排版留出信息框区域',
+        'avoid_hint': '不要纯海报感，不要只有一个主体没有信息层级，不要花哨背景，不要写实商业广告感',
+    },
+    {
+        'key': 'myth_compare',
+        'label': '误区对照图',
+        'description': '适合左右对照、真伪辨析和避坑内容',
+        'asset_type': '误区对照图',
+        'default_size': '1536x2048',
+        'prompt_suffix': '左右对照结构明显，适合“误区 vs 正解”表达。',
+        'default_bullets': ['常见误区', '正确理解', '实际怎么做'],
+        'accent': '#d96570',
+        'bg': '#fff2f5',
+    },
+    {
+        'key': 'flowchart',
+        'label': '流程图',
+        'description': '适合检查流程、复查流程、就诊步骤',
+        'asset_type': '流程图',
+        'default_size': '1536x2048',
+        'prompt_suffix': '流程步骤清晰，方向性强，适合路线图阅读方式。',
+        'default_bullets': ['第一步', '第二步', '第三步'],
+        'accent': '#f2a43c',
+        'bg': '#fff8ea',
+    },
+]
+
+VOLCENGINE_MODEL_OPTIONS = [
+    {'key': 'doubao-seedream-5-0-lite-260128', 'label': 'Seedream 5.0 lite', 'provider': 'volcengine_las'},
+    {'key': 'doubao-seedream-5-0-260128', 'label': 'Seedream 5.0', 'provider': 'volcengine_las'},
+    {'key': 'doubao-seedream-4-5-251128', 'label': 'Seedream 4.5', 'provider': 'volcengine_las'},
+    {'key': 'doubao-seedream-4-0-250828', 'label': 'Seedream 4.0', 'provider': 'volcengine_las'},
+    {'key': 'doubao-seededit-3-0-i2i-250628', 'label': 'SeedEdit 3.0', 'provider': 'volcengine_ark'},
+]
+
+MEDICAL_SCIENCE_LAYOUT_VARIANTS = {
+    'impact_compare': '采用左右对照信息图版式：左侧是危险状态或错误行为，右侧是健康状态或正确做法，中间可用箭头或对照符号强化反差。',
+    'symptom_warning': '采用警示科普版式：主标题强提醒，中部为人体或器官示意图，四周分布症状标签、风险信号和结论提示。',
+    'device_explainer': '采用检查设备解读版式：主体是设备或检查场景，旁边搭配成像原理、适用场景、优缺点、注意事项等信息块。',
+    'organ_explainer': '采用器官科普版式：一个核心器官或人体系统作为主体，配合局部放大、箭头标签、误区提示和管理建议。',
+}
+
+KNOWLEDGE_CARD_LAYOUT_VARIANTS = {
+    'comparison_card': '采用对比知识卡版式：左中右或上下分区清楚，适合表达外表正常 vs 体内异常、误区 vs 真相、不同状态对照。',
+    'mechanism_cycle': '采用机制流程卡版式：中心器官或核心结论居中，周围用环形箭头、因果路径和编号标签说明机制。',
+    'body_map': '采用全身影响总览卡版式：人体轮廓或核心器官置中，四周分布系统影响、风险结果和重点提示。',
+    'knowledge_breakdown': '采用结构拆解卡版式：顶部标题，中部核心结构图或剖面图，旁边补充定义、风险、指标和行动建议。',
+}
+
+STYLE_REFERENCE_SIGNATURES = {
+    'medical_science': {
+        'core_style': '贴近你提供的“小红书医学科普封面”样例：顶部超大黑色中文标题，必要时加一个小徽标或警示角标，中部是主体信息图，底部有一条总结式横幅或结论栏。',
+        'composition': '常见构图是左右对比、人体总览、器官+局部放大、设备+说明块，阅读路径要非常直接，一眼看懂重点。',
+        'palette': '颜色采用白底、浅蓝绿、浅暖灰作为主色，橙红和黄色只做警示强调，不要高饱和商业海报色。',
+        'illustration': '插画是医学手绘科普风，器官、人体、检查设备要准确，带一点柔和上色和线稿质感，像高质量健康科普账号配图。',
+        'annotation': '画面里要有短标签框、箭头、图标、对勾叉号、提示小框，但保持整洁，不要挤成论文海报。',
+        'footer': '底部适合放一句强结论、一条风险提醒或一条行动建议，形成封面收口。',
+        'avoid': '不要欧美扁平插画感，不要时尚杂志排版，不要赛博未来风，不要纯摄影拼贴。',
+    },
+    'knowledge_card': {
+        'core_style': '贴近你提供的“医学知识卡片”样例：白底或米白底，四周细边框，顶部超大黑标题，副标题可用橙色强调，中部是完整结构图或机制图。',
+        'composition': '常见构图是器官剖面图、机制循环图、左右对比图、人体影响总览图，周围配箭头、编号、标签框、局部放大图。',
+        'palette': '颜色采用米白、浅橙、肉粉、浅蓝、浅绿、咖色线稿，整体温和、清晰、像可收藏的医学笔记卡片。',
+        'illustration': '插画应当偏医学手绘和知识图谱结合，不是极简图标，也不是过度写实的商业渲染。',
+        'annotation': '标签一定要短、准、整齐，信息块彼此分明，像小红书里高收藏的医学讲解页。',
+        'footer': '底部留一条灰白或米色总结区，适合放结论、定义、检查建议或提醒。',
+        'avoid': '不要只有一个器官孤零零摆在中间，不要背景花里胡哨，不要广告感文案排版。',
+    },
 }
 
 
@@ -693,6 +838,34 @@ def _automation_runtime_config():
     except Exception:
         pass
     return config
+
+
+def _image_provider_options():
+    return [dict(item) for item in IMAGE_PROVIDER_OPTIONS]
+
+
+def _asset_style_type_options():
+    return [dict(item) for item in ASSET_STYLE_TYPE_DEFINITIONS]
+
+
+def _asset_style_meta(style_value):
+    raw = (style_value or '').strip()
+    for item in ASSET_STYLE_TYPE_DEFINITIONS:
+        if raw == item['key'] or raw == item['label']:
+            return dict(item)
+    default_item = ASSET_STYLE_TYPE_DEFINITIONS[0]
+    fallback = dict(default_item)
+    if raw:
+        fallback['label'] = raw
+        fallback['asset_type'] = raw
+    return fallback
+
+
+def _image_model_options(provider=''):
+    current_provider = (provider or '').strip()
+    if current_provider in {'volcengine_ark', 'volcengine_las'}:
+        return [dict(item) for item in VOLCENGINE_MODEL_OPTIONS]
+    return []
 
 
 def _safe_int(value, default=0):
@@ -1063,23 +1236,43 @@ def _serialize_automation_schedule(item):
 def _image_provider_capabilities():
     runtime_config = _automation_runtime_config()
     provider = (os.environ.get('ASSET_IMAGE_PROVIDER') or str(runtime_config.get('image_provider') or 'svg_fallback')).strip() or 'svg_fallback'
+    api_base = (os.environ.get('ASSET_IMAGE_API_BASE') or str(runtime_config.get('image_api_base') or '')).strip()
+    if provider == 'volcengine_ark' and not api_base:
+        api_base = 'https://ark.cn-beijing.volces.com/api/v3'
+    if provider == 'volcengine_las' and not api_base:
+        api_base = 'https://operator.las.cn-beijing.volces.com/api/v1'
     api_url = (os.environ.get('ASSET_IMAGE_API_URL') or str(runtime_config.get('image_api_url') or '')).strip()
-    api_key = (os.environ.get('ASSET_IMAGE_API_KEY') or '').strip()
+    if not api_url and api_base:
+        api_url = api_base.rstrip('/') + '/images/generations'
+    api_key = (
+        os.environ.get('ASSET_IMAGE_API_KEY')
+        or os.environ.get('ARK_API_KEY')
+        or os.environ.get('LAS_API_KEY')
+        or ''
+    ).strip()
     model_name = (os.environ.get('ASSET_IMAGE_MODEL') or str(runtime_config.get('image_model') or '')).strip()
+    if not model_name and provider in {'volcengine_ark', 'volcengine_las'}:
+        model_name = 'doubao-seedream-5-0-lite-260128'
     image_size = (os.environ.get('ASSET_IMAGE_SIZE') or str(runtime_config.get('image_size') or '1024x1536')).strip()
     timeout_seconds = min(max(_safe_int(runtime_config.get('image_timeout_seconds'), 90), 10), 300)
     configured = bool(api_url and api_key)
     return {
         'image_provider_configured': configured,
         'image_provider_name': provider,
+        'image_provider_api_base': api_base,
         'image_provider_api_url': api_url,
         'image_provider_model': model_name,
         'image_provider_size': image_size,
         'image_timeout_seconds': timeout_seconds,
         'image_style_preset': str(runtime_config.get('image_style_preset') or '小红书图文'),
+        'image_default_style_type': str(runtime_config.get('image_default_style_type') or 'medical_science'),
+        'image_optimize_prompt_mode': str(runtime_config.get('image_optimize_prompt_mode') or 'standard'),
         'image_prompt_suffix': str(runtime_config.get('image_prompt_suffix') or ''),
         'api_key_configured': bool(api_key),
         'fallback_mode': not configured or provider == 'svg_fallback',
+        'provider_options': _image_provider_options(),
+        'model_options': _image_model_options(provider),
+        'style_type_options': _asset_style_type_options(),
     }
 
 
@@ -2107,6 +2300,187 @@ def _extract_content_points(content):
     return points
 
 
+def _normalize_image_prompt_mode(raw_mode='standard'):
+    mode = (raw_mode or 'standard').strip().lower()
+    return mode if mode in {'standard', 'fast'} else 'standard'
+
+
+def _infer_asset_layout_variant(style_key, title_text='', body_text='', support_points=None):
+    merged = ' '.join(filter(None, [title_text or '', body_text or '', ' '.join(support_points or [])]))
+    source = merged.lower()
+
+    if style_key == 'medical_science':
+        if any(token in source for token in ['对比', 'vs', '真相', '误区', '区别', '熬夜', '伤害', '危害', '全面', '好处', '坏处']):
+            return 'impact_compare'
+        if any(token in source for token in ['信号', '症状', '警示', '求救', '异常', '发黄', '疼', '不适', '表现', '征兆']):
+            return 'symptom_warning'
+        if any(token in source for token in ['ct', '核磁', 'b超', '超声', '扫描', '检查', '影像', '成像', '技术', '设备']):
+            return 'device_explainer'
+        return 'organ_explainer'
+
+    if style_key == 'knowledge_card':
+        if any(token in source for token in ['对比', 'vs', '区别', '瘦型', '隐形', '体外瘦', '体内胖', '正常', '异常']):
+            return 'comparison_card'
+        if any(token in source for token in ['机制', '原理', '通路', '流程', '循环', '导致', '路径', '代谢', '抵抗']):
+            return 'mechanism_cycle'
+        if any(token in source for token in ['全面', '伤害', '影响', '症状', '信号', '系统', '全身']):
+            return 'body_map'
+        return 'knowledge_breakdown'
+
+    return 'standard'
+
+
+def _build_variant_alignment_lines(style_key, layout_variant):
+    if style_key == 'medical_science':
+        if layout_variant == 'impact_compare':
+            return [
+                '版面尽量做成样例里的强对比封面：左侧偏暗或偏警示色，右侧偏亮或偏健康色，中间可放 VS、箭头或分隔视觉。',
+                '左边突出错误行为、受损器官、风险指标；右边突出正确状态、健康节律、改善结果。',
+            ]
+        if layout_variant == 'symptom_warning':
+            return [
+                '版面贴近“求救信号/症状警示”样例：人体或器官为主，周围分散多个症状小标签、局部特写和风险提示。',
+                '可加入眼睛、手掌、疲惫状态、疼痛位置这类局部说明，使画面像医学警示图而不是普通插画。',
+            ]
+        if layout_variant == 'device_explainer':
+            return [
+                '版面贴近“CT/B超/核磁讲解”样例：检查设备要足够大，旁边配成像原理、适合检查、注意事项、优缺点等模块。',
+                '信息块要规整，像医学设备知识海报，但依然保留小红书科普卡的易读感。',
+            ]
+        return [
+            '版面贴近“器官科普拆解”样例：一个核心器官占据视觉中心，配剖面、箭头、局部放大和短标签。',
+            '适合回答“为什么”“是什么”“怎么判断”这类问题，视觉上要有教材感但不过于严肃。',
+        ]
+
+    if style_key == 'knowledge_card':
+        if layout_variant == 'comparison_card':
+            return [
+                '版面贴近“左右对比知识卡”样例：中间主体大图，左右或上下做状态对照，强调外表正常 vs 内部异常、误区 vs 正解。',
+                '可加入体型轮廓、器官切面、脂肪分布、两个不同状态的说明框，让读者一眼看懂差异。',
+            ]
+        if layout_variant == 'mechanism_cycle':
+            return [
+                '版面贴近“机制图/循环图”样例：中心器官或核心结论居中，环形箭头串起多个环节，形成完整因果链。',
+                '每个机制节点配一个小图或局部结构示意，而不是纯文字堆砌。',
+            ]
+        if layout_variant == 'body_map':
+            return [
+                '版面贴近“全身影响总览图”样例：一个人体轮廓在中间，左右分布不同系统的影响标签和对应小图标。',
+                '重点信息要围绕人体形成放射式布局，像高收藏的全景科普卡。',
+            ]
+        return [
+            '版面贴近“结构拆解卡”样例：大标题下面是核心结构图，四周加简短标签框和局部放大图，底部再补一条结论区。',
+            '适合解释定义、成因、检查指标、器官结构和高频误区。',
+        ]
+
+    return []
+
+
+def _build_style_specific_prompt(style_meta, clean_title='', primary_keyword='', body_text='', support_points=None, prompt_mode='standard'):
+    style_key = style_meta.get('key') or ''
+    prompt_mode = _normalize_image_prompt_mode(prompt_mode)
+    focus_text = '；'.join((support_points or [])[:3]) or f'围绕{primary_keyword or clean_title or "主题"}做清晰表达'
+    layout_variant = _infer_asset_layout_variant(style_key, clean_title, body_text, support_points or [])
+    sample_signature = STYLE_REFERENCE_SIGNATURES.get(style_key, {})
+    sample_lines = [
+        value for value in [
+            sample_signature.get('core_style'),
+            sample_signature.get('composition'),
+            sample_signature.get('palette'),
+            sample_signature.get('illustration'),
+            sample_signature.get('annotation'),
+            sample_signature.get('footer'),
+            sample_signature.get('avoid'),
+        ] if value
+    ]
+
+    shared_lines = [
+        '画面比例：竖版 3:4，适合小红书封面或图文首屏。',
+        f'版式结构：{style_meta.get("layout_hint") or "顶部标题，中部主体，底部信息条"}。',
+        f'视觉气质：{style_meta.get("visual_hint") or "干净、专业、信息层级清楚"}。',
+        f'参考方向：{style_meta.get("reference_hint") or "小红书图文信息卡"}。',
+        f'文字策略：{style_meta.get("text_policy") or "保留简洁标题和关键词，避免长段落乱码"}。',
+        f'避免事项：{style_meta.get("avoid_hint") or "不要杂乱背景和营销感"}。',
+    ]
+
+    if style_key == 'medical_science':
+        lines = [
+            '画面主体优先使用人体轮廓、器官剖面、检查设备、症状标注、箭头标签、对照区块这类医学信息图元素。',
+            MEDICAL_SCIENCE_LAYOUT_VARIANTS.get(layout_variant, MEDICAL_SCIENCE_LAYOUT_VARIANTS['organ_explainer']),
+            '背景以白底、浅暖底、浅蓝绿医疗色为主，可搭配细边框和少量警示色点缀。',
+            f'信息重点：{focus_text}。',
+            '整体要像高质量医学科普图，不像普通商业海报，也不要只有一个插画主体没有信息结构。',
+        ]
+        if prompt_mode != 'fast':
+            lines.extend([
+                *sample_lines,
+                *_build_variant_alignment_lines(style_key, layout_variant),
+                '标题区要足够醒目，适合后续叠加中文大标题、副标题和短标签。',
+                '如果内容适合，可加入左右对比、局部放大、图标标签、结论提示条，形成一眼看懂的阅读路径。',
+                '插画质感以半写实手绘为主，器官结构准确，线条柔和，局部可以轻卡通化提升可读性。',
+            ])
+        return ' '.join(shared_lines + lines)
+
+    if style_key == 'knowledge_card':
+        lines = [
+            '画面主体优先使用器官结构图、剖面图、机制箭头、局部放大框、编号提示、总结卡片这些知识卡元素。',
+            KNOWLEDGE_CARD_LAYOUT_VARIANTS.get(layout_variant, KNOWLEDGE_CARD_LAYOUT_VARIANTS['knowledge_breakdown']),
+            '背景以白底、米白底、浅暖底为主，边框清晰，卡片留白足够，适合收藏截图传播。',
+            f'信息重点：{focus_text}。',
+            '整体要像医学知识卡片内页，结构完整、说明性强，不能只做成封面海报。',
+        ]
+        if prompt_mode != 'fast':
+            lines.extend([
+                *sample_lines,
+                *_build_variant_alignment_lines(style_key, layout_variant),
+                '可在主体周围安排标签框、解释框、对比箭头、定义区和结论区，让层级一目了然。',
+                '插画是医学手绘科普风，不要过度写实，不要廉价卡通，要兼顾专业感和亲和力。',
+                '如果模型不擅长精确文字，请用整齐的信息框和标签占位替代密集长文，保留后期排版空间。',
+            ])
+        return ' '.join(shared_lines + lines)
+
+    extra_lines = [
+        f'信息重点：{focus_text}。',
+        '整体要求：信息块清楚，适合小红书图文传播。',
+    ]
+    return ' '.join(shared_lines + extra_lines)
+
+
+def _build_asset_generation_prompt_from_context(topic_name='', topic_keywords='', selected_content='', style_preset='小红书图文', title_hint=''):
+    runtime_config = _automation_runtime_config()
+    prompt_mode = _normalize_image_prompt_mode(runtime_config.get('image_optimize_prompt_mode'))
+    style_meta = _asset_style_meta(style_preset or runtime_config.get('image_default_style_type') or 'medical_science')
+    resolved_topic_name = (topic_name or '肝病管理').strip() or '肝病管理'
+    keywords = _split_keywords(topic_keywords or resolved_topic_name)
+    primary_keyword = keywords[0] if keywords else resolved_topic_name
+    clean_title = (title_hint or '').strip() or _extract_title_from_version(selected_content) or resolved_topic_name
+    body = _extract_body_from_version(selected_content) if selected_content else ''
+    body = re.sub(r'^(正文|内文)\s*[：:]\s*', '', (body or '').strip())
+    support_points = _extract_content_points(body) if body else []
+    point_text = '；'.join(support_points[:3]) if support_points else f'围绕{primary_keyword}做清晰信息表达'
+
+    prompt_parts = [
+        f'为小红书生成 1 张{style_meta["asset_type"]}，主题“{clean_title}”，适合直接做图文配图或封面。',
+        f'内容主题：{resolved_topic_name}；核心关键词：{primary_keyword}。',
+        f'需要表达的重点：{point_text}。',
+        _build_style_specific_prompt(
+            style_meta,
+            clean_title=clean_title,
+            primary_keyword=primary_keyword,
+            body_text=body,
+            support_points=support_points,
+            prompt_mode=prompt_mode,
+        ),
+        f'{style_meta["prompt_suffix"]}',
+        '整体要求：画面干净、可信、适合截图传播，不过度营销，不出现品牌露出和水印。',
+    ]
+    prompt = ' '.join(part.strip() for part in prompt_parts if part and str(part).strip())
+    prompt_suffix = str(runtime_config.get('image_prompt_suffix') or '').strip()
+    if prompt_suffix:
+        prompt = f'{prompt} {prompt_suffix}'
+    return prompt
+
+
 def _build_creative_pack(topic, selected_content=''):
     topic_name = topic.topic_name or '肝病热点'
     keywords = _split_keywords(topic.keywords or topic_name)
@@ -2194,28 +2568,43 @@ def _build_graphic_article_bundle(topic, selected_content=''):
 
 
 def _build_asset_generation_prompt(topic, selected_content='', style_preset='小红书图文', title_hint=''):
-    runtime_config = _automation_runtime_config()
-    topic_name = topic.topic_name or '肝病管理'
-    keywords = _split_keywords(topic.keywords or topic_name)
-    primary_keyword = keywords[0] if keywords else topic_name
-    clean_title = (title_hint or '').strip() or _extract_title_from_version(selected_content) or topic_name
-    body = _extract_body_from_version(selected_content) if selected_content else ''
-    body = re.sub(r'^(正文|内文)\s*[：:]\s*', '', (body or '').strip())
-    support_points = _extract_content_points(body) if body else []
-    point_text = '；'.join(support_points[:3]) if support_points else f'围绕{primary_keyword}做清晰信息表达'
-    prompt = (
-        f'{style_preset}，适合小红书封面与配图，主题“{clean_title}”，'
-        f'核心关键词：{primary_keyword}，风格要求：干净、真实、医疗信息清楚、不过度营销。'
-        f'画面重点：{point_text}。配色建议与当前话题一致，保留收藏感和截图传播感。'
+    return _build_asset_generation_prompt_from_context(
+        topic_name=topic.topic_name or '肝病管理',
+        topic_keywords=topic.keywords or topic.topic_name or '肝病管理',
+        selected_content=selected_content,
+        style_preset=style_preset,
+        title_hint=title_hint,
     )
-    prompt_suffix = str(runtime_config.get('image_prompt_suffix') or '').strip()
-    if prompt_suffix:
-        prompt = f'{prompt} {prompt_suffix}'
-    return prompt
 
 
-def _build_asset_generation_fallback_results(topic, selected_content='', image_count=3):
+def _build_asset_generation_fallback_results(topic, selected_content='', image_count=3, style_preset='', title_hint=''):
+    style_meta = _asset_style_meta(style_preset or 'medical_science')
     creative_pack = _build_creative_pack(topic, selected_content)
+    if style_preset:
+        base_title = (title_hint or _extract_title_from_version(selected_content) or topic.topic_name or style_meta['label']).strip()
+        points = _extract_content_points(selected_content) or list(style_meta.get('default_bullets') or [])
+        accent = style_meta.get('accent') or '#ff7a59'
+        bg = style_meta.get('bg') or '#fff4ee'
+        custom_results = []
+        for idx in range(1, max(image_count, 1) + 1):
+            title = base_title[:18] if idx == 1 else f'{base_title[:14]} {idx}'
+            subtitle = style_meta.get('description') or style_meta['label']
+            bullets = points[:3] if points else list(style_meta.get('default_bullets') or [])
+            svg = _render_svg_card(style_meta['label'], title, subtitle, bullets, accent=accent, bg=bg)
+            custom_results.append({
+                'index': idx,
+                'type': style_meta['label'],
+                'title': title,
+                'subtitle': subtitle,
+                'image_prompt': _build_asset_generation_prompt(topic, selected_content, style_preset=style_meta['key'], title_hint=title),
+                'preview_url': _svg_data_uri(svg),
+                'download_name': f'asset_task_{topic.id}_{style_meta["key"]}_{idx}.svg',
+                'provider': 'svg_fallback',
+                'format': 'svg',
+                'bullets': bullets,
+            })
+        return custom_results
+
     results = []
     for idx, asset in enumerate(creative_pack[:max(image_count, 1)], start=1):
         results.append({
@@ -2241,6 +2630,22 @@ def _build_asset_provider_request_preview(provider, model_name, prompt_text, ima
     safe_style = (style_preset or '小红书图文').strip() or '小红书图文'
     safe_count = min(max(_safe_int(image_count, 3), 1), 4)
 
+    if safe_provider == 'volcengine_ark':
+        return {
+            'model': safe_model or 'doubao-seededit-3-0-i2i-250628',
+            'prompt': safe_prompt,
+            'size': safe_size,
+            'response_format': 'url',
+            'n': safe_count,
+        }
+    if safe_provider == 'volcengine_las':
+        return {
+            'model': safe_model or 'doubao-seedream-5-0-lite-260128',
+            'prompt': safe_prompt,
+            'size': safe_size,
+            'response_format': 'url',
+            'watermark': True,
+        }
     if safe_provider in {'openai', 'openai_compatible'}:
         return {
             'model': safe_model or 'gpt-image-1',
@@ -2555,7 +2960,7 @@ def topic_detail(topic_id):
 @app.route('/register_success/<int:reg_id>')
 def register_success(reg_id):
     reg = Registration.query.get_or_404(reg_id)
-    return render_template('register_success.html', registration=reg)
+    return render_template('register_success.html', registration=reg, asset_style_types=_asset_style_type_options())
 
 @app.route('/my_registration', methods=['GET', 'POST'])
 def my_registration():
@@ -3760,7 +4165,13 @@ def automation_center():
         return redirect(url_for('admin_login'))
 
     activities = Activity.query.order_by(Activity.created_at.desc()).all()
-    return render_template('automation_center.html', activities=activities, default_topic_quota=_default_topic_quota())
+    return render_template(
+        'automation_center.html',
+        activities=activities,
+        default_topic_quota=_default_topic_quota(),
+        asset_style_types=_asset_style_type_options(),
+        image_provider_options=_image_provider_options(),
+    )
 
 
 @app.route('/api/automation/overview')
@@ -3901,11 +4312,14 @@ def automation_config():
         next_config['hotword_source_channel'] = (data.get('hotword_source_channel') or current['hotword_source_channel']).strip()[:50]
         next_config['hotword_keyword_limit'] = min(max(_safe_int(data.get('hotword_keyword_limit'), current['hotword_keyword_limit']), 1), 30)
         next_config['image_provider'] = (data.get('image_provider') or current['image_provider']).strip()[:50]
+        next_config['image_api_base'] = (data.get('image_api_base') or current['image_api_base']).strip()[:500]
         next_config['image_api_url'] = (data.get('image_api_url') or current['image_api_url']).strip()[:500]
         next_config['image_model'] = (data.get('image_model') or current['image_model']).strip()[:100]
         next_config['image_size'] = (data.get('image_size') or current['image_size']).strip()[:50]
         next_config['image_timeout_seconds'] = min(max(_safe_int(data.get('image_timeout_seconds'), current['image_timeout_seconds']), 10), 300)
         next_config['image_style_preset'] = (data.get('image_style_preset') or current['image_style_preset']).strip()[:50]
+        next_config['image_default_style_type'] = (data.get('image_default_style_type') or current['image_default_style_type']).strip()[:50]
+        next_config['image_optimize_prompt_mode'] = (data.get('image_optimize_prompt_mode') or current['image_optimize_prompt_mode']).strip()[:50]
         next_config['image_prompt_suffix'] = (data.get('image_prompt_suffix') or current['image_prompt_suffix']).strip()[:500]
 
         setting = Settings.query.filter_by(key='automation_runtime_config').first()
@@ -3922,6 +4336,9 @@ def automation_config():
         'success': True,
         'config': runtime_config,
         'capabilities': capabilities,
+        'provider_options': _image_provider_options(),
+        'style_types': _asset_style_type_options(),
+        'model_options': _image_model_options(runtime_config.get('image_provider')),
         'notes': {
             'api_key_managed_by_env': True,
             'api_key_configured': capabilities.get('api_key_configured', False),
@@ -3943,16 +4360,19 @@ def automation_config_preview():
         'keyword_limit': runtime_config.get('hotword_keyword_limit'),
         'keywords': _automation_keyword_seeds()[:min(max(_safe_int(runtime_config.get('hotword_keyword_limit'), 10), 1), 10)],
     }
-    image_prompt_preview = (
-        '小红书封面图，主题“脂肪肝别忽视”，医疗健康视觉，信息块清晰，'
-        '突出脂肪肝管理，色彩克制。'
+    image_prompt_preview = _build_asset_generation_prompt_from_context(
+        topic_name='脂肪肝管理',
+        topic_keywords='脂肪肝,瘦型脂肪肝,内脏脂肪',
+        selected_content='标题：什么是瘦型脂肪肝？\n内文：体重正常也可能有脂肪肝。先解释成因，再讲风险和检查建议，适合做收藏型知识卡片。',
+        style_preset=capabilities.get('image_default_style_type') or runtime_config.get('image_default_style_type') or 'medical_science',
+        title_hint='什么是瘦型脂肪肝？',
     )
     image_request_preview = _build_asset_provider_request_preview(
         capabilities.get('image_provider_name'),
         capabilities.get('image_provider_model'),
         image_prompt_preview + (' ' + capabilities.get('image_prompt_suffix', '') if capabilities.get('image_prompt_suffix') else ''),
         capabilities.get('image_provider_size'),
-        capabilities.get('image_style_preset'),
+        _asset_style_meta(capabilities.get('image_default_style_type')).get('label'),
         image_count=3,
     )
     return jsonify({
@@ -3960,6 +4380,7 @@ def automation_config_preview():
         'hotword_preview': hotword_preview,
         'image_request_preview': image_request_preview,
         'capabilities': capabilities,
+        'style_meta': _asset_style_meta(capabilities.get('image_default_style_type')),
     })
 
 
@@ -4563,13 +4984,15 @@ def _dispatch_asset_generation(payload, actor='system'):
         raise ValueError('报名信息不存在')
 
     selected_content = (payload.get('selected_content') or '').strip()
-    style_preset = (payload.get('style_preset') or str(runtime_config.get('image_style_preset') or '小红书图文')).strip()[:50]
+    raw_style_type = (payload.get('style_type') or runtime_config.get('image_default_style_type') or 'medical_science')
+    style_meta = _asset_style_meta(raw_style_type)
+    style_preset = style_meta['label'][:50]
     image_count = min(max(_safe_int(payload.get('image_count'), 3), 1), 4)
     title_hint = (payload.get('title_hint') or _extract_title_from_version(selected_content) or reg.topic.topic_name).strip()[:200]
     prompt_text = _build_asset_generation_prompt(
         reg.topic,
         selected_content=selected_content,
-        style_preset=style_preset,
+        style_preset=style_meta['key'],
         title_hint=title_hint,
     )
 
@@ -4592,6 +5015,7 @@ def _dispatch_asset_generation(payload, actor='system'):
         'registration_id': reg.id,
         'topic_id': reg.topic_id,
         'style_preset': style_preset,
+        'style_type': style_meta['key'],
         'image_count': image_count,
         'source_provider': task.source_provider,
         'actor': actor,
