@@ -60,6 +60,9 @@
                 <a class="nav-link" href="#" onclick="showTab('logs')">
                     <i class="bi bi-journal-text"></i> 操作日志
                 </a>
+                <a class="nav-link" href="#" onclick="showTab('system')">
+                    <i class="bi bi-sliders"></i> 权限与系统配置
+                </a>
                 <a class="nav-link" href="/automation_center">
                     <i class="bi bi-lightning-charge"></i> 自动化中心
                 </a>
@@ -970,6 +973,148 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 权限与系统配置 -->
+            <div id="tab-system" style="display:none;">
+                <h4 class="mb-4">权限与系统配置</h4>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="mb-3">系统配置</h6>
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">默认话题名额</label>
+                                <input id="settingDefaultTopicQuota" type="number" min="1" max="500" class="form-control">
+                            </div>
+                            <div class="col-md-9">
+                                <label class="form-label">默认热点词池</label>
+                                <textarea id="settingAutomationKeywords" class="form-control" rows="3" placeholder="多个关键词用逗号分隔"></textarea>
+                            </div>
+                            <div class="col-md-12 d-flex gap-2">
+                                <button type="button" class="btn btn-outline-primary" onclick="loadSystemSettings()">刷新配置</button>
+                                <button type="button" class="btn btn-outline-success" onclick="saveSystemSettings()">保存配置</button>
+                                <div id="systemSettingsMsg" class="text-muted small d-flex align-items-center"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-lg-5">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="mb-3">管理员用户</h6>
+                                <input type="hidden" id="adminUserIdInput">
+                                <div class="mb-2">
+                                    <label class="form-label">用户名</label>
+                                    <input id="adminUsernameInput" class="form-control">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">显示名称</label>
+                                    <input id="adminDisplayNameInput" class="form-control">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">密码</label>
+                                    <input id="adminPasswordInput" class="form-control" placeholder="留空表示不改密码">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">角色</label>
+                                    <select id="adminRoleKeyInput" class="form-select"></select>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">状态</label>
+                                    <select id="adminStatusInput" class="form-select">
+                                        <option value="active">active</option>
+                                        <option value="disabled">disabled</option>
+                                    </select>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-outline-primary" onclick="saveAdminUser()">保存用户</button>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="resetAdminUserForm()">清空</button>
+                                </div>
+                                <div id="adminUserMsg" class="text-muted small mt-2"></div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="mb-3">角色权限</h6>
+                                <input type="hidden" id="roleIdInput">
+                                <div class="mb-2">
+                                    <label class="form-label">角色编码</label>
+                                    <input id="roleKeyInput" class="form-control">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">角色名称</label>
+                                    <input id="roleNameInput" class="form-control">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">权限列表</label>
+                                    <textarea id="rolePermissionsInput" class="form-control" rows="6" placeholder="每行一个权限，如 activity.manage"></textarea>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-outline-primary" onclick="saveRole()">保存角色</button>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="resetRoleForm()">清空</button>
+                                </div>
+                                <div id="roleMsg" class="text-muted small mt-2"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-7">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="mb-3">管理员列表</h6>
+                                <div class="table-responsive">
+                                    <table class="table align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>用户名</th>
+                                                <th>显示名称</th>
+                                                <th>角色</th>
+                                                <th>状态</th>
+                                                <th>最近登录</th>
+                                                <th>操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="adminUserTableBody">
+                                            <tr><td colspan="6" class="text-muted text-center">暂无管理员</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="mb-3">角色列表</h6>
+                                <div class="table-responsive">
+                                    <table class="table align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>角色编码</th>
+                                                <th>角色名称</th>
+                                                <th>权限数</th>
+                                                <th>操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="roleTableBody">
+                                            <tr><td colspan="4" class="text-muted text-center">暂无角色</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="mb-3">可用权限清单</h6>
+                                <div id="availablePermissionWrap" class="text-muted">加载中...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1010,6 +1155,9 @@
         let creatorAccountCache = {};
         let siteConfigCache = null;
         let announcementCache = {};
+        let adminUserCache = {};
+        let roleCache = {};
+        let availablePermissions = [];
 
         function escapeHtml(value) {
             return String(value ?? '')
@@ -1029,6 +1177,7 @@
             document.getElementById('tab-backups').style.display = 'none';
             document.getElementById('tab-creator').style.display = 'none';
             document.getElementById('tab-logs').style.display = 'none';
+            document.getElementById('tab-system').style.display = 'none';
             document.getElementById('tab-' + tab).style.display = 'block';
             if (tab === 'portal') {
                 loadSiteConfig();
@@ -1042,6 +1191,11 @@
             }
             if (tab === 'logs') {
                 loadOperationLogs();
+            }
+            if (tab === 'system') {
+                loadSystemSettings();
+                loadAdminUsers();
+                loadRoles();
             }
         }
 
@@ -1872,6 +2026,165 @@
                     <td><details><summary>查看</summary><pre style="white-space: pre-wrap; word-break: break-word; font-size: 12px;">${item.detail || '-'}</pre></details></td>
                 </tr>
             `).join('') || '<tr><td colspan="6" class="text-muted text-center">暂无日志数据</td></tr>';
+        }
+
+        function resetAdminUserForm() {
+            document.getElementById('adminUserIdInput').value = '';
+            document.getElementById('adminUsernameInput').value = '';
+            document.getElementById('adminDisplayNameInput').value = '';
+            document.getElementById('adminPasswordInput').value = '';
+            document.getElementById('adminStatusInput').value = 'active';
+        }
+
+        function resetRoleForm() {
+            document.getElementById('roleIdInput').value = '';
+            document.getElementById('roleKeyInput').value = '';
+            document.getElementById('roleNameInput').value = '';
+            document.getElementById('rolePermissionsInput').value = '';
+        }
+
+        function fillRoleSelect(items) {
+            const select = document.getElementById('adminRoleKeyInput');
+            if (!select) return;
+            select.innerHTML = (items || []).map((item) => `
+                <option value="${escapeHtml(item.role_key)}">${escapeHtml(item.role_name)} (${escapeHtml(item.role_key)})</option>
+            `).join('');
+        }
+
+        async function loadSystemSettings() {
+            const res = await fetch('/api/admin/settings');
+            const data = await res.json();
+            if (!data.success) {
+                document.getElementById('systemSettingsMsg').textContent = data.message || '加载系统配置失败';
+                return;
+            }
+            document.getElementById('settingDefaultTopicQuota').value = data.items?.default_topic_quota || 30;
+            document.getElementById('settingAutomationKeywords').value = (data.items?.automation_keyword_seeds || []).join(', ');
+            availablePermissions = data.available_permissions || [];
+            document.getElementById('availablePermissionWrap').innerHTML = availablePermissions.map((item) => `
+                <span class="badge bg-light text-dark border me-2 mb-2">${escapeHtml(item)}</span>
+            `).join('') || '暂无权限定义';
+        }
+
+        async function saveSystemSettings() {
+            const payload = {
+                default_topic_quota: document.getElementById('settingDefaultTopicQuota').value,
+                automation_keyword_seeds: String(document.getElementById('settingAutomationKeywords').value || '')
+                    .split(',')
+                    .map((item) => item.trim())
+                    .filter(Boolean)
+            };
+            const res = await fetch('/api/admin/settings', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            document.getElementById('systemSettingsMsg').textContent = data.message || '系统配置已保存';
+            if (data.success) {
+                loadSystemSettings();
+            }
+        }
+
+        async function loadAdminUsers() {
+            const res = await fetch('/api/admin/users');
+            const data = await res.json();
+            const body = document.getElementById('adminUserTableBody');
+            const items = data.items || [];
+            adminUserCache = Object.fromEntries(items.map((item) => [item.id, item]));
+            body.innerHTML = items.map((item) => `
+                <tr>
+                    <td>${escapeHtml(item.username || '-')}</td>
+                    <td>${escapeHtml(item.display_name || '-')}</td>
+                    <td>${escapeHtml(item.role_key || '-')}</td>
+                    <td>${escapeHtml(item.status || '-')}</td>
+                    <td>${escapeHtml(item.last_login_at || '-')}</td>
+                    <td><button type="button" class="btn btn-sm btn-outline-primary" onclick="editAdminUser(${item.id})">编辑</button></td>
+                </tr>
+            `).join('') || '<tr><td colspan="6" class="text-muted text-center">暂无管理员</td></tr>';
+        }
+
+        function editAdminUser(userId) {
+            const item = adminUserCache[userId];
+            if (!item) return;
+            document.getElementById('adminUserIdInput').value = item.id;
+            document.getElementById('adminUsernameInput').value = item.username || '';
+            document.getElementById('adminDisplayNameInput').value = item.display_name || '';
+            document.getElementById('adminPasswordInput').value = '';
+            document.getElementById('adminStatusInput').value = item.status || 'active';
+            document.getElementById('adminRoleKeyInput').value = item.role_key || 'super_admin';
+        }
+
+        async function saveAdminUser() {
+            const payload = {
+                id: document.getElementById('adminUserIdInput').value || undefined,
+                username: document.getElementById('adminUsernameInput').value.trim(),
+                display_name: document.getElementById('adminDisplayNameInput').value.trim(),
+                password: document.getElementById('adminPasswordInput').value.trim(),
+                role_key: document.getElementById('adminRoleKeyInput').value,
+                status: document.getElementById('adminStatusInput').value,
+            };
+            const res = await fetch('/api/admin/users', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            document.getElementById('adminUserMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                resetAdminUserForm();
+                loadAdminUsers();
+            }
+        }
+
+        async function loadRoles() {
+            const res = await fetch('/api/admin/roles');
+            const data = await res.json();
+            const body = document.getElementById('roleTableBody');
+            const items = data.items || [];
+            roleCache = Object.fromEntries(items.map((item) => [item.id, item]));
+            fillRoleSelect(items);
+            body.innerHTML = items.map((item) => `
+                <tr>
+                    <td>${escapeHtml(item.role_key || '-')}</td>
+                    <td>${escapeHtml(item.role_name || '-')}</td>
+                    <td>${(item.permissions || []).length}</td>
+                    <td><button type="button" class="btn btn-sm btn-outline-primary" onclick="editRole(${item.id})">编辑</button></td>
+                </tr>
+            `).join('') || '<tr><td colspan="4" class="text-muted text-center">暂无角色</td></tr>';
+        }
+
+        function editRole(roleId) {
+            const item = roleCache[roleId];
+            if (!item) return;
+            document.getElementById('roleIdInput').value = item.id;
+            document.getElementById('roleKeyInput').value = item.role_key || '';
+            document.getElementById('roleNameInput').value = item.role_name || '';
+            document.getElementById('rolePermissionsInput').value = (item.permissions || []).join('\n');
+        }
+
+        async function saveRole() {
+            const payload = {
+                id: document.getElementById('roleIdInput').value || undefined,
+                role_key: document.getElementById('roleKeyInput').value.trim(),
+                role_name: document.getElementById('roleNameInput').value.trim(),
+                permissions: String(document.getElementById('rolePermissionsInput').value || '')
+                    .split('\n')
+                    .map((item) => item.trim())
+                    .filter(Boolean),
+            };
+            const res = await fetch('/api/admin/roles', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            document.getElementById('roleMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                resetRoleForm();
+                loadRoles();
+                loadSystemSettings();
+            }
         }
 
         ensureSnapshotDate();

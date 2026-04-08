@@ -122,6 +122,27 @@ class BackupRecord(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now)
 
 
+class AdminUser(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(100), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
+    display_name = db.Column(db.String(100))
+    role_key = db.Column(db.String(50), default='super_admin')
+    status = db.Column(db.String(20), default='active')
+    last_login_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class RolePermission(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    role_key = db.Column(db.String(50), unique=True, nullable=False)
+    role_name = db.Column(db.String(100), nullable=False)
+    permissions = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+
 class OperationLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     actor = db.Column(db.String(100), default='system')
@@ -807,6 +828,56 @@ STYLE_REFERENCE_SIGNATURES = {
     },
 }
 
+DEFAULT_ROLE_PERMISSIONS = {
+    'super_admin': {
+        'role_name': '超级管理员',
+        'permissions': [
+            'site_config.manage',
+            'activity.manage',
+            'topic.manage',
+            'snapshot.manage',
+            'backup.manage',
+            'automation.manage',
+            'analytics.view',
+            'creator.manage',
+            'logs.view',
+            'admin_user.manage',
+            'role_permission.manage',
+            'settings.manage',
+        ],
+    },
+    'operator': {
+        'role_name': '内容运营',
+        'permissions': [
+            'site_config.manage',
+            'activity.manage',
+            'topic.manage',
+            'snapshot.manage',
+            'automation.manage',
+            'analytics.view',
+            'creator.manage',
+            'logs.view',
+            'settings.manage',
+        ],
+    },
+    'reviewer': {
+        'role_name': '审核人员',
+        'permissions': [
+            'topic.manage',
+            'automation.manage',
+            'logs.view',
+            'analytics.view',
+        ],
+    },
+    'viewer': {
+        'role_name': '数据查看者',
+        'permissions': [
+            'analytics.view',
+            'logs.view',
+        ],
+    },
+}
+
 
 def _default_automation_schedules(default_quota=30):
     return [
@@ -1026,11 +1097,31 @@ def _current_actor():
 
 
 def _admin_username():
+    session_username = (session.get('admin_username') or '').strip()
+    if session_username:
+        return session_username
     return os.environ.get('ADMIN_USERNAME', 'furui')
 
 
 def _admin_password():
     return os.environ.get('ADMIN_PASSWORD', 'wangdandan39')
+
+
+def _admin_user_record():
+    username = (session.get('admin_username') or '').strip()
+    if not username:
+        return None
+    return AdminUser.query.filter_by(username=username).first()
+
+
+def _current_permissions():
+    role_key = (session.get('admin_role_key') or '').strip()
+    if role_key:
+        role = RolePermission.query.filter_by(role_key=role_key).first()
+        if role:
+            permissions = _load_json_value(role.permissions, [])
+            return permissions if isinstance(permissions, list) else []
+    return list(DEFAULT_ROLE_PERMISSIONS['super_admin']['permissions'])
 
 
 def _log_operation(action, target_type, target_id=None, message='', detail=None):
@@ -1185,6 +1276,30 @@ def _serialize_backup_record(item):
         'summary': item.summary or '',
         'restored_activity_id': item.restored_activity_id,
         'created_at': _format_datetime(item.created_at),
+    }
+
+
+def _serialize_admin_user(item):
+    return {
+        'id': item.id,
+        'username': item.username,
+        'display_name': item.display_name or item.username,
+        'role_key': item.role_key or 'super_admin',
+        'status': item.status or 'active',
+        'last_login_at': _format_datetime(item.last_login_at),
+        'created_at': _format_datetime(item.created_at),
+        'updated_at': _format_datetime(item.updated_at),
+    }
+
+
+def _serialize_role_permission(item):
+    return {
+        'id': item.id,
+        'role_key': item.role_key,
+        'role_name': item.role_name,
+        'permissions': _load_json_value(item.permissions, []),
+        'created_at': _format_datetime(item.created_at),
+        'updated_at': _format_datetime(item.updated_at),
     }
 
 
@@ -1789,6 +1904,15 @@ def _create_backup_record(*, backup_type, target_type='activity', target_id=None
     )
     db.session.add(record)
     return record
+
+
+def _admin_permission_guard(permission_key):
+    if not session.get('admin_logged_in'):
+        return jsonify({'success': False, 'message': '未登录'}), 401
+    permissions = _current_permissions()
+    if permission_key not in permissions and 'super_admin' not in permissions:
+        return jsonify({'success': False, 'message': '无权限'}), 403
+    return None
 
 
 def _next_schedule_time(interval_minutes, base_time=None):
@@ -6578,6 +6702,153 @@ def restore_from_backup_record(record_id):
     })
 
 
+@app.route('/api/admin/users', methods=['GET', 'POST'])
+def admin_users():
+    guard = _admin_permission_guard('admin_user.manage')
+    if guard:
+        return guard
+
+    if request.method == 'POST':
+        data = request.json or {}
+        user_id = _safe_int(data.get('id'), 0)
+        if user_id:
+            user = AdminUser.query.get_or_404(user_id)
+        else:
+            user = AdminUser()
+            db.session.add(user)
+
+        username = (data.get('username') or '').strip()
+        password = (data.get('password') or '').strip()
+        if not username:
+            return jsonify({'success': False, 'message': '用户名不能为空'})
+        if not user_id and not password:
+            return jsonify({'success': False, 'message': '新用户必须设置密码'})
+
+        duplicate = AdminUser.query.filter(AdminUser.username == username, AdminUser.id != user.id).first()
+        if duplicate:
+            return jsonify({'success': False, 'message': '用户名已存在'})
+
+        user.username = username
+        user.display_name = (data.get('display_name') or username).strip()[:100]
+        user.role_key = (data.get('role_key') or 'super_admin').strip()[:50]
+        user.status = (data.get('status') or 'active').strip()[:20]
+        if password:
+            user.password = password[:200]
+        db.session.flush()
+        _log_operation('save', 'admin_user', target_id=user.id, message='保存管理员用户', detail={
+            'username': user.username,
+            'role_key': user.role_key,
+            'status': user.status,
+        })
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': '管理员用户已保存',
+            'item': _serialize_admin_user(user),
+        })
+
+    items = AdminUser.query.order_by(AdminUser.created_at.asc(), AdminUser.id.asc()).all()
+    return jsonify({
+        'success': True,
+        'items': [_serialize_admin_user(item) for item in items]
+    })
+
+
+@app.route('/api/admin/roles', methods=['GET', 'POST'])
+def admin_roles():
+    guard = _admin_permission_guard('role_permission.manage')
+    if guard:
+        return guard
+
+    if request.method == 'POST':
+        data = request.json or {}
+        role_id = _safe_int(data.get('id'), 0)
+        if role_id:
+            role = RolePermission.query.get_or_404(role_id)
+        else:
+            role = RolePermission()
+            db.session.add(role)
+
+        role_key = (data.get('role_key') or '').strip()
+        role_name = (data.get('role_name') or '').strip()
+        permissions = data.get('permissions') or []
+        if not role_key or not role_name:
+            return jsonify({'success': False, 'message': '角色编码和角色名称不能为空'})
+
+        duplicate = RolePermission.query.filter(RolePermission.role_key == role_key, RolePermission.id != role.id).first()
+        if duplicate:
+            return jsonify({'success': False, 'message': '角色编码已存在'})
+
+        normalized_permissions = [str(item).strip() for item in permissions if str(item).strip()]
+        role.role_key = role_key[:50]
+        role.role_name = role_name[:100]
+        role.permissions = json.dumps(sorted(set(normalized_permissions)), ensure_ascii=False)
+        db.session.flush()
+        _log_operation('save', 'role_permission', target_id=role.id, message='保存角色权限', detail={
+            'role_key': role.role_key,
+            'permission_count': len(normalized_permissions),
+        })
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': '角色权限已保存',
+            'item': _serialize_role_permission(role),
+        })
+
+    items = RolePermission.query.order_by(RolePermission.created_at.asc(), RolePermission.id.asc()).all()
+    return jsonify({
+        'success': True,
+        'items': [_serialize_role_permission(item) for item in items]
+    })
+
+
+@app.route('/api/admin/settings', methods=['GET', 'POST'])
+def admin_settings():
+    guard = _admin_permission_guard('settings.manage')
+    if guard:
+        return guard
+
+    managed_keys = ['default_topic_quota', 'automation_keyword_seeds', 'automation_runtime_config']
+
+    if request.method == 'POST':
+        data = request.json or {}
+        updates = {}
+        for key in managed_keys:
+            if key not in data:
+                continue
+            value = data.get(key)
+            if isinstance(value, (dict, list)):
+                value_text = json.dumps(value, ensure_ascii=False)
+            else:
+                value_text = str(value)
+            setting = Settings.query.filter_by(key=key).first()
+            if not setting:
+                setting = Settings(key=key, value='')
+                db.session.add(setting)
+            setting.value = value_text
+            updates[key] = value
+
+        _log_operation('save', 'settings', message='更新系统配置', detail=updates)
+        db.session.commit()
+
+    items = Settings.query.filter(Settings.key.in_(managed_keys)).all()
+    result = {}
+    for item in items:
+        if item.key in {'automation_keyword_seeds', 'automation_runtime_config'}:
+            result[item.key] = _load_json_value(item.value, [] if item.key == 'automation_keyword_seeds' else {})
+        else:
+            result[item.key] = item.value
+    return jsonify({
+        'success': True,
+        'items': result,
+        'available_permissions': sorted({
+            permission
+            for role in DEFAULT_ROLE_PERMISSIONS.values()
+            for permission in role['permissions']
+        }),
+    })
+
+
 @app.route('/api/jobs/ping', methods=['POST'])
 def trigger_worker_ping():
     guard = _admin_json_guard()
@@ -6766,12 +7037,25 @@ def admin():
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
+        username = (request.form.get('username') or '').strip()
+        password = (request.form.get('password') or '').strip()
 
-        if username == _admin_username() and password == _admin_password():
+        matched_user = AdminUser.query.filter_by(username=username, status='active').first()
+        password_ok = False
+        if matched_user and matched_user.password == password:
+            password_ok = True
+        elif username == os.environ.get('ADMIN_USERNAME', 'furui') and password == _admin_password():
+            password_ok = True
+
+        if password_ok:
             session['admin_logged_in'] = True
             session['admin_username'] = username
+            if matched_user:
+                matched_user.last_login_at = datetime.now()
+                session['admin_role_key'] = matched_user.role_key or 'super_admin'
+                db.session.commit()
+            else:
+                session['admin_role_key'] = 'super_admin'
             return redirect(url_for('admin'))
         else:
             return render_template('admin_login.html', error='用户名或密码错误')
@@ -6782,6 +7066,7 @@ def admin_login():
 def admin_logout():
     session.pop('admin_logged_in', None)
     session.pop('admin_username', None)
+    session.pop('admin_role_key', None)
     return redirect(url_for('admin_login'))
 
 @app.route('/admin/activity/add', methods=['POST'])
@@ -7131,6 +7416,31 @@ def init_db():
                 value=json.dumps(AUTOMATION_RUNTIME_CONFIG_DEFAULTS, ensure_ascii=False)
             )
             db.session.add(automation_runtime_setting)
+            db.session.commit()
+
+        existing_roles = {item.role_key for item in RolePermission.query.all()}
+        for role_key, row in DEFAULT_ROLE_PERMISSIONS.items():
+            if role_key in existing_roles:
+                continue
+            db.session.add(RolePermission(
+                role_key=role_key,
+                role_name=row['role_name'],
+                permissions=json.dumps(row['permissions'], ensure_ascii=False),
+            ))
+        db.session.commit()
+
+        env_admin_username = os.environ.get('ADMIN_USERNAME', 'furui').strip() or 'furui'
+        env_admin_password = _admin_password()
+        admin_user = AdminUser.query.filter_by(username=env_admin_username).first()
+        if not admin_user:
+            admin_user = AdminUser(
+                username=env_admin_username,
+                password=env_admin_password,
+                display_name=env_admin_username,
+                role_key='super_admin',
+                status='active',
+            )
+            db.session.add(admin_user)
             db.session.commit()
         default_quota = _default_topic_quota()
 
