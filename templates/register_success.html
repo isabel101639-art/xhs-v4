@@ -110,7 +110,7 @@
                             <option value="{{ item.key }}">{{ item.label }}{% if item.description %}｜{{ item.description }}{% endif %}</option>
                             {% endfor %}
                         </select>
-                        <div class="form-text">
+                        <div class="form-text" id="assetStyleTypeHelp">
                             医学科普型会更贴近你提供的警示封面/症状总览样例；知识卡片型会更贴近白底细边框、结构图+箭头标签的收藏型讲解页样例。
                         </div>
                     </div>
@@ -237,10 +237,20 @@
         let regenCount = 0;
         let versions = [];
         let titles = [];
+        const assetStyleTypeDefinitions = {{ asset_style_types|tojson }};
         window.latestCreativeAssets = [];
         window.latestGraphicBundles = [];
         window.latestGeneratedImages = [];
         window.currentAssetTaskId = null;
+
+        function refreshAssetStyleTypeHelp() {
+            const select = document.getElementById('assetStyleType');
+            const wrap = document.getElementById('assetStyleTypeHelp');
+            if (!select || !wrap) return;
+            const current = (assetStyleTypeDefinitions || []).find((item) => item.key === select.value);
+            if (!current) return;
+            wrap.textContent = `${current.label}${current.description ? `：${current.description}` : ''}`;
+        }
         
         async function generateCopy() {
             document.getElementById('loading').style.display = 'block';
@@ -772,6 +782,9 @@
                 alert(data.message || '更新失败');
             }
         }
+
+        document.getElementById('assetStyleType')?.addEventListener('change', refreshAssetStyleTypeHelp);
+        refreshAssetStyleTypeHelp();
     </script>
 </body>
 </html>

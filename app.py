@@ -4171,6 +4171,7 @@ def automation_center():
         default_topic_quota=_default_topic_quota(),
         asset_style_types=_asset_style_type_options(),
         image_provider_options=_image_provider_options(),
+        image_model_options=_image_model_options('volcengine_las'),
     )
 
 

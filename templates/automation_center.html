@@ -267,7 +267,12 @@
                 </div>
                 <div class="col-lg-2">
                     <label class="form-label subtle">图片模型</label>
-                    <input id="configImageModel" class="form-control" placeholder="gpt-image-1">
+                    <input id="configImageModel" class="form-control" list="configImageModelOptions" placeholder="gpt-image-1">
+                    <datalist id="configImageModelOptions">
+                        {% for item in image_model_options %}
+                        <option value="{{ item.key }}">{{ item.label }}</option>
+                        {% endfor %}
+                    </datalist>
                 </div>
                 <div class="col-lg-2">
                     <label class="form-label subtle">图片尺寸</label>
@@ -884,6 +889,8 @@
         let dataSourceTaskCache = {};
         let assetTaskCache = {};
         let assetLibraryCache = {};
+        const assetStyleTypeDefinitions = {{ asset_style_types|tojson }};
+        const imageModelDefinitions = {{ image_model_options|tojson }};
 
         function escapeHtml(text) {
             return (text || '').replace(/[&<>"']/g, (char) => ({
@@ -949,6 +956,31 @@
             }
         }
 
+        function renderModelOptions(items, currentValue) {
+            const datalist = document.getElementById('configImageModelOptions');
+            if (!datalist) return;
+            datalist.innerHTML = (items || []).map((item) => `
+                <option value="${escapeHtml(item.key)}">${escapeHtml(item.label || item.key)}</option>
+            `).join('');
+            const input = document.getElementById('configImageModel');
+            if (input && currentValue) {
+                input.value = currentValue;
+            }
+        }
+
+        function styleTypeMetaByKey(key) {
+            return (assetStyleTypeDefinitions || []).find((item) => item.key === key) || null;
+        }
+
+        function refreshStyleTypeHint() {
+            const key = document.getElementById('configImageDefaultStyleType')?.value;
+            const meta = styleTypeMetaByKey(key);
+            const noteWrap = document.getElementById('automationConfigNote');
+            if (!noteWrap || !meta) return;
+            const extra = meta.description ? ` ｜ ${meta.description}` : '';
+            noteWrap.textContent = `${noteWrap.textContent ? noteWrap.textContent.split(' ｜ ')[0] : ''}${extra}`;
+        }
+
         async function loadOverview() {
             const res = await fetch('/api/automation/overview');
             const data = await res.json();
@@ -969,7 +1001,7 @@
             }
         }
 
-        function fillAutomationConfig(config, notes, styleTypes) {
+        function fillAutomationConfig(config, notes, styleTypes, modelOptions) {
             automationConfigCache = config || {};
             document.getElementById('configHotwordPlatform').value = config.hotword_source_platform || '小红书';
             document.getElementById('configHotwordChannel').value = config.hotword_source_channel || 'Worker骨架';
@@ -977,7 +1009,7 @@
             document.getElementById('configImageProvider').value = config.image_provider || 'svg_fallback';
             document.getElementById('configImageApiBase').value = config.image_api_base || '';
             document.getElementById('configImageApiUrl').value = config.image_api_url || '';
-            document.getElementById('configImageModel').value = config.image_model || '';
+            renderModelOptions(modelOptions || imageModelDefinitions || [], config.image_model || '');
             document.getElementById('configImageSize').value = config.image_size || '1024x1536';
             document.getElementById('configImageTimeout').value = config.image_timeout_seconds || 90;
             document.getElementById('configImageStylePreset').value = config.image_style_preset || '小红书图文';
@@ -991,6 +1023,7 @@
                     ? '图片 API Key 已通过环境变量配置'
                     : '图片 API Key 尚未通过环境变量配置';
             }
+            refreshStyleTypeHint();
 
             if (!document.getElementById('hotwordBatchName').value) {
                 document.getElementById('hotwordSourcePlatform').value = config.hotword_source_platform || '小红书';
@@ -1006,7 +1039,7 @@
                 document.getElementById('automationConfigNote').textContent = data.message || '加载自动化配置失败';
                 return;
             }
-            fillAutomationConfig(data.config || {}, data.notes || {}, data.style_types || []);
+            fillAutomationConfig(data.config || {}, data.notes || {}, data.style_types || [], data.model_options || []);
             loadAutomationConfigPreview();
         }
 
@@ -1068,7 +1101,7 @@
                 document.getElementById('automationConfigNote').textContent = data.message || '保存自动化配置失败';
                 return;
             }
-            fillAutomationConfig(data.config || {}, data.notes || {}, data.style_types || []);
+            fillAutomationConfig(data.config || {}, data.notes || {}, data.style_types || [], data.model_options || []);
             document.getElementById('automationConfigNote').textContent = '自动化运维配置已保存';
             loadOverview();
             loadDiagnostics();
