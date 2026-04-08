@@ -51,6 +51,9 @@
                 <a class="nav-link" href="#" onclick="showTab('snapshots')">
                     <i class="bi bi-archive"></i> 活动快照
                 </a>
+                <a class="nav-link" href="#" onclick="showTab('backups')">
+                    <i class="bi bi-hdd-stack"></i> 备份恢复
+                </a>
                 <a class="nav-link" href="#" onclick="showTab('creator')">
                     <i class="bi bi-people"></i> 账号看板
                 </a>
@@ -463,6 +466,89 @@
                     <div class="card-body">
                         <h6 class="mb-3">快照详情</h6>
                         <pre id="snapshotDetail" style="white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 420px; overflow: auto;">暂无快照详情</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 备份恢复 -->
+            <div id="tab-backups" style="display:none;">
+                <h4 class="mb-4">备份恢复中心</h4>
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label">活动期数</label>
+                                <select id="backupActivitySelect" class="form-select">
+                                    {% for activity in activities %}
+                                    <option value="{{ activity.id }}">{{ activity.name }} - {{ activity.title }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">备份名称</label>
+                                <input id="backupNameInput" class="form-control" placeholder="例如：上线前手动备份">
+                            </div>
+                            <div class="col-md-4 d-flex gap-2">
+                                <button type="button" class="btn btn-outline-primary" onclick="createBackup()">创建手动备份</button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="loadBackups()">刷新备份记录</button>
+                            </div>
+                            <div class="col-md-12">
+                                <div id="backupMsg" class="text-muted small"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label">类型筛选</label>
+                                <select id="backupTypeFilter" class="form-select" onchange="loadBackups()">
+                                    <option value="">全部</option>
+                                    <option value="manual_backup">手动备份</option>
+                                    <option value="activity_snapshot">活动快照</option>
+                                    <option value="restore_from_snapshot">快照恢复</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">条数</label>
+                                <input id="backupLimitFilter" type="number" min="1" max="200" value="50" class="form-control" onchange="loadBackups()">
+                            </div>
+                            <div class="col-md-5">
+                                <div class="text-muted small">这里统一查看手动备份、活动归档快照和恢复记录。</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>时间</th>
+                                        <th>类型</th>
+                                        <th>名称</th>
+                                        <th>活动</th>
+                                        <th>状态</th>
+                                        <th>快照</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="backupTableBody">
+                                    <tr><td colspan="7" class="text-muted text-center">暂无备份记录</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="mb-3">备份详情</h6>
+                        <pre id="backupDetail" style="white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 420px; overflow: auto;">暂无备份详情</pre>
                     </div>
                 </div>
             </div>
@@ -940,12 +1026,16 @@
             document.getElementById('tab-portal').style.display = 'none';
             document.getElementById('tab-data').style.display = 'none';
             document.getElementById('tab-snapshots').style.display = 'none';
+            document.getElementById('tab-backups').style.display = 'none';
             document.getElementById('tab-creator').style.display = 'none';
             document.getElementById('tab-logs').style.display = 'none';
             document.getElementById('tab-' + tab).style.display = 'block';
             if (tab === 'portal') {
                 loadSiteConfig();
                 loadAnnouncements();
+            }
+            if (tab === 'backups') {
+                loadBackups();
             }
             if (tab === 'creator') {
                 loadCreatorAccounts();
@@ -1040,6 +1130,80 @@
             alert(result.message || '已处理');
             if (result.success) {
                 location.reload();
+            }
+        }
+
+        async function loadBackups() {
+            const params = new URLSearchParams();
+            const backupType = document.getElementById('backupTypeFilter')?.value || '';
+            const activityId = document.getElementById('backupActivitySelect')?.value || '';
+            const limit = document.getElementById('backupLimitFilter')?.value || '50';
+            if (backupType) params.set('backup_type', backupType);
+            if (activityId) params.set('activity_id', activityId);
+            if (limit) params.set('limit', limit);
+            const res = await fetch(`/api/admin/backups?${params.toString()}`);
+            const result = await res.json();
+            const body = document.getElementById('backupTableBody');
+            body.innerHTML = (result.items || []).map((item) => `
+                <tr>
+                    <td>${item.created_at || '-'}</td>
+                    <td>${item.backup_type || '-'}</td>
+                    <td>${item.backup_name || '-'}</td>
+                    <td>${item.activity_id || '-'}</td>
+                    <td>${item.status || '-'}</td>
+                    <td>${item.snapshot_id || '-'}</td>
+                    <td>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="viewBackup(${item.id})">查看</button>
+                            ${item.snapshot_id ? `<button type="button" class="btn btn-sm btn-outline-primary" onclick="restoreBackup(${item.id})">恢复</button>` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="7" class="text-muted text-center">暂无备份记录</td></tr>';
+        }
+
+        async function viewBackup(recordId) {
+            const res = await fetch(`/api/admin/backups/${recordId}`);
+            const result = await res.json();
+            document.getElementById('backupDetail').textContent = JSON.stringify(result.item || result, null, 2);
+        }
+
+        async function createBackup() {
+            const activityId = document.getElementById('backupActivitySelect')?.value;
+            if (!activityId) {
+                document.getElementById('backupMsg').textContent = '请先选择活动';
+                return;
+            }
+            const backupName = document.getElementById('backupNameInput')?.value || '';
+            const res = await fetch('/api/admin/backups/create', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    activity_id: parseInt(activityId, 10),
+                    backup_name: backupName
+                })
+            });
+            const result = await res.json();
+            document.getElementById('backupMsg').textContent = result.message || '已处理';
+            if (result.success) {
+                loadBackups();
+                loadSnapshots();
+            }
+        }
+
+        async function restoreBackup(recordId) {
+            const name = window.prompt('请输入恢复后的活动名称');
+            if (name === null) return;
+            const res = await fetch(`/api/admin/backups/${recordId}/restore`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name })
+            });
+            const result = await res.json();
+            document.getElementById('backupMsg').textContent = result.message || '已处理';
+            if (result.success) {
+                loadBackups();
+                loadSnapshots();
             }
         }
 

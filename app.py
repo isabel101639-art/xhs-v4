@@ -105,6 +105,23 @@ class ActivitySnapshot(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now)
 
 
+class BackupRecord(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    backup_type = db.Column(db.String(50), nullable=False)
+    target_type = db.Column(db.String(50), default='activity')
+    target_id = db.Column(db.Integer)
+    activity_id = db.Column(db.Integer)
+    snapshot_id = db.Column(db.Integer)
+    status = db.Column(db.String(20), default='success')
+    trigger_mode = db.Column(db.String(20), default='manual')
+    backup_name = db.Column(db.String(200))
+    storage_path = db.Column(db.String(500))
+    payload = db.Column(db.Text)
+    summary = db.Column(db.Text)
+    restored_activity_id = db.Column(db.Integer)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+
 class OperationLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     actor = db.Column(db.String(100), default='system')
@@ -1152,6 +1169,25 @@ def _serialize_announcement(item):
     }
 
 
+def _serialize_backup_record(item):
+    return {
+        'id': item.id,
+        'backup_type': item.backup_type or '',
+        'target_type': item.target_type or '',
+        'target_id': item.target_id,
+        'activity_id': item.activity_id,
+        'snapshot_id': item.snapshot_id,
+        'status': item.status or '',
+        'trigger_mode': item.trigger_mode or '',
+        'backup_name': item.backup_name or '',
+        'storage_path': item.storage_path or '',
+        'payload': _load_json_value(item.payload, {}),
+        'summary': item.summary or '',
+        'restored_activity_id': item.restored_activity_id,
+        'created_at': _format_datetime(item.created_at),
+    }
+
+
 def _serialize_data_source_log(item):
     return {
         'id': item.id,
@@ -1728,6 +1764,31 @@ def _append_data_source_log(task_id, message, level='info', detail=None):
         message=(message or '')[:300],
         detail=detail_text,
     ))
+
+
+def _create_backup_record(*, backup_type, target_type='activity', target_id=None, activity_id=None, snapshot_id=None, status='success', trigger_mode='manual', backup_name='', storage_path='', payload=None, summary='', restored_activity_id=None):
+    payload_text = ''
+    if payload is not None:
+        try:
+            payload_text = json.dumps(payload, ensure_ascii=False)
+        except TypeError:
+            payload_text = str(payload)
+    record = BackupRecord(
+        backup_type=backup_type,
+        target_type=target_type,
+        target_id=target_id,
+        activity_id=activity_id,
+        snapshot_id=snapshot_id,
+        status=status,
+        trigger_mode=trigger_mode,
+        backup_name=backup_name[:200] if backup_name else '',
+        storage_path=storage_path[:500] if storage_path else '',
+        payload=payload_text,
+        summary=(summary or '')[:1000],
+        restored_activity_id=restored_activity_id,
+    )
+    db.session.add(record)
+    return record
 
 
 def _next_schedule_time(interval_minutes, base_time=None):
@@ -6402,6 +6463,121 @@ def operation_logs():
     })
 
 
+@app.route('/api/admin/backups')
+def list_backup_records():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    backup_type = (request.args.get('backup_type') or '').strip()
+    activity_id = _safe_int(request.args.get('activity_id'), 0)
+    limit = min(max(_safe_int(request.args.get('limit'), 50), 1), 200)
+
+    query = BackupRecord.query
+    if backup_type:
+        query = query.filter_by(backup_type=backup_type)
+    if activity_id:
+        query = query.filter_by(activity_id=activity_id)
+
+    items = query.order_by(BackupRecord.created_at.desc(), BackupRecord.id.desc()).limit(limit).all()
+    return jsonify({
+        'success': True,
+        'items': [_serialize_backup_record(item) for item in items]
+    })
+
+
+@app.route('/api/admin/backups/<int:record_id>')
+def backup_record_detail(record_id):
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    item = BackupRecord.query.get_or_404(record_id)
+    return jsonify({
+        'success': True,
+        'item': _serialize_backup_record(item)
+    })
+
+
+@app.route('/api/admin/backups/create', methods=['POST'])
+def create_manual_backup():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    data = request.json or {}
+    activity_id = _safe_int(data.get('activity_id'), 0)
+    if not activity_id:
+        return jsonify({'success': False, 'message': '请选择要备份的活动'})
+    activity = Activity.query.get_or_404(activity_id)
+    backup_name = (data.get('backup_name') or '').strip()
+
+    snapshot = _create_activity_snapshot(activity, snapshot_name=backup_name)
+    db.session.flush()
+    _, summary = _snapshot_payload_and_summary(snapshot)
+    record = _create_backup_record(
+        backup_type='manual_backup',
+        target_type='activity',
+        target_id=activity.id,
+        activity_id=activity.id,
+        snapshot_id=snapshot.id,
+        status='success',
+        trigger_mode='manual',
+        backup_name=snapshot.snapshot_name or backup_name or f'{activity.name} 手动备份',
+        payload=summary,
+        summary=f'手动备份：话题 {summary.get("topic_count", 0)} 个，报名 {summary.get("registration_count", 0)} 条，提报 {summary.get("submission_count", 0)} 条',
+    )
+    _log_operation('backup', 'activity', target_id=activity.id, message='创建手动备份', detail={
+        'snapshot_id': snapshot.id,
+        'backup_record_id': record.id,
+        'backup_name': record.backup_name,
+    })
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': f'已创建手动备份：{record.backup_name}',
+        'item': _serialize_backup_record(record),
+    })
+
+
+@app.route('/api/admin/backups/<int:record_id>/restore', methods=['POST'])
+def restore_from_backup_record(record_id):
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    record = BackupRecord.query.get_or_404(record_id)
+    snapshot_id = record.snapshot_id
+    if not snapshot_id:
+        return jsonify({'success': False, 'message': '该备份记录没有可恢复的快照'})
+    snapshot = ActivitySnapshot.query.get(snapshot_id)
+    if not snapshot:
+        return jsonify({'success': False, 'message': '快照不存在，无法恢复'})
+
+    data = request.json or {}
+    restored = _restore_activity_from_snapshot(
+        snapshot,
+        name=(data.get('name') or '').strip(),
+        title=(data.get('title') or '').strip(),
+        description=(data.get('description') or '').strip() if data.get('description') is not None else None,
+    )
+    db.session.flush()
+    record.restored_activity_id = restored.id
+    _log_operation('restore_backup', 'backup_record', target_id=record.id, message='从备份记录恢复新活动', detail={
+        'backup_record_id': record.id,
+        'snapshot_id': snapshot.id,
+        'restored_activity_id': restored.id,
+        'restored_name': restored.name,
+    })
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': f'已从备份恢复为新活动：{restored.name}',
+        'backup': _serialize_backup_record(record),
+        'activity': _serialize_activity(restored),
+    })
+
+
 @app.route('/api/jobs/ping', methods=['POST'])
 def trigger_worker_ping():
     guard = _admin_json_guard()
@@ -6553,6 +6729,20 @@ def restore_activity_snapshot(snapshot_id):
         description=(data.get('description') or '').strip() if data else None,
     )
     db.session.flush()
+    _, summary = _snapshot_payload_and_summary(snapshot)
+    _create_backup_record(
+        backup_type='restore_from_snapshot',
+        target_type='activity_snapshot',
+        target_id=snapshot.id,
+        activity_id=snapshot.activity_id,
+        snapshot_id=snapshot.id,
+        status='success',
+        trigger_mode='manual',
+        backup_name=f'恢复 {snapshot.snapshot_name or snapshot.id}',
+        payload=summary,
+        summary=f'从快照恢复新活动：{restored.name}',
+        restored_activity_id=restored.id,
+    )
     _log_operation('restore_snapshot', 'activity', target_id=restored.id, message='从活动快照恢复新活动', detail={
         'snapshot_id': snapshot.id,
         'restored_name': restored.name,
@@ -6680,6 +6870,19 @@ def archive_activity(activity_id):
     activity.status = 'archived'
     activity.archived_at = datetime.now()
     db.session.flush()
+    _, summary = _snapshot_payload_and_summary(snapshot)
+    _create_backup_record(
+        backup_type='activity_snapshot',
+        target_type='activity',
+        target_id=activity.id,
+        activity_id=activity.id,
+        snapshot_id=snapshot.id,
+        status='success',
+        trigger_mode='manual',
+        backup_name=snapshot.snapshot_name or f'{activity.name} 归档快照',
+        payload=summary,
+        summary=f'活动归档快照：话题 {summary.get("topic_count", 0)} 个，报名 {summary.get("registration_count", 0)} 条，提报 {summary.get("submission_count", 0)} 条',
+    )
     _log_operation('archive', 'activity', target_id=activity.id, message='归档活动并生成快照', detail={
         'name': activity.name,
         'snapshot_id': snapshot.id,
