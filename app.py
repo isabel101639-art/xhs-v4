@@ -602,8 +602,10 @@ DEFAULT_HOME_PAGE_CONFIG = {
 
 AUTOMATION_RUNTIME_CONFIG_DEFAULTS = {
     'hotword_source_platform': '小红书',
+    'hotword_source_template': 'generic_lines',
     'hotword_source_channel': 'Worker骨架',
     'hotword_keyword_limit': 10,
+    'hotword_source_template': 'generic_lines',
     'image_provider': 'svg_fallback',
     'image_api_url': '',
     'image_api_base': '',
@@ -721,6 +723,33 @@ VOLCENGINE_MODEL_OPTIONS = [
     {'key': 'doubao-seedream-4-5-251128', 'label': 'Seedream 4.5', 'provider': 'volcengine_las'},
     {'key': 'doubao-seedream-4-0-250828', 'label': 'Seedream 4.0', 'provider': 'volcengine_las'},
     {'key': 'doubao-seededit-3-0-i2i-250628', 'label': 'SeedEdit 3.0', 'provider': 'volcengine_ark'},
+]
+
+HOTWORD_SOURCE_TEMPLATE_OPTIONS = [
+    {
+        'key': 'generic_lines',
+        'label': '通用行文本',
+        'source_platform': '手工整理',
+        'description': '每行一条，按“关键词|标题|链接|点赞|收藏|评论|传播量|作者|摘要”粘贴',
+    },
+    {
+        'key': 'generic_json',
+        'label': '通用 JSON',
+        'source_platform': '手工整理',
+        'description': 'JSON 数组或 {items: []} 结构，字段包含 keyword、title、views 等',
+    },
+    {
+        'key': 'douyin_hotwords',
+        'label': '抖音热点词接口',
+        'source_platform': '抖音',
+        'description': '适配抖音热点词/热榜类接口的 words、sentence_id、hot_value 结构',
+    },
+    {
+        'key': 'qiangua_notes',
+        'label': '千瓜笔记导出',
+        'source_platform': '千瓜数据',
+        'description': '适配千瓜笔记/爆文导出常见字段，如 title、like_count、collect_count、comment_count',
+    },
 ]
 
 MEDICAL_SCIENCE_LAYOUT_VARIANTS = {
@@ -866,6 +895,18 @@ def _image_model_options(provider=''):
     if current_provider in {'volcengine_ark', 'volcengine_las'}:
         return [dict(item) for item in VOLCENGINE_MODEL_OPTIONS]
     return []
+
+
+def _hotword_source_template_options():
+    return [dict(item) for item in HOTWORD_SOURCE_TEMPLATE_OPTIONS]
+
+
+def _hotword_source_template_meta(template_key=''):
+    raw = (template_key or '').strip()
+    for item in HOTWORD_SOURCE_TEMPLATE_OPTIONS:
+        if raw == item['key']:
+            return dict(item)
+    return dict(HOTWORD_SOURCE_TEMPLATE_OPTIONS[0])
 
 
 def _safe_int(value, default=0):
@@ -4310,6 +4351,7 @@ def automation_config():
         current = _automation_runtime_config()
         next_config = dict(current)
         next_config['hotword_source_platform'] = (data.get('hotword_source_platform') or current['hotword_source_platform']).strip()[:50]
+        next_config['hotword_source_template'] = (data.get('hotword_source_template') or current['hotword_source_template']).strip()[:50]
         next_config['hotword_source_channel'] = (data.get('hotword_source_channel') or current['hotword_source_channel']).strip()[:50]
         next_config['hotword_keyword_limit'] = min(max(_safe_int(data.get('hotword_keyword_limit'), current['hotword_keyword_limit']), 1), 30)
         next_config['image_provider'] = (data.get('image_provider') or current['image_provider']).strip()[:50]
@@ -4340,6 +4382,7 @@ def automation_config():
         'provider_options': _image_provider_options(),
         'style_types': _asset_style_type_options(),
         'model_options': _image_model_options(runtime_config.get('image_provider')),
+        'hotword_templates': _hotword_source_template_options(),
         'notes': {
             'api_key_managed_by_env': True,
             'api_key_configured': capabilities.get('api_key_configured', False),
@@ -4357,6 +4400,7 @@ def automation_config_preview():
     capabilities = _image_provider_capabilities()
     hotword_preview = {
         'source_platform': runtime_config.get('hotword_source_platform'),
+        'source_template': runtime_config.get('hotword_source_template'),
         'source_channel': runtime_config.get('hotword_source_channel'),
         'keyword_limit': runtime_config.get('hotword_keyword_limit'),
         'keywords': _automation_keyword_seeds()[:min(max(_safe_int(runtime_config.get('hotword_keyword_limit'), 10), 1), 10)],
@@ -4379,6 +4423,7 @@ def automation_config_preview():
     return jsonify({
         'success': True,
         'hotword_preview': hotword_preview,
+        'hotword_template': _hotword_source_template_meta(runtime_config.get('hotword_source_template')),
         'image_request_preview': image_request_preview,
         'capabilities': capabilities,
         'style_meta': _asset_style_meta(capabilities.get('image_default_style_type')),
@@ -4854,6 +4899,105 @@ def _parse_trend_payload(raw_payload):
     return items
 
 
+def _extract_first_non_empty(row, keys, default=''):
+    for key in keys:
+        value = row.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return default
+
+
+def _extract_first_number(row, keys, default=0):
+    for key in keys:
+        value = row.get(key)
+        if value in [None, '']:
+            continue
+        number = _safe_int(value, None)
+        if number is not None:
+            return number
+    return default
+
+
+def _normalize_trend_items(items, template_key='generic_lines', source_platform='', source_channel='', batch_name=''):
+    template = _hotword_source_template_meta(template_key)
+    normalized = []
+    for index, row in enumerate(items or [], start=1):
+        if not isinstance(row, dict):
+            continue
+
+        if template['key'] in {'generic_lines', 'generic_json'}:
+            keyword = _extract_first_non_empty(row, ['keyword', 'hot_word', 'query'])
+            title = _extract_first_non_empty(row, ['title', 'sentence', 'name'])
+            link = _extract_first_non_empty(row, ['link', 'url', 'share_url'])
+            author = _extract_first_non_empty(row, ['author', 'nickname', 'user_name'])
+            summary = _extract_first_non_empty(row, ['summary', 'desc', 'description'])
+            views = _extract_first_number(row, ['views', 'view_count', 'play_count', 'read_count'])
+            likes = _extract_first_number(row, ['likes', 'like_count', 'digg_count'])
+            favorites = _extract_first_number(row, ['favorites', 'collect_count', 'favorite_count'])
+            comments = _extract_first_number(row, ['comments', 'comment_count'])
+            publish_time = _extract_first_non_empty(row, ['publish_time', 'create_time'])
+        elif template['key'] == 'douyin_hotwords':
+            keyword = _extract_first_non_empty(row, ['word', 'hot_word', 'keyword', 'sentence'])
+            title = _extract_first_non_empty(row, ['sentence', 'title', 'word']) or keyword
+            link = _extract_first_non_empty(row, ['url', 'link'])
+            author = _extract_first_non_empty(row, ['source', 'board_name'])
+            summary = _extract_first_non_empty(row, ['sentence_tag', 'summary', 'description'])
+            views = _extract_first_number(row, ['hot_value', 'hot_score', 'search_cnt'])
+            likes = _extract_first_number(row, ['like_count', 'digg_count'])
+            favorites = _extract_first_number(row, ['collect_count', 'favorite_count'])
+            comments = _extract_first_number(row, ['comment_count'])
+            publish_time = _extract_first_non_empty(row, ['event_time', 'create_time'])
+        elif template['key'] == 'qiangua_notes':
+            keyword = _extract_first_non_empty(row, ['keyword', 'search_word', 'topic'])
+            title = _extract_first_non_empty(row, ['title', 'note_title'])
+            link = _extract_first_non_empty(row, ['link', 'note_url', 'url'])
+            author = _extract_first_non_empty(row, ['author', 'nickname', 'account_name'])
+            summary = _extract_first_non_empty(row, ['summary', 'content_summary', 'desc'])
+            views = _extract_first_number(row, ['views', 'view_count', 'read_num'])
+            likes = _extract_first_number(row, ['likes', 'like_count'])
+            favorites = _extract_first_number(row, ['favorites', 'collect_count', 'favorite_count'])
+            comments = _extract_first_number(row, ['comments', 'comment_count'])
+            publish_time = _extract_first_non_empty(row, ['publish_time', 'create_time'])
+        else:
+            continue
+
+        if not title:
+            continue
+
+        normalized_row = {
+            'keyword': keyword,
+            'title': title,
+            'link': link,
+            'author': author,
+            'summary': summary,
+            'views': views,
+            'likes': likes,
+            'favorites': favorites,
+            'comments': comments,
+            'publish_time': publish_time,
+            'source_platform': source_platform or template.get('source_platform') or '手工整理',
+            'source_channel': source_channel or template['label'],
+            'import_batch': batch_name,
+            'topic_category': template['label'],
+            'raw_payload': row,
+            'normalized_rank': index,
+        }
+        normalized_row['interactions'] = likes + favorites + comments
+        score_seed = (
+            normalized_row['views']
+            + normalized_row['likes'] * 3
+            + normalized_row['favorites'] * 4
+            + normalized_row['comments'] * 5
+            + max(0, 100 - index * 3)
+        )
+        normalized_row['hot_score'] = score_seed
+        normalized.append(normalized_row)
+    return normalized
+
+
 def _build_hotword_skeleton_rows(keywords, source_platform='小红书', source_channel='Worker骨架', batch_name=''):
     rows = []
     templates = [
@@ -5066,6 +5210,7 @@ def import_trends():
         return guard
 
     data = request.json or {}
+    template_key = (data.get('template_key') or 'generic_lines').strip()
     items = _parse_trend_payload(data.get('payload'))
     if not items:
         return jsonify({'success': False, 'message': '没有识别到可导入的热点数据'})
@@ -5073,10 +5218,19 @@ def import_trends():
     batch_name = (data.get('batch_name') or datetime.now().strftime('batch_%Y%m%d_%H%M%S')).strip()
     source_platform = (data.get('source_platform') or '小红书').strip()
     source_channel = (data.get('source_channel') or '手动导入').strip()
+    normalized_items = _normalize_trend_items(
+        items,
+        template_key=template_key,
+        source_platform=source_platform,
+        source_channel=source_channel,
+        batch_name=batch_name,
+    )
+    if not normalized_items:
+        return jsonify({'success': False, 'message': '已识别到数据，但未标准化出可入库热点，请检查模板类型'})
 
     inserted = 0
     skipped = 0
-    for item in items:
+    for item in normalized_items:
         title = (item.get('title') or '').strip()
         link = (item.get('link') or '').strip()
         if not title:
@@ -5113,6 +5267,7 @@ def import_trends():
         inserted += 1
 
     _log_operation('import', 'trend_note', message='导入热点数据', detail={
+        'template_key': template_key,
         'source_platform': source_platform,
         'source_channel': source_channel,
         'batch_name': batch_name,
@@ -5125,6 +5280,38 @@ def import_trends():
         'message': f'导入完成：新增{inserted}条，跳过{skipped}条',
         'inserted': inserted,
         'skipped': skipped
+    })
+
+
+@app.route('/api/trends/import_preview', methods=['POST'])
+def preview_trends_import():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    data = request.json or {}
+    template_key = (data.get('template_key') or 'generic_lines').strip()
+    items = _parse_trend_payload(data.get('payload'))
+    if not items:
+        return jsonify({'success': False, 'message': '没有识别到可预览的数据'})
+
+    batch_name = (data.get('batch_name') or datetime.now().strftime('preview_%Y%m%d_%H%M%S')).strip()
+    source_platform = (data.get('source_platform') or '小红书').strip()
+    source_channel = (data.get('source_channel') or '手动导入').strip()
+    normalized_items = _normalize_trend_items(
+        items,
+        template_key=template_key,
+        source_platform=source_platform,
+        source_channel=source_channel,
+        batch_name=batch_name,
+    )
+    preview_items = normalized_items[:10]
+    return jsonify({
+        'success': True,
+        'template': _hotword_source_template_meta(template_key),
+        'raw_count': len(items),
+        'normalized_count': len(normalized_items),
+        'items': preview_items,
     })
 
 

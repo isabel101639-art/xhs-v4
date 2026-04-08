@@ -242,6 +242,10 @@
                     </select>
                 </div>
                 <div class="col-lg-4">
+                    <label class="form-label subtle">热点默认模板</label>
+                    <select id="configHotwordTemplate" class="form-select"></select>
+                </div>
+                <div class="col-lg-4">
                     <label class="form-label subtle">热点默认渠道</label>
                     <input id="configHotwordChannel" class="form-control" placeholder="如 Worker骨架">
                 </div>
@@ -319,32 +323,43 @@
                     <div class="subtle mb-3">支持两种格式：1. JSON数组；2. 每行一条，按“关键词|标题|链接|点赞|收藏|评论|传播量|作者|摘要”粘贴。</div>
 
                     <div class="row g-3 mb-3">
-                        <div class="col-md-4">
-                            <label class="form-label subtle">来源平台</label>
-                            <select id="trendSourcePlatform" class="form-select">
-                                <option value="小红书">小红书</option>
-                                <option value="千瓜数据">千瓜数据</option>
-                                <option value="抖音">抖音</option>
-                                <option value="手工整理">手工整理</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label subtle">来源渠道</label>
-                            <input id="trendSourceChannel" class="form-control" value="手动导入">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label subtle">批次名</label>
-                            <input id="trendBatchName" class="form-control" placeholder="例如：2026-03-27 肝病热点">
-                        </div>
-                    </div>
+                <div class="col-md-4">
+                    <label class="form-label subtle">来源平台</label>
+                    <select id="trendSourcePlatform" class="form-select">
+                        <option value="小红书">小红书</option>
+                        <option value="千瓜数据">千瓜数据</option>
+                        <option value="抖音">抖音</option>
+                        <option value="手工整理">手工整理</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label subtle">导入模板</label>
+                    <select id="trendTemplateKey" class="form-select">
+                        <option value="generic_lines">通用行文本</option>
+                        <option value="generic_json">通用 JSON</option>
+                        <option value="douyin_hotwords">抖音热点词接口</option>
+                        <option value="qiangua_notes">千瓜笔记导出</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label subtle">来源渠道</label>
+                    <input id="trendSourceChannel" class="form-control" value="手动导入">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label subtle">批次名</label>
+                    <input id="trendBatchName" class="form-control" placeholder="例如：2026-03-27 肝病热点">
+                </div>
+            </div>
 
                     <div class="mb-3">
                         <label class="form-label subtle">粘贴热点数据</label>
                         <textarea id="trendPayload" rows="10" class="form-control" placeholder='[{"keyword":"脂肪肝","title":"脂肪肝体检后别只看转氨酶","likes":320,"favorites":118,"comments":26,"views":6800}]'></textarea>
                     </div>
 
+                    <button class="btn btn-outline-primary me-2" onclick="previewTrendsImport()">预览导入</button>
                     <button class="btn btn-accent" onclick="importTrends()">导入热点</button>
                     <div id="trendImportMsg" class="subtle mt-2"></div>
+                    <div id="trendPreviewWrap" class="detail-card mt-3 text-muted">预览会展示标准化后的热点结果和评分。</div>
                 </div>
             </div>
 
@@ -892,6 +907,18 @@
         const assetStyleTypeDefinitions = {{ asset_style_types|tojson }};
         const imageModelDefinitions = {{ image_model_options|tojson }};
 
+        function renderHotwordTemplateOptions(items, selectedValue) {
+            const select = document.getElementById('configHotwordTemplate');
+            if (!select) return;
+            const current = selectedValue || select.value;
+            select.innerHTML = (items || []).map((item) => `
+                <option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}${item.description ? `｜${escapeHtml(item.description)}` : ''}</option>
+            `).join('');
+            if (current) {
+                select.value = current;
+            }
+        }
+
         function escapeHtml(text) {
             return (text || '').replace(/[&<>"']/g, (char) => ({
                 '&': '&amp;',
@@ -1001,9 +1028,10 @@
             }
         }
 
-        function fillAutomationConfig(config, notes, styleTypes, modelOptions) {
+        function fillAutomationConfig(config, notes, styleTypes, modelOptions, hotwordTemplates) {
             automationConfigCache = config || {};
             document.getElementById('configHotwordPlatform').value = config.hotword_source_platform || '小红书';
+            renderHotwordTemplateOptions(hotwordTemplates || [], config.hotword_source_template || 'generic_lines');
             document.getElementById('configHotwordChannel').value = config.hotword_source_channel || 'Worker骨架';
             document.getElementById('configHotwordKeywordLimit').value = config.hotword_keyword_limit || 10;
             document.getElementById('configImageProvider').value = config.image_provider || 'svg_fallback';
@@ -1027,6 +1055,7 @@
 
             if (!document.getElementById('hotwordBatchName').value) {
                 document.getElementById('hotwordSourcePlatform').value = config.hotword_source_platform || '小红书';
+                document.getElementById('trendTemplateKey').value = config.hotword_source_template || 'generic_lines';
                 document.getElementById('hotwordSourceChannel').value = config.hotword_source_channel || 'Worker骨架';
                 document.getElementById('hotwordKeywordLimit').value = config.hotword_keyword_limit || 10;
             }
@@ -1039,7 +1068,7 @@
                 document.getElementById('automationConfigNote').textContent = data.message || '加载自动化配置失败';
                 return;
             }
-            fillAutomationConfig(data.config || {}, data.notes || {}, data.style_types || [], data.model_options || []);
+            fillAutomationConfig(data.config || {}, data.notes || {}, data.style_types || [], data.model_options || [], data.hotword_templates || []);
             loadAutomationConfigPreview();
         }
 
@@ -1056,6 +1085,7 @@
                     <div class="col-lg-5">
                         <strong>热点任务预览</strong>
                         <div class="subtle mt-2">平台：${escapeHtml(data.hotword_preview?.source_platform || '-')}</div>
+                        <div class="subtle">模板：${escapeHtml(data.hotword_template?.label || data.hotword_preview?.source_template || '-')}</div>
                         <div class="subtle">渠道：${escapeHtml(data.hotword_preview?.source_channel || '-')}</div>
                         <div class="subtle">关键词数量：${data.hotword_preview?.keyword_limit || 0}</div>
                         <div class="subtle">预览关键词：${escapeHtml((data.hotword_preview?.keywords || []).join('、'))}</div>
@@ -1078,6 +1108,7 @@
         async function saveAutomationConfig() {
             const payload = {
                 hotword_source_platform: document.getElementById('configHotwordPlatform').value,
+                hotword_source_template: document.getElementById('configHotwordTemplate').value,
                 hotword_source_channel: document.getElementById('configHotwordChannel').value.trim(),
                 hotword_keyword_limit: parseInt(document.getElementById('configHotwordKeywordLimit').value || '10', 10),
                 image_provider: document.getElementById('configImageProvider').value,
@@ -1101,7 +1132,7 @@
                 document.getElementById('automationConfigNote').textContent = data.message || '保存自动化配置失败';
                 return;
             }
-            fillAutomationConfig(data.config || {}, data.notes || {}, data.style_types || [], data.model_options || []);
+            fillAutomationConfig(data.config || {}, data.notes || {}, data.style_types || [], data.model_options || [], data.hotword_templates || []);
             document.getElementById('automationConfigNote').textContent = '自动化运维配置已保存';
             loadOverview();
             loadDiagnostics();
@@ -1622,6 +1653,7 @@
 
         async function importTrends() {
             const payload = {
+                template_key: document.getElementById('trendTemplateKey').value,
                 source_platform: document.getElementById('trendSourcePlatform').value,
                 source_channel: document.getElementById('trendSourceChannel').value,
                 batch_name: document.getElementById('trendBatchName').value,
@@ -1639,6 +1671,55 @@
                 loadOverview();
                 loadTrends();
             }
+        }
+
+        async function previewTrendsImport() {
+            const payload = {
+                template_key: document.getElementById('trendTemplateKey').value,
+                source_platform: document.getElementById('trendSourcePlatform').value,
+                source_channel: document.getElementById('trendSourceChannel').value,
+                batch_name: document.getElementById('trendBatchName').value,
+                payload: document.getElementById('trendPayload').value
+            };
+            const res = await fetch('/api/trends/import_preview', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            const wrap = document.getElementById('trendPreviewWrap');
+            if (!data.success) {
+                wrap.textContent = data.message || '预览失败';
+                return;
+            }
+            wrap.innerHTML = `
+                <div><strong>模板：</strong>${escapeHtml(data.template?.label || '-')}</div>
+                <div class="subtle mb-3">原始 ${data.raw_count || 0} 条，标准化 ${data.normalized_count || 0} 条</div>
+                <div class="table-wrap">
+                    <table class="table data-table align-middle">
+                        <thead>
+                            <tr>
+                                <th>关键词</th>
+                                <th>标题</th>
+                                <th>互动</th>
+                                <th>传播量</th>
+                                <th>评分</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${(data.items || []).map((item) => `
+                                <tr>
+                                    <td>${escapeHtml(item.keyword || '-')}</td>
+                                    <td>${escapeHtml(item.title || '-')}</td>
+                                    <td>${item.interactions || 0}</td>
+                                    <td>${item.views || 0}</td>
+                                    <td>${item.hot_score || 0}</td>
+                                </tr>
+                            `).join('') || '<tr><td colspan="5" class="text-center text-muted">暂无预览结果</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            `;
         }
 
         async function saveCorpus() {
