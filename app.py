@@ -3168,6 +3168,122 @@ def _build_dashboard_stats(activity_id, args):
         'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     }
 
+
+def _build_report_markdown(activity, stats, report_type='weekly'):
+    report_type = (report_type or 'weekly').strip()
+    report_title_map = {
+        'weekly': '周报',
+        'monthly': '月报',
+        'review': '活动复盘',
+    }
+    report_label = report_title_map.get(report_type, '报告')
+    group_lines = [
+        f"- {row['group']}：参与{row['count']}，已发布{row['published']}，发布率{round(row['completion_rate'], 2)}%"
+        for row in stats['group_completion']
+    ]
+    top_lines = [
+        f"{idx}. {row['name']}｜{row['group']}｜互动{row['interactions']}｜{row['topic']}"
+        for idx, row in enumerate(stats['personal_rankings']['all_platform'][:20], 1)
+    ]
+    platform_lines = [
+        f"- {platform['label']}：参与人数{platform['participants']}，发布条数{platform['published_count']}，传播量{platform['views']}，互动率{platform['interaction_rate_display']}"
+        for platform in stats['platforms'].values()
+    ]
+    type_line = '、'.join([
+        f"{name}{count}" for name, count in sorted(
+            stats['content_type_stats'].items(),
+            key=lambda item: item[1],
+            reverse=True
+        )
+    ]) if stats['content_type_stats'] else '暂无'
+    keyword_lines = [
+        f"- {row['keyword']}：热度分 {row['score']}"
+        for row in stats.get('top_keyword_trends', [])[:8]
+    ]
+    viral_lines = [
+        f"- {row['name']}｜{row['topic']}｜互动{row['xhs_interactions']}｜阅读{row['xhs_views']}"
+        for row in stats.get('viral_notes', [])[:10]
+    ]
+
+    sections = [
+        f"# {activity.name} {report_label}（{activity.title}）",
+        '',
+        f"生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"统计区间：{stats['range']['label']} {stats['range']['start_date'] or ''} {('~ ' + stats['range']['end_date']) if stats['range']['end_date'] else ''}",
+        '',
+        '## 一、固定口径',
+        *[f"- {line}" for line in stats['definitions']],
+        '',
+        '## 二、总览区',
+        f"- 总参与人数：{stats['overview']['total_participants']}",
+        f"- 总发布条数：{stats['overview']['total_published']}",
+        f"- 总体发布率：{stats['overview']['publish_rate_display']}",
+        f"- 总传播量：{stats['total_views']}",
+        f"- 总互动：{stats['total_interactions']}（点赞{stats['total_likes']} + 收藏{stats['total_favorites']} + 评论{stats['total_comments']}）",
+        '',
+        '## 三、平台分层',
+        *(platform_lines or ['- 暂无平台数据']),
+        '',
+        '## 四、小组排名',
+        *(group_lines or ['- 暂无小组数据']),
+        '',
+        '## 五、优秀个人TOP20（小红书+抖音+视频号）',
+        *(top_lines or ['暂无数据']),
+        '',
+        '## 六、内容类型分布',
+        f"- {type_line}",
+        f"- 当前最佳内容类型：{stats['best_content_type'] or '暂无'}",
+        '',
+    ]
+
+    if report_type in {'monthly', 'review'}:
+        sections.extend([
+            '## 七、热点关键词趋势',
+            *(keyword_lines or ['- 暂无热点关键词趋势']),
+            '',
+            '## 八、爆款笔记摘要',
+            *(viral_lines or ['- 暂无爆款摘要']),
+            '',
+        ])
+    else:
+        sections.extend([
+            '## 七、优化建议',
+            *[f"- {line}" for line in stats['note_improvement_suggestions']],
+            '',
+            '## 八、下期选题建议',
+            *[f"- {line}" for line in stats['next_topic_suggestions']],
+            '',
+        ])
+
+    if report_type == 'monthly':
+        sections.extend([
+            '## 九、月度结论',
+            f"- 本月最佳内容类型：{stats['best_content_type'] or '暂无'}",
+            f"- 本月热点趋势重点：{('、'.join([row['keyword'] for row in stats.get('top_keyword_trends', [])[:3]]) or '暂无')}",
+            '- 建议围绕高互动内容类型和热点关键词同步优化标题、封面与发布时间。',
+            '',
+            '## 十、下月建议',
+            *[f"- {line}" for line in stats['next_topic_suggestions']],
+            '',
+        ])
+
+    if report_type == 'review':
+        sections.extend([
+            '## 九、活动复盘亮点',
+            f"- 最佳内容类型：{stats['best_content_type'] or '暂无'}",
+            f"- 已发布话题数：{stats['total_published']}",
+            f"- 累计热点趋势关键词：{('、'.join([row['keyword'] for row in stats.get('top_keyword_trends', [])[:5]]) or '暂无')}",
+            '',
+            '## 十、问题与改进',
+            *[f"- {line}" for line in stats['note_improvement_suggestions']],
+            '',
+            '## 十一、下期建议',
+            *[f"- {line}" for line in stats['next_topic_suggestions']],
+            '',
+        ])
+
+    return '\n'.join(sections)
+
 # ==================== 路由 ====================
 
 @app.route('/')
@@ -6506,65 +6622,33 @@ def get_stats(activity_id):
 def export_weekly_report(activity_id):
     activity = Activity.query.get_or_404(activity_id)
     stats = _build_dashboard_stats(activity_id, request.args)
-
-    group_lines = [
-        f"- {row['group']}：参与{row['count']}，已发布{row['published']}，发布率{round(row['completion_rate'], 2)}%"
-        for row in stats['group_completion']
-    ]
-    top_lines = [
-        f"{idx}. {row['name']}｜{row['group']}｜互动{row['interactions']}｜{row['topic']}"
-        for idx, row in enumerate(stats['personal_rankings']['all_platform'][:20], 1)
-    ]
-    platform_lines = [
-        f"- {platform['label']}：参与人数{platform['participants']}，发布条数{platform['published_count']}，传播量{platform['views']}，互动率{platform['interaction_rate_display']}"
-        for platform in stats['platforms'].values()
-    ]
-    type_line = '、'.join([
-        f"{name}{count}" for name, count in sorted(
-            stats['content_type_stats'].items(),
-            key=lambda item: item[1],
-            reverse=True
-        )
-    ]) if stats['content_type_stats'] else '暂无'
-
-    report = f"""# {activity.name} 周报（{activity.title}）
-
-生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-统计区间：{stats['range']['label']} {stats['range']['start_date'] or ''} {('~ ' + stats['range']['end_date']) if stats['range']['end_date'] else ''}
-
-## 一、固定口径
-{chr(10).join([f"- {line}" for line in stats['definitions']])}
-
-## 二、总览区
-- 总参与人数：{stats['overview']['total_participants']}
-- 总发布条数：{stats['overview']['total_published']}
-- 总体发布率：{stats['overview']['publish_rate_display']}
-- 总传播量：{stats['total_views']}
-- 总互动：{stats['total_interactions']}（点赞{stats['total_likes']} + 收藏{stats['total_favorites']} + 评论{stats['total_comments']}）
-
-## 三、平台分层
-{chr(10).join(platform_lines) if platform_lines else '- 暂无平台数据'}
-
-## 四、小组排名
-{chr(10).join(group_lines) if group_lines else '- 暂无小组数据'}
-
-## 五、优秀个人TOP20（小红书+抖音+视频号）
-{chr(10).join(top_lines) if top_lines else '暂无数据'}
-
-## 六、内容类型分布
-- {type_line}
-- 当前最佳内容类型：{stats['best_content_type'] or '暂无'}
-
-## 七、优化建议
-{chr(10).join([f"- {line}" for line in stats['note_improvement_suggestions']])}
-
-## 八、下期选题建议
-{chr(10).join([f"- {line}" for line in stats['next_topic_suggestions']])}
-"""
+    report = _build_report_markdown(activity, stats, report_type='weekly')
 
     return report, 200, {
         'Content-Type': 'text/markdown; charset=utf-8',
         'Content-Disposition': f"attachment; filename=weekly_report_activity_{activity_id}.md"
+    }
+
+
+@app.route('/api/monthly_report/<int:activity_id>')
+def export_monthly_report(activity_id):
+    activity = Activity.query.get_or_404(activity_id)
+    stats = _build_dashboard_stats(activity_id, request.args)
+    report = _build_report_markdown(activity, stats, report_type='monthly')
+    return report, 200, {
+        'Content-Type': 'text/markdown; charset=utf-8',
+        'Content-Disposition': f"attachment; filename=monthly_report_activity_{activity_id}.md"
+    }
+
+
+@app.route('/api/review_report/<int:activity_id>')
+def export_review_report(activity_id):
+    activity = Activity.query.get_or_404(activity_id)
+    stats = _build_dashboard_stats(activity_id, request.args)
+    report = _build_report_markdown(activity, stats, report_type='review')
+    return report, 200, {
+        'Content-Type': 'text/markdown; charset=utf-8',
+        'Content-Disposition': f"attachment; filename=review_report_activity_{activity_id}.md"
     }
 
 

@@ -221,7 +221,9 @@
                 </div>
                 <div class="col-md-2 d-flex align-items-end gap-2">
                     <button class="btn btn-danger w-100" onclick="loadStats()">刷新</button>
-                    <button class="btn btn-outline-danger w-100" onclick="exportReport()">导出</button>
+                    <button class="btn btn-outline-danger w-100" onclick="exportReport('weekly')">周报</button>
+                    <button class="btn btn-outline-danger w-100" onclick="exportReport('monthly')">月报</button>
+                    <button class="btn btn-outline-danger w-100" onclick="exportReport('review')">复盘</button>
                 </div>
             </div>
         </div>
@@ -565,10 +567,16 @@
             renderAdvice(stats);
         }
 
-        function exportReport() {
+        function exportReport(type = 'weekly') {
             const activityId = document.getElementById('activitySelect').value;
             const query = buildQuery();
-            window.open(`/api/weekly_report/${activityId}?${query}`, '_blank');
+            const routeMap = {
+                weekly: 'weekly_report',
+                monthly: 'monthly_report',
+                review: 'review_report',
+            };
+            const route = routeMap[type] || 'weekly_report';
+            window.open(`/api/${route}/${activityId}?${query}`, '_blank');
         }
 
         document.getElementById('rangeSelect').addEventListener('change', toggleCustomRange);
