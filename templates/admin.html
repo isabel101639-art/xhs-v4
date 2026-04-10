@@ -99,6 +99,7 @@
                     </div>
                     <div class="d-flex gap-2 flex-wrap">
                         <button type="button" class="btn btn-outline-primary" onclick="bootstrapProjectDemoData()">补齐演示数据</button>
+                        <button type="button" class="btn btn-outline-danger" onclick="clearProjectDemoData()">清理演示数据</button>
                         <a href="/admin/project-status" class="btn btn-outline-secondary">固定链接</a>
                         <a href="/automation_center" class="btn btn-xhs">进入自动化中心</a>
                     </div>
@@ -1449,6 +1450,35 @@
             document.getElementById('projectStatusMsg').textContent = createdSummary
                 ? `${data.message || '演示数据补齐完成'} ｜ ${createdSummary}`
                 : (data.message || '当前已有数据，本次未新增演示记录');
+            projectStatusCache = data.project_status || null;
+            if (projectStatusCache) {
+                renderProjectStatus(projectStatusCache);
+            } else {
+                loadProjectStatus(true);
+            }
+        }
+
+        async function clearProjectDemoData() {
+            const confirmed = window.confirm('这会清理当前系统里由 demo_seed / demo-svg 补进去的演示记录，不会删除正常业务数据。现在开始吗？');
+            if (!confirmed) return;
+            document.getElementById('projectStatusMsg').textContent = '正在清理演示数据...';
+            const res = await fetch('/api/admin/project-status/clear-demo-data', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({})
+            });
+            const data = await res.json();
+            if (!data.success) {
+                document.getElementById('projectStatusMsg').textContent = data.message || '演示数据清理失败';
+                return;
+            }
+            const deleted = data.deleted || {};
+            const deletedSummary = Object.entries(deleted)
+                .map(([key, value]) => `${key}:${value}`)
+                .join(' / ');
+            document.getElementById('projectStatusMsg').textContent = deletedSummary
+                ? `${data.message || '演示数据清理完成'} ｜ ${deletedSummary}`
+                : (data.message || '当前没有可清理的演示数据');
             projectStatusCache = data.project_status || null;
             if (projectStatusCache) {
                 renderProjectStatus(projectStatusCache);

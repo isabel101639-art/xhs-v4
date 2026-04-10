@@ -1982,6 +1982,17 @@ def _build_project_status_payload():
         'admin_users': AdminUser.query.count(),
         'roles': RolePermission.query.count(),
     }
+    demo_counts = {
+        'trend_notes': TrendNote.query.filter_by(source_channel='demo_seed').count(),
+        'topic_ideas': TopicIdea.query.filter(TopicIdea.review_note.contains('演示数据：')).count(),
+        'creator_accounts': CreatorAccount.query.filter_by(source_channel='demo_seed').count(),
+        'creator_posts': CreatorPost.query.filter_by(source_channel='demo_seed').count(),
+        'creator_snapshots': CreatorAccountSnapshot.query.filter_by(source_channel='demo_seed').count(),
+        'asset_generation_tasks': AssetGenerationTask.query.filter_by(model_name='demo-svg').count(),
+        'asset_library_items': AssetLibrary.query.filter_by(model_name='demo-svg').count(),
+        'data_source_tasks': DataSourceTask.query.filter(or_(DataSourceTask.source_channel == 'demo_seed', DataSourceTask.mode == 'demo')).count(),
+    }
+    demo_total = sum(demo_counts.values())
 
     readiness_total = readiness['summary']['total'] or 1
     readiness_rate = round((readiness['summary']['passed'] / readiness_total) * 100)
@@ -2224,11 +2235,14 @@ def _build_project_status_payload():
             'delivery_status': '可运营骨架已成型',
             'readiness_rate': readiness_rate,
             'codebase_size_lines': 7702,
+            'demo_data_present': demo_total > 0,
+            'demo_data_count': demo_total,
             'key_message': '当前最值得继续投入的是“真实数据源接入 + 异步链路联通 + 样本数据灌入”。',
         },
         'milestones': milestones,
         'modules': modules,
         'counts': counts,
+        'demo_counts': demo_counts,
         'readiness': readiness,
         'capabilities': capability,
         'blockers': blockers[:6],
@@ -2683,6 +2697,561 @@ def _bootstrap_demo_operational_data():
         'activity_id': activity.id if activity else None,
         'message': '演示运营数据补齐完成' if created_dict else '当前已有数据，本次未新增演示记录',
     }
+
+
+def _clear_demo_operational_data():
+    deleted = Counter()
+    skipped = []
+
+    demo_task_ids = [
+        item.id for item in DataSourceTask.query.filter(
+            or_(DataSourceTask.source_channel == 'demo_seed', DataSourceTask.mode == 'demo')
+        ).all()
+    ]
+    if demo_task_ids:
+        deleted['data_source_logs'] += DataSourceLog.query.filter(
+            DataSourceLog.task_id.in_(demo_task_ids)
+        ).delete(synchronize_session=False)
+        deleted['data_source_tasks'] += DataSourceTask.query.filter(
+            DataSourceTask.id.in_(demo_task_ids)
+        ).delete(synchronize_session=False)
+    else:
+        skipped.append('暂无演示抓取任务需要清理')
+
+    deleted['trend_notes'] += TrendNote.query.filter_by(
+        source_channel='demo_seed'
+    ).delete(synchronize_session=False)
+
+    deleted['topic_ideas'] += TopicIdea.query.filter(
+        TopicIdea.review_note.contains('演示数据：')
+    ).delete(synchronize_session=False)
+
+    deleted['asset_library_items'] += AssetLibrary.query.filter_by(
+        model_name='demo-svg'
+    ).delete(synchronize_session=False)
+
+    deleted['asset_generation_tasks'] += AssetGenerationTask.query.filter_by(
+        model_name='demo-svg'
+    ).delete(synchronize_session=False)
+
+    deleted['creator_posts'] += CreatorPost.query.filter_by(
+        source_channel='demo_seed'
+    ).delete(synchronize_session=False)
+    deleted['creator_snapshots'] += CreatorAccountSnapshot.query.filter_by(
+        source_channel='demo_seed'
+    ).delete(synchronize_session=False)
+    deleted['creator_accounts'] += CreatorAccount.query.filter_by(
+        source_channel='demo_seed'
+    ).delete(synchronize_session=False)
+
+    deleted['operation_logs'] += OperationLog.query.filter_by(
+        action='bootstrap_demo_data'
+    ).delete(synchronize_session=False)
+
+    deleted_dict = {key: value for key, value in dict(deleted).items() if value}
+    _log_operation('clear_demo_data', 'system', message='清理演示运营数据', detail={
+        'deleted': deleted_dict,
+        'skipped': skipped,
+    })
+    return {
+        'deleted': deleted_dict,
+        'skipped': skipped,
+        'message': '演示运营数据已清理完成' if deleted_dict else '当前没有可清理的演示数据',
+    }
+
+
+def _latest_worker_ping_snapshot():
+    log = OperationLog.query.filter(
+        OperationLog.action.in_(['worker_ping_check', 'worker_ping_check_failed'])
+    ).order_by(OperationLog.created_at.desc(), OperationLog.id.desc()).first()
+    if not log:
+        return {
+            'has_result': False,
+            'status': 'unknown',
+            'status_label': '未检查',
+            'checked_at': '',
+            'message': '尚未执行 Worker 联通检查',
+            'task_id': '',
+            'state': '',
+            'elapsed_ms': 0,
+            'error': '',
+            'error_type': '',
+            'response': None,
+        }
+
+    detail = _deserialize_operation_detail(log.detail)
+    status = (detail.get('status') or ('success' if log.action == 'worker_ping_check' else 'failed')).strip() or 'failed'
+    label_map = {
+        'success': '成功',
+        'timeout': '超时',
+        'dispatch_failed': '派发失败',
+        'failed': '失败',
+    }
+    response = detail.get('response')
+    if not isinstance(response, (dict, list, str, int, float, bool, type(None))):
+        response = str(response)
+    return {
+        'has_result': True,
+        'status': status,
+        'status_label': label_map.get(status, status),
+        'checked_at': _format_datetime(log.created_at),
+        'message': detail.get('message') or log.message or '',
+        'task_id': detail.get('task_id') or '',
+        'state': detail.get('state') or '',
+        'elapsed_ms': _safe_int(detail.get('elapsed_ms'), 0),
+        'error': detail.get('error') or '',
+        'error_type': detail.get('error_type') or '',
+        'response': response,
+    }
+
+
+def _deployment_config_value(key, runtime_config=None):
+    runtime_config = runtime_config or _automation_runtime_config()
+    env_value = (os.environ.get(key) or '').strip()
+    if env_value:
+        return env_value, 'env'
+
+    runtime_key_map = {
+        'ASSET_IMAGE_PROVIDER': 'image_provider',
+        'ASSET_IMAGE_API_BASE': 'image_api_base',
+        'ASSET_IMAGE_API_URL': 'image_api_url',
+        'ASSET_IMAGE_MODEL': 'image_model',
+        'ASSET_IMAGE_SIZE': 'image_size',
+    }
+    runtime_key = runtime_key_map.get(key)
+    runtime_value = str(runtime_config.get(runtime_key) or '').strip() if runtime_key else ''
+    if runtime_value:
+        return runtime_value, 'runtime_config'
+    return '', ''
+
+
+def _build_deployment_helper_payload():
+    runtime_config = _automation_runtime_config()
+    capabilities = _image_provider_capabilities()
+    sensitive_keys = {
+        'SECRET_KEY',
+        'ADMIN_PASSWORD',
+        'DEEPSEEK_API_KEY',
+        'ASSET_IMAGE_API_KEY',
+        'ARK_API_KEY',
+        'LAS_API_KEY',
+        'POSTGRES_PASSWORD',
+        'DATABASE_URL',
+    }
+    env_defaults = {
+        'ADMIN_USERNAME': 'furui',
+        'REDIS_URL': 'redis://redis:6379/0',
+        'CELERY_BROKER_URL': 'redis://redis:6379/0',
+        'CELERY_RESULT_BACKEND': 'redis://redis:6379/1',
+        'DEFAULT_TOPIC_QUOTA': str(_default_topic_quota()),
+        'PREFERRED_URL_SCHEME': os.environ.get('PREFERRED_URL_SCHEME', 'https') or 'https',
+        'SESSION_COOKIE_SECURE': os.environ.get('SESSION_COOKIE_SECURE', 'false') or 'false',
+        'ENABLE_AUTOMATION_BEAT': os.environ.get('ENABLE_AUTOMATION_BEAT', 'true') or 'true',
+        'CELERY_BEAT_LOG_LEVEL': os.environ.get('CELERY_BEAT_LOG_LEVEL', 'info') or 'info',
+        'ASSET_IMAGE_PROVIDER': capabilities.get('image_provider_name') or 'svg_fallback',
+        'ASSET_IMAGE_API_BASE': capabilities.get('image_provider_api_base') or '',
+        'ASSET_IMAGE_API_URL': capabilities.get('image_provider_api_url') or '',
+        'ASSET_IMAGE_MODEL': capabilities.get('image_provider_model') or '',
+        'ASSET_IMAGE_SIZE': capabilities.get('image_provider_size') or '1024x1536',
+    }
+
+    def env_item(key, required=True, label=''):
+        current_value, source = _deployment_config_value(key, runtime_config=runtime_config)
+        display_value = ''
+        if current_value:
+            display_value = '<已配置，提交到目标环境时请填真实值>' if key in sensitive_keys else current_value
+        elif key in env_defaults and env_defaults[key]:
+            display_value = env_defaults[key]
+        configured = bool(current_value)
+        preview_value = current_value if (configured and key not in sensitive_keys) else (env_defaults.get(key, '') or '')
+        if key in sensitive_keys:
+            preview_value = '<required>' if required else '<optional>'
+        return {
+            'key': key,
+            'label': label or key,
+            'required': required,
+            'configured': configured,
+            'display_value': display_value or ('<未配置>' if required else '<可选>'),
+            'preview_value': preview_value,
+            'source': source or ('default' if env_defaults.get(key) else ''),
+            'sensitive': key in sensitive_keys,
+        }
+
+    services = [
+        {
+            'key': 'web',
+            'name': 'Web',
+            'service_name': 'xhs-v4',
+            'start_command': './docker/entrypoint-web.sh',
+            'summary': '负责前台、后台、自动化中心和健康检查接口。',
+            'required_envs': [
+                env_item('SECRET_KEY'),
+                env_item('ADMIN_USERNAME'),
+                env_item('ADMIN_PASSWORD'),
+                env_item('DEEPSEEK_API_KEY'),
+                env_item('DATABASE_URL'),
+                env_item('REDIS_URL'),
+                env_item('CELERY_BROKER_URL'),
+                env_item('CELERY_RESULT_BACKEND'),
+            ],
+            'optional_envs': [
+                env_item('DEFAULT_TOPIC_QUOTA', required=False),
+                env_item('PREFERRED_URL_SCHEME', required=False),
+                env_item('SESSION_COOKIE_SECURE', required=False),
+                env_item('ASSET_IMAGE_PROVIDER', required=False),
+                env_item('ASSET_IMAGE_API_BASE', required=False),
+                env_item('ASSET_IMAGE_API_URL', required=False),
+                env_item('ASSET_IMAGE_MODEL', required=False),
+                env_item('ASSET_IMAGE_SIZE', required=False),
+            ],
+        },
+        {
+            'key': 'worker',
+            'name': 'Worker',
+            'service_name': 'xhs-v4-worker',
+            'start_command': './docker/entrypoint-worker.sh',
+            'summary': '负责候选话题生成、热点抓取、图片生成等异步任务。',
+            'required_envs': [
+                env_item('DATABASE_URL'),
+                env_item('REDIS_URL'),
+                env_item('CELERY_BROKER_URL'),
+                env_item('CELERY_RESULT_BACKEND'),
+                env_item('SECRET_KEY'),
+            ],
+            'optional_envs': [
+                env_item('DEFAULT_TOPIC_QUOTA', required=False),
+                env_item('DEEPSEEK_API_KEY', required=False),
+                env_item('ASSET_IMAGE_PROVIDER', required=False),
+                env_item('ASSET_IMAGE_API_BASE', required=False),
+                env_item('ASSET_IMAGE_API_URL', required=False),
+                env_item('ASSET_IMAGE_MODEL', required=False),
+                env_item('ASSET_IMAGE_SIZE', required=False),
+            ],
+        },
+        {
+            'key': 'beat',
+            'name': 'Beat',
+            'service_name': 'xhs-v4-beat',
+            'start_command': './docker/entrypoint-beat.sh',
+            'summary': '负责按照后台调度配置定时派发自动化任务。',
+            'required_envs': [
+                env_item('DATABASE_URL'),
+                env_item('REDIS_URL'),
+                env_item('CELERY_BROKER_URL'),
+                env_item('CELERY_RESULT_BACKEND'),
+                env_item('SECRET_KEY'),
+                env_item('ENABLE_AUTOMATION_BEAT'),
+            ],
+            'optional_envs': [
+                env_item('CELERY_BEAT_LOG_LEVEL', required=False),
+                env_item('DEFAULT_TOPIC_QUOTA', required=False),
+            ],
+        },
+    ]
+
+    for service in services:
+        required_items = service['required_envs']
+        missing = [item['key'] for item in required_items if not item['configured']]
+        service['ready'] = len(missing) == 0
+        service['missing_required'] = missing
+        preview_lines = []
+        for item in required_items + service['optional_envs']:
+            if not item['preview_value'] and not item['required']:
+                continue
+            preview_lines.append(f"{item['key']}={item['preview_value']}")
+        service['env_preview'] = '\n'.join(preview_lines)
+
+    missing_required_total = sum(len(item['missing_required']) for item in services)
+    current_worker_ping = _latest_worker_ping_snapshot()
+    return {
+        'success': True,
+        'summary': {
+            'services_ready': len([item for item in services if item['ready']]),
+            'services_total': len(services),
+            'missing_required_total': missing_required_total,
+            'worker_ping_status': current_worker_ping.get('status_label', '未检查'),
+            'image_provider_name': capabilities.get('image_provider_name') or 'svg_fallback',
+        },
+        'services': services,
+        'compose': {
+            'commands': [
+                'docker compose up -d --build',
+                'docker compose ps',
+                'docker compose logs -f web',
+                'docker compose logs -f worker',
+                'docker compose logs -f beat',
+            ],
+            'healthchecks': [
+                '/healthz',
+                '/admin',
+                '/automation_center',
+            ],
+        },
+        'zeabur': {
+            'recommended_order': [
+                '先部署 web',
+                '确认 /healthz 可访问',
+                '再新增 worker',
+                '再新增 beat',
+                '最后在自动化中心执行检测 Worker 与运行诊断',
+            ],
+            'services': [{
+                'name': item['service_name'],
+                'start_command': item['start_command'],
+            } for item in services],
+        },
+        'docs': [
+            'docs/xhs_v4_生产部署方案_v1_2026-04-02.md',
+            'docs/xhs_v4_Zeabur与GitHub同步操作说明_v1_2026-04-07.md',
+        ],
+    }
+
+
+def _build_recent_failed_jobs_payload(limit=10):
+    safe_limit = min(max(_safe_int(limit, 10), 1), 50)
+    items = []
+
+    failed_data_source_tasks = DataSourceTask.query.filter_by(status='failed').order_by(
+        DataSourceTask.finished_at.desc(), DataSourceTask.updated_at.desc(), DataSourceTask.created_at.desc(), DataSourceTask.id.desc()
+    ).limit(safe_limit).all()
+    for task in failed_data_source_tasks:
+        items.append({
+            'kind': 'data_source_task',
+            'kind_label': '热点抓取任务',
+            'id': task.id,
+            'title': task.batch_name or task.task_type or '热点抓取任务',
+            'occurred_at': _format_datetime(task.finished_at or task.updated_at or task.created_at),
+            'status': task.status or 'failed',
+            'status_label': task.status or 'failed',
+            'message': task.message or '抓取任务失败',
+            'task_id': task.celery_task_id or '',
+            'source_label': f'{task.source_platform or "-"} / {task.source_channel or "-"}',
+            'detail': {
+                'task_type': task.task_type,
+                'source_platform': task.source_platform or '',
+                'source_channel': task.source_channel or '',
+                'batch_name': task.batch_name or '',
+                'celery_task_id': task.celery_task_id or '',
+                'result_payload': _load_json_value(task.result_payload, {}),
+            },
+            'retry': {
+                'type': 'data_source_task',
+                'id': task.id,
+                'label': '重试抓取',
+            },
+        })
+
+    failed_asset_tasks = AssetGenerationTask.query.filter_by(status='failed').order_by(
+        AssetGenerationTask.finished_at.desc(), AssetGenerationTask.updated_at.desc(), AssetGenerationTask.created_at.desc(), AssetGenerationTask.id.desc()
+    ).limit(safe_limit).all()
+    for task in failed_asset_tasks:
+        items.append({
+            'kind': 'asset_generation_task',
+            'kind_label': '图片生成任务',
+            'id': task.id,
+            'title': task.title_hint or f'图片任务 #{task.id}',
+            'occurred_at': _format_datetime(task.finished_at or task.updated_at or task.created_at),
+            'status': task.status or 'failed',
+            'status_label': task.status or 'failed',
+            'message': task.message or '图片生成失败',
+            'task_id': task.celery_task_id or '',
+            'source_label': task.source_provider or '-',
+            'detail': {
+                'topic_id': task.topic_id,
+                'registration_id': task.registration_id,
+                'source_provider': task.source_provider or '',
+                'style_preset': task.style_preset or '',
+                'celery_task_id': task.celery_task_id or '',
+                'result_payload': _load_json_value(task.result_payload, []),
+            },
+            'retry': {
+                'type': 'asset_generation_task',
+                'id': task.id,
+                'label': '重试图片',
+            },
+        })
+
+    failed_schedules = AutomationSchedule.query.filter_by(last_status='failed').order_by(
+        AutomationSchedule.last_run_at.desc(), AutomationSchedule.updated_at.desc(), AutomationSchedule.id.desc()
+    ).limit(safe_limit).all()
+    for schedule in failed_schedules:
+        items.append({
+            'kind': 'automation_schedule',
+            'kind_label': '自动调度',
+            'id': schedule.id,
+            'title': schedule.name or schedule.job_key or f'调度 #{schedule.id}',
+            'occurred_at': _format_datetime(schedule.last_run_at or schedule.updated_at or schedule.created_at),
+            'status': schedule.last_status or 'failed',
+            'status_label': schedule.last_status or 'failed',
+            'message': schedule.last_message or '调度执行失败',
+            'task_id': schedule.last_celery_task_id or '',
+            'source_label': schedule.task_type or '-',
+            'detail': {
+                'job_key': schedule.job_key,
+                'task_type': schedule.task_type,
+                'enabled': bool(schedule.enabled),
+                'interval_minutes': schedule.interval_minutes or 0,
+                'last_celery_task_id': schedule.last_celery_task_id or '',
+                'params_payload': _load_json_value(schedule.params_payload, {}),
+            },
+            'retry': {
+                'type': 'automation_schedule',
+                'id': schedule.id,
+                'label': '立即执行',
+            },
+        })
+
+    failed_ping_logs = OperationLog.query.filter_by(action='worker_ping_check_failed').order_by(
+        OperationLog.created_at.desc(), OperationLog.id.desc()
+    ).limit(safe_limit).all()
+    for log in failed_ping_logs:
+        detail = _deserialize_operation_detail(log.detail)
+        items.append({
+            'kind': 'worker_ping',
+            'kind_label': 'Worker 联通检查',
+            'id': log.id,
+            'title': 'Worker Ping',
+            'occurred_at': _format_datetime(log.created_at),
+            'status': detail.get('status') or 'failed',
+            'status_label': detail.get('status') or 'failed',
+            'message': detail.get('message') or log.message or 'Worker 联通检查失败',
+            'task_id': detail.get('task_id') or '',
+            'source_label': detail.get('state') or '-',
+            'detail': detail,
+            'retry': {
+                'type': 'worker_ping',
+                'id': 0,
+                'label': '重新检测',
+            },
+        })
+
+    items.sort(key=lambda item: item.get('occurred_at') or '', reverse=True)
+    trimmed = items[:safe_limit]
+    return {
+        'success': True,
+        'summary': {
+            'count': len(trimmed),
+            'limit': safe_limit,
+        },
+        'items': trimmed,
+    }
+
+
+def _run_worker_ping_check(timeout_seconds=3):
+    from time import monotonic
+    from celery.result import AsyncResult
+    from celery.exceptions import TimeoutError as CeleryTimeoutError
+    from celery_app import celery, ping
+
+    safe_timeout = min(max(_safe_int(timeout_seconds, 3), 1), 15)
+    started_at = datetime.now()
+    started_tick = monotonic()
+    task_id = ''
+    async_result = None
+
+    def _elapsed_ms():
+        return int(round((monotonic() - started_tick) * 1000))
+
+    try:
+        task = ping.delay()
+        task_id = task.id
+        async_result = AsyncResult(task_id, app=celery)
+        _log_operation('dispatch_job', 'worker', message='触发 Worker 联通检查', detail={
+            'task_id': task_id,
+            'job': 'system.ping',
+            'timeout_seconds': safe_timeout,
+        })
+
+        payload = async_result.get(timeout=safe_timeout, propagate=False)
+        state = async_result.state
+        if not isinstance(payload, (dict, list, str, int, float, bool, type(None))):
+            payload = str(payload)
+        if state == 'SUCCESS':
+            detail = {
+                'status': 'success',
+                'task_id': task_id,
+                'state': state,
+                'checked_at': _format_datetime(started_at),
+                'elapsed_ms': _elapsed_ms(),
+                'response': payload,
+                'message': 'Worker 返回 pong',
+            }
+            _log_operation('worker_ping_check', 'worker', message='Worker 联通检查成功', detail=detail)
+            return {
+                'success': True,
+                'message': f'Worker 联通正常，耗时 {detail["elapsed_ms"]}ms',
+                'job': 'system.ping',
+                'task_id': task_id,
+                'state': state,
+                'checked_at': detail['checked_at'],
+                'elapsed_ms': detail['elapsed_ms'],
+                'result': payload,
+            }
+
+        detail = {
+            'status': 'failed',
+            'task_id': task_id,
+            'state': state,
+            'checked_at': _format_datetime(started_at),
+            'elapsed_ms': _elapsed_ms(),
+            'response': payload,
+            'message': f'Worker 返回状态 {state}',
+        }
+        _log_operation('worker_ping_check_failed', 'worker', message='Worker 联通检查返回失败状态', detail=detail)
+        return {
+            'success': False,
+            'message': f'Worker 返回状态 {state}',
+            'job': 'system.ping',
+            'task_id': task_id,
+            'state': state,
+            'checked_at': detail['checked_at'],
+            'elapsed_ms': detail['elapsed_ms'],
+            'result': payload,
+        }
+    except CeleryTimeoutError:
+        detail = {
+            'status': 'timeout',
+            'task_id': task_id,
+            'state': async_result.state if async_result else 'PENDING',
+            'checked_at': _format_datetime(started_at),
+            'elapsed_ms': _elapsed_ms(),
+            'message': f'等待 Worker 超时（>{safe_timeout}s）',
+        }
+        _log_operation('worker_ping_check_failed', 'worker', message='Worker 联通检查超时', detail=detail)
+        return {
+            'success': False,
+            'message': detail['message'],
+            'job': 'system.ping',
+            'task_id': task_id,
+            'state': detail['state'],
+            'checked_at': detail['checked_at'],
+            'elapsed_ms': detail['elapsed_ms'],
+            'result': None,
+        }
+    except Exception as exc:
+        status = 'dispatch_failed' if not task_id else 'failed'
+        state = async_result.state if async_result else 'UNKNOWN'
+        detail = {
+            'status': status,
+            'task_id': task_id,
+            'state': state,
+            'checked_at': _format_datetime(started_at),
+            'elapsed_ms': _elapsed_ms(),
+            'error': str(exc),
+            'error_type': exc.__class__.__name__,
+            'message': 'Broker / Worker 链路异常，无法完成联通检查',
+        }
+        _log_operation('worker_ping_check_failed', 'worker', message='Worker 联通检查失败', detail=detail)
+        return {
+            'success': False,
+            'message': f'Worker 联通检查失败：{exc}',
+            'job': 'system.ping',
+            'task_id': task_id,
+            'state': state,
+            'checked_at': detail['checked_at'],
+            'elapsed_ms': detail['elapsed_ms'],
+            'result': None,
+        }
 
 
 def _next_schedule_time(interval_minutes, base_time=None):
@@ -5389,6 +5958,17 @@ def runtime_diagnostics():
     if guard:
         return guard
 
+    last_worker_ping = _latest_worker_ping_snapshot()
+    worker_health_status = 'unknown'
+    worker_health_message = '尚未执行 Worker 联通检查'
+    if last_worker_ping.get('has_result'):
+        if last_worker_ping.get('status') == 'success':
+            worker_health_status = 'healthy'
+            worker_health_message = last_worker_ping.get('message') or '最近一次 Worker 联通检查成功'
+        else:
+            worker_health_status = 'degraded'
+            worker_health_message = last_worker_ping.get('message') or '最近一次 Worker 联通检查失败'
+
     schedules = AutomationSchedule.query.order_by(AutomationSchedule.id.asc()).all()
     next_runs = [{
         'job_key': item.job_key,
@@ -5399,7 +5979,7 @@ def runtime_diagnostics():
     } for item in schedules[:10]]
 
     recent_jobs = OperationLog.query.filter(OperationLog.action.in_([
-        'dispatch_job', 'worker_generate', 'worker_sync', 'worker_generate_asset', 'scheduler_tick'
+        'dispatch_job', 'worker_generate', 'worker_sync', 'worker_generate_asset', 'scheduler_tick', 'worker_ping_check', 'worker_ping_check_failed'
     ])).order_by(OperationLog.created_at.desc()).limit(10).all()
 
     return jsonify({
@@ -5416,6 +5996,13 @@ def runtime_diagnostics():
             'session_cookie_secure': _env_flag('SESSION_COOKIE_SECURE', False),
             'default_topic_quota': _default_topic_quota(),
             'beat_enabled': _coerce_bool(os.environ.get('ENABLE_AUTOMATION_BEAT', 'true')),
+        },
+        'worker': {
+            'broker_ready': bool((os.environ.get('CELERY_BROKER_URL') or '').strip()),
+            'result_backend_ready': bool((os.environ.get('CELERY_RESULT_BACKEND') or '').strip()),
+            'health_status': worker_health_status,
+            'health_message': worker_health_message,
+            'last_ping': last_worker_ping,
         },
         'capabilities': _image_provider_capabilities(),
         'counts': {
@@ -5471,6 +6058,40 @@ def bootstrap_project_demo_data():
         **result,
         'project_status': _build_project_status_payload(),
     })
+
+
+@app.route('/api/admin/project-status/clear-demo-data', methods=['POST'])
+def clear_project_demo_data():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    result = _clear_demo_operational_data()
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        **result,
+        'project_status': _build_project_status_payload(),
+    })
+
+
+@app.route('/api/admin/deployment-helper')
+def deployment_helper():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    return jsonify(_build_deployment_helper_payload())
+
+
+@app.route('/api/admin/failed-jobs')
+def failed_jobs():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    limit = request.args.get('limit')
+    return jsonify(_build_recent_failed_jobs_payload(limit=limit))
 
 
 @app.route('/api/admin/automation-config', methods=['GET', 'POST'])
@@ -7765,20 +8386,11 @@ def trigger_worker_ping():
     if guard:
         return guard
 
-    from celery_app import ping
-
-    task = ping.delay()
-    _log_operation('dispatch_job', 'worker', message='触发 Worker 联通检查', detail={
-        'task_id': task.id,
-        'job': 'system.ping',
-    })
+    data = request.json or {}
+    timeout_seconds = min(max(_safe_int(data.get('wait_seconds'), 3), 1), 15)
+    result = _run_worker_ping_check(timeout_seconds=timeout_seconds)
     db.session.commit()
-    return jsonify({
-        'success': True,
-        'message': '已触发 Worker 联通检查',
-        'task_id': task.id,
-        'job': 'system.ping',
-    })
+    return jsonify(result)
 
 
 @app.route('/api/jobs/hotwords/run', methods=['POST'])
@@ -7861,7 +8473,9 @@ def get_job_history():
     from celery_app import celery
 
     limit = min(max(_safe_int(request.args.get('limit'), 20), 1), 200)
-    logs = OperationLog.query.filter(OperationLog.action.in_(['dispatch_job', 'worker_generate', 'worker_sync', 'worker_generate_asset'])).order_by(
+    logs = OperationLog.query.filter(OperationLog.action.in_([
+        'dispatch_job', 'worker_generate', 'worker_sync', 'worker_generate_asset', 'worker_ping_check', 'worker_ping_check_failed'
+    ])).order_by(
         OperationLog.created_at.desc(),
         OperationLog.id.desc()
     ).limit(limit).all()
