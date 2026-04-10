@@ -6,6 +6,7 @@
     <title>{{ site_config.page_title or '福瑞医科内容运营平台' }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/static/css/public_site.css">
     <style>
         :root {
             --primary: {{ site_theme.primary_color or '#ff2442' }};
@@ -23,8 +24,8 @@
             --muted: {{ site_theme.muted_text_color or '#6b7280' }};
         }
 
-        body {
-            font-family: {{ site_theme.font_family or '-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif' }};
+        body.public-body {
+            font-family: 'Manrope', 'Noto Sans SC', {{ site_theme.font_family or 'sans-serif' }};
             background:
                 radial-gradient(circle at top right, var(--primary-soft) 0%, transparent 35%),
                 linear-gradient(180deg, var(--bg-start) 0%, var(--bg-end) 100%);
@@ -433,9 +434,10 @@
         }
     </style>
 </head>
-<body>
-    <nav class="navbar navbar-dark">
-        <div class="container">
+<body class="public-body">
+    <div class="public-shell">
+    <nav class="navbar navbar-dark public-navbar">
+        <div class="container public-container">
             <a class="navbar-brand" href="/">
                 <i class="bi bi-bookmark-heart-fill"></i>
                 {{ site_config.site_name or '福瑞医科' }}
@@ -507,7 +509,7 @@
         </div>
     </section>
 
-    <div class="container main-wrap">
+    <div class="container public-container main-wrap">
         <div class="row g-3 quick-grid">
             <div class="col-md-4">
                 <a class="quick-link" href="/my_registration">
@@ -722,9 +724,10 @@
         {% endif %}
     </div>
 
-    <footer class="text-center py-4">
+    <footer class="public-footer">
         <div>{{ site_config.footer_text or site_theme.footer_text or '福瑞医科小红书任务管理系统' }}</div>
     </footer>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>

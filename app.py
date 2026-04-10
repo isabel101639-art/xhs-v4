@@ -1957,6 +1957,734 @@ def _build_readiness_checks():
     }
 
 
+def _build_project_status_payload():
+    readiness = _build_readiness_checks()
+    capability = _image_provider_capabilities()
+    counts = {
+        'activities': Activity.query.count(),
+        'topics': Topic.query.count(),
+        'registrations': Registration.query.count(),
+        'submissions': Submission.query.count(),
+        'corpus_entries': CorpusEntry.query.count(),
+        'trend_notes': TrendNote.query.count(),
+        'topic_ideas': TopicIdea.query.count(),
+        'published_topic_ideas': TopicIdea.query.filter_by(status='published').count(),
+        'data_source_tasks': DataSourceTask.query.count(),
+        'asset_generation_tasks': AssetGenerationTask.query.count(),
+        'asset_library_items': AssetLibrary.query.count(),
+        'automation_schedules': AutomationSchedule.query.count(),
+        'enabled_schedules': AutomationSchedule.query.filter_by(enabled=True).count(),
+        'backups': BackupRecord.query.count(),
+        'snapshots': ActivitySnapshot.query.count(),
+        'operation_logs': OperationLog.query.count(),
+        'creator_accounts': CreatorAccount.query.count(),
+        'creator_posts': CreatorPost.query.count(),
+        'admin_users': AdminUser.query.count(),
+        'roles': RolePermission.query.count(),
+    }
+
+    readiness_total = readiness['summary']['total'] or 1
+    readiness_rate = round((readiness['summary']['passed'] / readiness_total) * 100)
+    worker_env_ready = all(
+        item['ok'] for item in readiness['env_checks']
+        if item['key'] in {'REDIS_URL', 'CELERY_BROKER_URL', 'CELERY_RESULT_BACKEND', 'SECRET_KEY'}
+    )
+    image_real_provider_ready = bool(capability.get('image_provider_configured')) and not bool(capability.get('fallback_mode'))
+
+    modules = [
+        {
+            'key': 'M01',
+            'name': '网站门户与视觉系统',
+            'phase': 'P0',
+            'status': 'done',
+            'progress': 95,
+            'summary': '首页、门户配置、公告管理和统一视觉外壳已经落地。',
+            'evidence': '前台首页、后台门户配置、公告管理均已可用。',
+            'next_step': '继续做细节打磨和视觉统一，不是当前主阻塞项。',
+        },
+        {
+            'key': 'M02',
+            'name': '期数管理与内容隔离',
+            'phase': 'P0',
+            'status': 'done',
+            'progress': 85,
+            'summary': '活动新增、发布、归档、复制、快照恢复都已具备。',
+            'evidence': f'当前活动 {counts["activities"]} 期，活动快照 {counts["snapshots"]} 条。',
+            'next_step': '后续可继续强化历史期运营视图和更细的内容池隔离。',
+        },
+        {
+            'key': 'M03',
+            'name': '话题广场与报名中心',
+            'phase': 'P0',
+            'status': 'done',
+            'progress': 95,
+            'summary': '话题广场、话题详情、报名、我的报名主流程已跑通。',
+            'evidence': f'当前正式话题 {counts["topics"]} 个，报名 {counts["registrations"]} 条。',
+            'next_step': '继续补运营文案和空状态提示即可。',
+        },
+        {
+            'key': 'M04',
+            'name': '多平台提报与更新中心',
+            'phase': 'P0',
+            'status': 'done',
+            'progress': 90,
+            'summary': '多平台提报字段、更新接口和数据导出能力已经在主链路内。',
+            'evidence': f'当前提报记录 {counts["submissions"]} 条，支持小红书/抖音/视频号/微博字段。',
+            'next_step': '后续可继续补更强的校验和批量运维能力。',
+        },
+        {
+            'key': 'M05',
+            'name': 'AI 文案中心',
+            'phase': 'P0',
+            'status': 'done',
+            'progress': 85,
+            'summary': '报名成功页的文案生成、真人化、合规检查和图文创作包已接入。',
+            'evidence': '文案生成、真人化、合规检查、创作包接口均已存在。',
+            'next_step': '后续可继续优化提示词模板和版本质量。',
+        },
+        {
+            'key': 'M06',
+            'name': '图片库与文生图中心',
+            'phase': 'P1',
+            'status': 'in_progress',
+            'progress': 60 if image_real_provider_ready else 52,
+            'summary': '图片任务流、素材库和样式系统已做完基础版，但默认还是 SVG 兜底。',
+            'evidence': f'图片任务 {counts["asset_generation_tasks"]} 条，素材库 {counts["asset_library_items"]} 条，当前 provider {capability.get("image_provider_name") or "-"}。',
+            'next_step': '接入真实图片模型服务，替换 fallback 路径。',
+        },
+        {
+            'key': 'M07',
+            'name': '热点抓取与选题引擎',
+            'phase': 'P0',
+            'status': 'in_progress',
+            'progress': 62 if counts['trend_notes'] > 0 else 46,
+            'summary': '热点导入、模板预览、Worker 任务骨架已在，但真实外部数据源还没收口。',
+            'evidence': f'热点池 {counts["trend_notes"]} 条，抓取任务 {counts["data_source_tasks"]} 条。',
+            'next_step': '优先接入真实热点源并跑出第一批有效热点数据。',
+        },
+        {
+            'key': 'M08',
+            'name': '语料库与爆款分析中心',
+            'phase': 'P0',
+            'status': 'in_progress',
+            'progress': 60,
+            'summary': '语料库基础结构已建，账号与爆款分析能力已有骨架，但真实数据样本不足。',
+            'evidence': f'语料 {counts["corpus_entries"]} 条，账号 {counts["creator_accounts"]} 个，笔记 {counts["creator_posts"]} 条。',
+            'next_step': '补账号/笔记样本数据，让分析结果真正可验证。',
+        },
+        {
+            'key': 'M09',
+            'name': '自动化中心与审核发布流',
+            'phase': 'P0',
+            'status': 'in_progress',
+            'progress': 78 if worker_env_ready else 68,
+            'summary': '候选话题池、审核发布、调度配置、任务记录都已具备，但生产异步链路还未完全连通。',
+            'evidence': f'候选话题 {counts["topic_ideas"]} 条，调度 {counts["automation_schedules"]} 条，其中启用 {counts["enabled_schedules"]} 条。',
+            'next_step': '补齐 Worker/Beat 环境并完成一次真实异步闭环验证。',
+        },
+        {
+            'key': 'M10',
+            'name': '全局数据分析中心',
+            'phase': 'P0',
+            'status': 'done',
+            'progress': 80,
+            'summary': '数据分析页、周报/月报/复盘报告导出已上线。',
+            'evidence': '分析页和三类报表导出接口已具备。',
+            'next_step': '后续可再增强维度和图表表达。',
+        },
+        {
+            'key': 'M11',
+            'name': '报名人账号数据看板',
+            'phase': 'P1',
+            'status': 'in_progress',
+            'progress': 58 if counts['creator_accounts'] > 0 else 48,
+            'summary': '账号、笔记、快照、统计接口和后台看板都在，但当前库里还没有运营样本。',
+            'evidence': f'账号 {counts["creator_accounts"]} 个，笔记 {counts["creator_posts"]} 条。',
+            'next_step': '先导入一批演示或真实账号数据，验证排行和趋势是否符合预期。',
+        },
+        {
+            'key': 'M12',
+            'name': '报表、备份与恢复中心',
+            'phase': 'P0',
+            'status': 'done',
+            'progress': 88,
+            'summary': '原始数据导出、周报/月报/复盘、手动备份、快照恢复都已到位。',
+            'evidence': f'备份 {counts["backups"]} 条，活动快照 {counts["snapshots"]} 条。',
+            'next_step': '下一步重点是把真实备份记录跑起来并验证恢复演练。',
+        },
+        {
+            'key': 'M13',
+            'name': '权限、日志与系统配置',
+            'phase': 'P1',
+            'status': 'done',
+            'progress': 82,
+            'summary': '管理员、角色权限、系统设置、操作日志已形成基础中台能力。',
+            'evidence': f'管理员 {counts["admin_users"]} 个，角色 {counts["roles"]} 个，日志 {counts["operation_logs"]} 条。',
+            'next_step': '可继续补更细粒度权限和更多操作留痕。',
+        },
+    ]
+
+    module_map = {item['key']: item for item in modules}
+
+    def avg_progress(keys):
+        rows = [module_map[key]['progress'] for key in keys if key in module_map]
+        return round(sum(rows) / len(rows)) if rows else 0
+
+    milestones = [
+        {
+            'key': 'P0',
+            'name': '可运营版本',
+            'status': 'in_progress',
+            'progress': avg_progress(['M01', 'M02', 'M03', 'M04', 'M05', 'M07', 'M08', 'M09', 'M10', 'M12']),
+            'summary': '业务主链路已跑通，剩余主要是热点源、异步链路和真实运营数据验证。',
+        },
+        {
+            'key': 'P1',
+            'name': '增强版本',
+            'status': 'in_progress',
+            'progress': avg_progress(['M06', 'M11', 'M13']),
+            'summary': '图片中心、账号看板、权限体系已经有基础，但离完整增强版还有一段距离。',
+        },
+        {
+            'key': 'P2',
+            'name': '智能运营版本',
+            'status': 'pending',
+            'progress': 15,
+            'summary': '智能推荐、成长建议、联动评分等能力还没有真正展开。',
+        },
+    ]
+
+    blockers = []
+    for item in readiness['env_checks']:
+        if not item['ok']:
+            blockers.append({
+                'title': f'环境项未就绪：{item["key"]}',
+                'detail': item['message'],
+            })
+    if counts['trend_notes'] == 0:
+        blockers.append({
+            'title': '热点池仍为空',
+            'detail': '热点抓取与候选话题链路暂时缺少真实输入数据。',
+        })
+    if counts['topic_ideas'] == 0:
+        blockers.append({
+            'title': '候选话题池暂无记录',
+            'detail': '审核发布流代码已经在，但还没有看到首批真实候选话题数据。',
+        })
+    if not image_real_provider_ready:
+        blockers.append({
+            'title': '图片中心仍在 fallback 模式',
+            'detail': '当前图片任务可以运行，但主要依赖 SVG 兜底，不是最终形态。',
+        })
+
+    recommended_actions = []
+    if not worker_env_ready:
+        recommended_actions.append({
+            'priority': 'P0',
+            'title': '补齐 Worker / Beat 与环境变量',
+            'detail': '先把 Redis、Celery Broker、Celery Backend、SECRET_KEY 等环境项补齐，异步链路才算真正可运营。',
+            'url': '/automation_center',
+        })
+    if counts['trend_notes'] == 0:
+        recommended_actions.append({
+            'priority': 'P0',
+            'title': '接入真实热点源并产出首批热点池数据',
+            'detail': '当前热点池为空，会直接影响候选话题工厂和自动化选题验证。',
+            'url': '/automation_center',
+        })
+    if counts['topic_ideas'] == 0:
+        recommended_actions.append({
+            'priority': 'P0',
+            'title': '生成首批候选话题并完成审核发布验证',
+            'detail': '把候选话题从“有代码”推进到“有真实记录、可复盘”的状态。',
+            'url': '/automation_center',
+        })
+    if not image_real_provider_ready:
+        recommended_actions.append({
+            'priority': 'P1',
+            'title': '接入真实图片模型服务',
+            'detail': '当前图片中心结构已齐，但还没有从 SVG 兜底升级到真实出图。',
+            'url': '/automation_center',
+        })
+    if counts['creator_accounts'] == 0 and counts['creator_posts'] == 0:
+        recommended_actions.append({
+            'priority': 'P1',
+            'title': '导入账号与笔记样本，跑通账号看板',
+            'detail': '账号看板和爆款分析现在缺少数据，先补样本比继续堆页面更有价值。',
+            'url': '/admin?tab=creator',
+        })
+
+    overall_progress = round(sum(item['progress'] for item in modules) / len(modules)) if modules else 0
+    return {
+        'success': True,
+        'updated_at': _format_datetime(datetime.now()),
+        'summary': {
+            'estimated_completion': overall_progress,
+            'current_stage': 'P0 收尾 + P1 推进',
+            'delivery_status': '可运营骨架已成型',
+            'readiness_rate': readiness_rate,
+            'codebase_size_lines': 7702,
+            'key_message': '当前最值得继续投入的是“真实数据源接入 + 异步链路联通 + 样本数据灌入”。',
+        },
+        'milestones': milestones,
+        'modules': modules,
+        'counts': counts,
+        'readiness': readiness,
+        'capabilities': capability,
+        'blockers': blockers[:6],
+        'recommended_actions': recommended_actions[:5],
+        'docs': [
+            {'title': '项目状态总览', 'path': 'docs/xhs_v4_项目状态总览_v1_2026-04-10.md'},
+            {'title': '整体方案与实施蓝图', 'path': 'docs/xhs_v4_整体方案与实施蓝图_v1_2026-04-02.md'},
+            {'title': '模块需求文档 PRD', 'path': 'docs/xhs_v4_模块需求文档_PRD_v1_2026-04-02.md'},
+            {'title': 'Zeabur 与 GitHub 同步操作说明', 'path': 'docs/xhs_v4_Zeabur与GitHub同步操作说明_v1_2026-04-07.md'},
+        ],
+    }
+
+
+def _bootstrap_demo_operational_data():
+    now = datetime.now()
+    activity = Activity.query.filter_by(status='published').order_by(Activity.created_at.desc(), Activity.id.desc()).first()
+    if not activity:
+        activity = Activity.query.order_by(Activity.created_at.desc(), Activity.id.desc()).first()
+    topics = Topic.query.filter_by(activity_id=activity.id).order_by(Topic.id.asc()).all() if activity else Topic.query.order_by(Topic.id.asc()).all()
+    registrations = Registration.query.order_by(Registration.created_at.desc(), Registration.id.desc()).all()
+
+    created = Counter()
+    skipped = []
+    demo_batch = f'DEMO-{now.strftime("%Y%m%d%H%M")}'
+    data_task = None
+
+    topic_titles = [topic.topic_name for topic in topics[:6]]
+    if len(topic_titles) < 6:
+        topic_titles.extend([
+            'FibroScan 检查结果怎么看',
+            '脂肪肝复查要不要紧',
+            '护肝期饮食管理',
+            '体检后肝功能异常怎么复盘',
+            '复方鳖甲软肝片怎么自然软植入',
+            '乙肝/脂肪肝人群日常管理',
+        ][len(topic_titles):])
+
+    if DataSourceTask.query.count() == 0:
+        data_task = DataSourceTask(
+            task_type='hotword_sync',
+            source_platform='小红书',
+            source_channel='demo_seed',
+            mode='demo',
+            status='success',
+            batch_name=demo_batch,
+            keyword_limit=6,
+            activity_id=activity.id if activity else None,
+            item_count=0,
+            message='已补齐演示热点任务',
+            params_payload=json.dumps({
+                'source_platform': '小红书',
+                'source_channel': 'demo_seed',
+                'keyword_limit': 6,
+                'batch_name': demo_batch,
+            }, ensure_ascii=False),
+            result_payload=json.dumps({'status': 'pending_note_seed'}, ensure_ascii=False),
+            started_at=now - timedelta(minutes=6),
+            finished_at=now - timedelta(minutes=5),
+        )
+        db.session.add(data_task)
+        db.session.flush()
+        _append_data_source_log(data_task.id, '已创建演示热点抓取任务', detail={'batch_name': demo_batch, 'mode': 'demo'})
+        created['data_source_tasks'] += 1
+    else:
+        skipped.append('抓取任务已有数据，跳过演示任务补齐')
+
+    if TrendNote.query.count() == 0:
+        trend_rows = [
+            {
+                'keyword': 'FibroScan',
+                'topic_category': '检查解读',
+                'title': '体检发现肝脏硬度偏高后，我是怎么补做 FibroScan 的',
+                'author': '肝脏健康研究员',
+                'views': 18600,
+                'likes': 1320,
+                'favorites': 980,
+                'comments': 216,
+                'hot_score': 94,
+                'source_rank': 1,
+                'summary': '适合延展为检查解读、复查流程和结果对照类话题。',
+                'pool_status': 'candidate',
+            },
+            {
+                'keyword': '脂肪肝复查',
+                'topic_category': '复查管理',
+                'title': '脂肪肝复查别只看转氨酶，这 3 个指标我后来才搞明白',
+                'author': '体检复盘手记',
+                'views': 14300,
+                'likes': 960,
+                'favorites': 801,
+                'comments': 154,
+                'hot_score': 88,
+                'source_rank': 2,
+                'summary': '适合延展为复查清单、指标复盘和医生沟通建议。',
+                'pool_status': 'candidate',
+            },
+            {
+                'keyword': '护肝饮食',
+                'topic_category': '日常管理',
+                'title': '护肝期我把早餐换成这套搭配，复查指标稳定了很多',
+                'author': '慢病饮食观察',
+                'views': 11900,
+                'likes': 756,
+                'favorites': 688,
+                'comments': 132,
+                'hot_score': 82,
+                'source_rank': 3,
+                'summary': '适合延展为日常习惯、饮食管理和生活方式内容。',
+                'pool_status': 'reserve',
+            },
+            {
+                'keyword': '肝功能异常',
+                'topic_category': '体检复盘',
+                'title': '体检单上 ALT / AST 异常时，我最想先搞懂的是哪一步',
+                'author': '年度体检复盘',
+                'views': 9800,
+                'likes': 604,
+                'favorites': 511,
+                'comments': 96,
+                'hot_score': 77,
+                'source_rank': 4,
+                'summary': '适合做体检复盘、复查建议和基础科普分层内容。',
+                'pool_status': 'reserve',
+            },
+            {
+                'keyword': '复方鳖甲软肝片',
+                'topic_category': '用药沟通',
+                'title': '门诊沟通里医生提醒我，护肝内容最怕一上来就把产品说满',
+                'author': '真实问诊记录',
+                'views': 8600,
+                'likes': 522,
+                'favorites': 460,
+                'comments': 88,
+                'hot_score': 72,
+                'source_rank': 5,
+                'summary': '适合做软植入表达、产品信息节奏和合规表达示例。',
+                'pool_status': 'reserve',
+            },
+            {
+                'keyword': '肝病日常管理',
+                'topic_category': '长期管理',
+                'title': '复查周期拉长之后，我怎么用一个表把肝病日常管理固定下来',
+                'author': '慢病管理计划',
+                'views': 7300,
+                'likes': 468,
+                'favorites': 406,
+                'comments': 73,
+                'hot_score': 69,
+                'source_rank': 6,
+                'summary': '适合做管理清单、长期随访和个人行动模板内容。',
+                'pool_status': 'reserve',
+            },
+        ]
+        for index, row in enumerate(trend_rows, start=1):
+            db.session.add(TrendNote(
+                source_platform='小红书',
+                source_channel='demo_seed',
+                source_template_key='generic_lines',
+                import_batch=demo_batch,
+                keyword=row['keyword'],
+                topic_category=row['topic_category'],
+                title=row['title'],
+                author=row['author'],
+                link=f'https://example.com/demo/trend/{index}',
+                views=row['views'],
+                likes=row['likes'],
+                favorites=row['favorites'],
+                comments=row['comments'],
+                hot_score=row['hot_score'],
+                source_rank=row['source_rank'],
+                publish_time=now - timedelta(days=index),
+                summary=row['summary'],
+                raw_payload=json.dumps({'mode': 'demo_seed', 'batch_name': demo_batch}, ensure_ascii=False),
+                pool_status=row['pool_status'],
+                created_at=now - timedelta(days=index),
+            ))
+        db.session.flush()
+        created['trend_notes'] += len(trend_rows)
+        if data_task:
+            data_task.item_count = len(trend_rows)
+            data_task.result_payload = json.dumps({'inserted': len(trend_rows), 'batch_name': demo_batch}, ensure_ascii=False)
+            data_task.message = f'已补齐 {len(trend_rows)} 条演示热点'
+            _append_data_source_log(data_task.id, '已写入演示热点池数据', detail={'inserted': len(trend_rows)})
+    else:
+        skipped.append('热点池已有数据，跳过演示热点补齐')
+
+    if TopicIdea.query.count() == 0:
+        source_notes = TrendNote.query.order_by(TrendNote.hot_score.desc(), TrendNote.id.asc()).limit(6).all()
+        published_topic = topics[0] if topics else None
+        idea_rows = [
+            {
+                'topic_title': topic_titles[0],
+                'keywords': 'FibroScan,检查结果,复查建议',
+                'angle': '以体检报告切入，解释为什么要补做 FibroScan，并给出复查判断路径。',
+                'content_type': '经验分享',
+                'persona': '体检复盘者',
+                'soft_insertion': '自然带出护肝管理方案',
+                'hot_value': 92,
+                'status': 'pending_review',
+            },
+            {
+                'topic_title': topic_titles[1],
+                'keywords': '脂肪肝,复查周期,指标复盘',
+                'angle': '做一条“复查前先看什么”的结构化内容，强调医生沟通要点。',
+                'content_type': '知识卡',
+                'persona': '复查管理者',
+                'soft_insertion': '在复盘建议里植入长期管理思路',
+                'hot_value': 88,
+                'status': 'pending_review',
+            },
+            {
+                'topic_title': topic_titles[2],
+                'keywords': '护肝饮食,早餐搭配,日常管理',
+                'angle': '围绕日常饮食习惯变化，做可执行的管理内容。',
+                'content_type': '清单卡',
+                'persona': '生活方式管理者',
+                'soft_insertion': '用长期管理角度承接产品信息',
+                'hot_value': 81,
+                'status': 'approved',
+            },
+            {
+                'topic_title': topic_titles[3],
+                'keywords': '肝功能异常,体检复盘,结果解读',
+                'angle': '用体检单上的异常指标做一次“怎么复盘”的说明型内容。',
+                'content_type': '复盘型图文',
+                'persona': '年度体检人群',
+                'soft_insertion': '保持合规表达，不把产品写满',
+                'hot_value': 79,
+                'status': 'published' if published_topic else 'approved',
+            },
+            {
+                'topic_title': topic_titles[4],
+                'keywords': '软植入,用药沟通,门诊建议',
+                'angle': '演示什么叫自然软植入，什么叫过度营销。',
+                'content_type': '误区对照图',
+                'persona': '医学内容运营',
+                'soft_insertion': '强调合规与表达节奏',
+                'hot_value': 73,
+                'status': 'rejected',
+            },
+        ]
+        for idx, row in enumerate(idea_rows):
+            note_slice = source_notes[idx:idx + 2] or source_notes[:2]
+            db.session.add(TopicIdea(
+                activity_id=activity.id if activity else None,
+                topic_title=row['topic_title'],
+                keywords=row['keywords'],
+                angle=row['angle'],
+                content_type=row['content_type'],
+                persona=row['persona'],
+                soft_insertion=row['soft_insertion'],
+                hot_value=row['hot_value'],
+                source_note_ids=','.join(str(item.id) for item in note_slice),
+                source_links='\n'.join(item.link or '' for item in note_slice),
+                copy_prompt=f'请围绕「{row["topic_title"]}」输出适合小红书的医疗科普图文草稿。',
+                cover_title=row['topic_title'][:24],
+                asset_brief='适合搭配知识卡、流程图、误区对照图等视觉资产。',
+                compliance_note='保留医学表达边界，不夸大疗效，不替代医生判断。',
+                quota=_default_topic_quota(),
+                status=row['status'],
+                review_note='演示数据：用于跑通候选话题池和审核发布视图。',
+                reviewed_at=now - timedelta(days=max(0, idx - 1)) if row['status'] in {'approved', 'published', 'rejected'} else None,
+                published_at=(now - timedelta(days=1)) if row['status'] == 'published' else None,
+                published_topic_id=published_topic.id if row['status'] == 'published' and published_topic else None,
+                created_at=now - timedelta(days=idx),
+            ))
+        created['topic_ideas'] += len(idea_rows)
+    else:
+        skipped.append('候选话题池已有数据，跳过演示候选话题补齐')
+
+    if CreatorAccount.query.count() == 0:
+        account_rows = [
+            {
+                'platform': 'xhs',
+                'owner_name': '陈晨',
+                'owner_phone': '13800000011',
+                'account_handle': 'furui_liver_cc',
+                'display_name': '肝脏体检复盘手记',
+                'profile_url': 'https://example.com/demo/xhs/furui_liver_cc',
+                'follower_count': 8420,
+                'topic_offset': 0,
+            },
+            {
+                'platform': 'douyin',
+                'owner_name': '林夏',
+                'owner_phone': '13800000012',
+                'account_handle': 'furui_followup_lx',
+                'display_name': '复查管理观察',
+                'profile_url': 'https://example.com/demo/douyin/furui_followup_lx',
+                'follower_count': 12100,
+                'topic_offset': 1,
+            },
+            {
+                'platform': 'video',
+                'owner_name': '周芮',
+                'owner_phone': '13800000013',
+                'account_handle': 'furui_dailycare_zr',
+                'display_name': '护肝日常管理',
+                'profile_url': 'https://example.com/demo/video/furui_dailycare_zr',
+                'follower_count': 5300,
+                'topic_offset': 2,
+            },
+        ]
+        for index, row in enumerate(account_rows):
+            account = CreatorAccount(
+                platform=row['platform'],
+                owner_name=row['owner_name'],
+                owner_phone=row['owner_phone'],
+                account_handle=row['account_handle'],
+                display_name=row['display_name'],
+                profile_url=row['profile_url'],
+                follower_count=row['follower_count'],
+                source_channel='demo_seed',
+                status='active',
+                notes='演示账号：用于验证账号看板、趋势图和爆款分析。',
+                last_synced_at=now - timedelta(hours=index + 1),
+            )
+            db.session.add(account)
+            db.session.flush()
+            created['creator_accounts'] += 1
+
+            post_metrics = [
+                {'views': 18600, 'exposures': 41200, 'likes': 1280, 'favorites': 860, 'comments': 206, 'shares': 112, 'follower_delta': 224},
+                {'views': 9200, 'exposures': 21800, 'likes': 560, 'favorites': 332, 'comments': 88, 'shares': 54, 'follower_delta': 73},
+            ]
+            for post_idx, metrics in enumerate(post_metrics):
+                title = f'{row["display_name"]}｜{topic_titles[(row["topic_offset"] + post_idx) % len(topic_titles)]}'
+                db.session.add(CreatorPost(
+                    creator_account_id=account.id,
+                    platform_post_id=f'demo-{row["platform"]}-{index + 1}-{post_idx + 1}',
+                    title=title,
+                    post_url=f'https://example.com/demo/{row["platform"]}/{account.account_handle}/{post_idx + 1}',
+                    publish_time=now - timedelta(days=post_idx + index + 1),
+                    topic_title=topic_titles[(row['topic_offset'] + post_idx) % len(topic_titles)],
+                    views=metrics['views'],
+                    exposures=metrics['exposures'],
+                    likes=metrics['likes'],
+                    favorites=metrics['favorites'],
+                    comments=metrics['comments'],
+                    shares=metrics['shares'],
+                    follower_delta=metrics['follower_delta'],
+                    is_viral=_infer_viral_post(
+                        views=metrics['views'],
+                        likes=metrics['likes'],
+                        favorites=metrics['favorites'],
+                        comments=metrics['comments'],
+                        exposures=metrics['exposures'],
+                    ),
+                    source_channel='demo_seed',
+                    raw_payload=json.dumps({'mode': 'demo_seed'}, ensure_ascii=False),
+                    created_at=now - timedelta(days=post_idx + index + 1),
+                ))
+                created['creator_posts'] += 1
+
+            db.session.add(CreatorAccountSnapshot(
+                creator_account_id=account.id,
+                snapshot_date=(now - timedelta(days=7)).date(),
+                follower_count=max(row['follower_count'] - 180, 0),
+                post_count=1,
+                total_views=9200,
+                total_interactions=980,
+                source_channel='demo_seed',
+                created_at=now - timedelta(days=7),
+            ))
+            db.session.add(CreatorAccountSnapshot(
+                creator_account_id=account.id,
+                snapshot_date=now.date(),
+                follower_count=row['follower_count'],
+                post_count=2,
+                total_views=27800,
+                total_interactions=3326,
+                source_channel='demo_seed',
+                created_at=now,
+            ))
+            created['creator_snapshots'] += 2
+    else:
+        skipped.append('账号看板已有数据，跳过演示账号补齐')
+
+    asset_task = None
+    if AssetGenerationTask.query.count() == 0:
+        first_topic = topics[0] if topics else None
+        first_registration = registrations[0] if registrations else None
+        asset_preview_svg = _render_svg_card(
+            '知识卡片',
+            title='护肝检查结果怎么看',
+            subtitle='演示素材，用于验证图片中心和素材库联调',
+            bullets=['FibroScan 指标解释', '复查周期怎么定', '随访沟通要点'],
+        )
+        asset_preview_url = _svg_data_uri(asset_preview_svg)
+        task_payload = [{
+            'provider': 'svg_fallback',
+            'title': '护肝检查结果怎么看',
+            'preview_url': asset_preview_url,
+            'asset_type': '知识卡片',
+        }]
+        asset_task = AssetGenerationTask(
+            registration_id=first_registration.id if first_registration else None,
+            topic_id=first_topic.id if first_topic else None,
+            source_provider='svg_fallback',
+            model_name='demo-svg',
+            style_preset='知识卡片',
+            image_count=1,
+            status='success',
+            title_hint='护肝检查结果怎么看',
+            prompt_text='演示素材任务：生成知识卡片类配图',
+            selected_content='FibroScan 指标解释、复查周期、医生沟通要点',
+            message='已补齐演示图片任务',
+            result_payload=json.dumps(task_payload, ensure_ascii=False),
+            started_at=now - timedelta(minutes=18),
+            finished_at=now - timedelta(minutes=17),
+            created_at=now - timedelta(minutes=18),
+        )
+        db.session.add(asset_task)
+        db.session.flush()
+        created['asset_generation_tasks'] += 1
+
+        if AssetLibrary.query.count() == 0:
+            db.session.add(AssetLibrary(
+                asset_generation_task_id=asset_task.id,
+                registration_id=first_registration.id if first_registration else None,
+                topic_id=first_topic.id if first_topic else None,
+                library_type='generated',
+                asset_type='知识卡片',
+                title='护肝检查结果怎么看',
+                subtitle='演示素材库卡片',
+                source_provider='svg_fallback',
+                model_name='demo-svg',
+                pool_status='candidate',
+                status='active',
+                tags='演示,知识卡片,FibroScan,复查',
+                prompt_text='演示素材任务：生成知识卡片类配图',
+                preview_url=asset_preview_url,
+                download_name='demo_liver_check_card.svg',
+                raw_payload=json.dumps(task_payload[0], ensure_ascii=False),
+                created_at=now - timedelta(minutes=17),
+            ))
+            created['asset_library_items'] += 1
+    else:
+        skipped.append('图片任务已有数据，跳过演示素材补齐')
+        if AssetLibrary.query.count() == 0:
+            skipped.append('素材库为空，但已有图片任务，建议后续按真实任务回填素材库')
+
+    created_dict = dict(created)
+    _log_operation('bootstrap_demo_data', 'system', message='补齐演示运营数据', detail={
+        'created': created_dict,
+        'skipped': skipped,
+        'activity_id': activity.id if activity else None,
+    })
+    return {
+        'created': created_dict,
+        'skipped': skipped,
+        'activity_id': activity.id if activity else None,
+        'message': '演示运营数据补齐完成' if created_dict else '当前已有数据，本次未新增演示记录',
+    }
+
+
 def _next_schedule_time(interval_minutes, base_time=None):
     base = base_time or datetime.now()
     minutes = max(_safe_int(interval_minutes, 60), 1)
@@ -3284,6 +4012,20 @@ def _build_report_markdown(activity, stats, report_type='weekly'):
 
     return '\n'.join(sections)
 
+
+def _build_public_shell_context():
+    page_config = _get_site_page_config('home')
+    theme = _get_active_site_theme()
+    site_config = _serialize_site_page_config(page_config) if page_config else {
+        **DEFAULT_HOME_PAGE_CONFIG,
+        'nav_items': [dict(item) for item in DEFAULT_SITE_NAV_ITEMS],
+    }
+    site_theme = _serialize_site_theme(theme) if theme else dict(DEFAULT_SITE_THEME)
+    return {
+        'site_config': site_config,
+        'site_theme': site_theme,
+    }
+
 # ==================== 路由 ====================
 
 @app.route('/')
@@ -3344,13 +4086,18 @@ def index():
 @app.route('/topic/<int:topic_id>')
 def topic_detail(topic_id):
     topic = Topic.query.get_or_404(topic_id)
-    return render_template('topic_detail.html', topic=topic)
+    return render_template('topic_detail.html', topic=topic, **_build_public_shell_context())
 
 # 报名成功页面（带一键生成文案）
 @app.route('/register_success/<int:reg_id>')
 def register_success(reg_id):
     reg = Registration.query.get_or_404(reg_id)
-    return render_template('register_success.html', registration=reg, asset_style_types=_asset_style_type_options())
+    return render_template(
+        'register_success.html',
+        registration=reg,
+        asset_style_types=_asset_style_type_options(),
+        **_build_public_shell_context(),
+    )
 
 @app.route('/my_registration', methods=['GET', 'POST'])
 def my_registration():
@@ -3359,7 +4106,7 @@ def my_registration():
     if reg_id:
         reg = Registration.query.get(int(reg_id))
         if reg:
-            return render_template('my_registration.html', registrations=[reg])
+            return render_template('my_registration.html', registrations=[reg], **_build_public_shell_context())
 
     if request.method == 'POST':
         group_num = request.form.get('group_num')
@@ -3369,11 +4116,11 @@ def my_registration():
         regs = Registration.query.filter_by(group_num=group_num, name=name).all()
         if regs:
             # 统一走同一展示模板：无论几条都用列表卡片
-            return render_template('my_registration.html', registrations=regs)
+            return render_template('my_registration.html', registrations=regs, **_build_public_shell_context())
         else:
-            return render_template('my_registration.html', error='未找到报名信息')
+            return render_template('my_registration.html', error='未找到报名信息', **_build_public_shell_context())
 
-    return render_template('my_registration.html')
+    return render_template('my_registration.html', **_build_public_shell_context())
 
 @app.route('/api/topics/<int:activity_id>')
 def get_topics(activity_id):
@@ -4699,6 +5446,30 @@ def readiness_check():
     return jsonify({
         'success': True,
         **checks,
+    })
+
+
+@app.route('/api/admin/project-status')
+def project_status():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    return jsonify(_build_project_status_payload())
+
+
+@app.route('/api/admin/project-status/bootstrap-demo-data', methods=['POST'])
+def bootstrap_project_demo_data():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    result = _bootstrap_demo_operational_data()
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        **result,
+        'project_status': _build_project_status_payload(),
     })
 
 
@@ -7170,8 +7941,22 @@ def admin():
     if not session.get('admin_logged_in'):
         return redirect(url_for('admin_login'))
 
+    allowed_tabs = {'status', 'activities', 'topics', 'portal', 'data', 'snapshots', 'backups', 'creator', 'logs', 'system'}
+    initial_admin_tab = (request.args.get('tab') or 'activities').strip()
+    if initial_admin_tab not in allowed_tabs:
+        initial_admin_tab = 'activities'
     activities = Activity.query.order_by(Activity.created_at.desc()).all()
-    return render_template('admin.html', activities=activities, default_topic_quota=_default_topic_quota())
+    return render_template(
+        'admin.html',
+        activities=activities,
+        default_topic_quota=_default_topic_quota(),
+        initial_admin_tab=initial_admin_tab,
+    )
+
+
+@app.route('/admin/project-status')
+def admin_project_status():
+    return redirect(url_for('admin', tab='status'))
 
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():

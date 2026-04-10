@@ -20,6 +20,19 @@
         .portal-swatch { width: 36px; height: 36px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.08); }
         .portal-nav-preview { display: inline-flex; gap: 8px; flex-wrap: wrap; }
         .portal-chip { padding: 7px 12px; border-radius: 999px; background: #fff5f6; color: #c81e3a; font-size: 12px; border: 1px solid #ffd7df; }
+        .status-summary-card { border: 1px solid #f0dfd8; border-radius: 18px; background: linear-gradient(180deg, #fff 0%, #fff9f7 100%); padding: 18px; height: 100%; }
+        .status-kpi-label { font-size: 12px; color: #6b7280; margin-bottom: 8px; }
+        .status-kpi-number { font-size: 30px; line-height: 1; font-weight: 800; color: #d32f2f; }
+        .status-kpi-note { font-size: 12px; color: #6b7280; margin-top: 8px; line-height: 1.6; }
+        .status-section-card { border: 1px solid #f0dfd8; border-radius: 18px; background: #fff; padding: 18px; height: 100%; }
+        .status-progress-track { height: 8px; border-radius: 999px; background: #f3f4f6; overflow: hidden; }
+        .status-progress-track > span { display: block; height: 100%; background: linear-gradient(90deg, #ff7a59, #ef4e45); border-radius: 999px; }
+        .status-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; }
+        .status-badge-done { background: #e8f7ef; color: #1b7f46; }
+        .status-badge-progress { background: #fff3e8; color: #c25a05; }
+        .status-badge-pending { background: #eef2f7; color: #475467; }
+        .status-list { display: grid; gap: 12px; }
+        .status-list-item { border: 1px solid #f1e5df; border-radius: 14px; padding: 14px; background: #fffaf8; }
     
         /* MOBILE_PATCH */
         @media (max-width: 768px) {
@@ -36,6 +49,9 @@
         <div class="sidebar" style="width: 250px;">
             <h5 class="mb-4 text-danger"><i class="bi bi-gear"></i> 后台管理</h5>
             <nav class="nav flex-column">
+                <a class="nav-link" href="/admin?tab=status">
+                    <i class="bi bi-kanban"></i> 项目状态
+                </a>
                 <a class="nav-link" href="#" onclick="showTab('activities')">
                     <i class="bi bi-collection"></i> 活动管理
                 </a>
@@ -74,8 +90,89 @@
 
         <!-- 主内容 -->
         <div class="flex-grow-1 p-4">
+            <!-- 项目状态 -->
+            <div id="tab-status" {% if initial_admin_tab != 'status' %}style="display:none;"{% endif %}>
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+                    <div>
+                        <h4 class="mb-1">项目状态总览</h4>
+                        <div class="text-muted">这里集中查看当前完成度、阶段判断、阻塞项和接下来最值得继续做的事。</div>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button type="button" class="btn btn-outline-primary" onclick="bootstrapProjectDemoData()">补齐演示数据</button>
+                        <a href="/admin/project-status" class="btn btn-outline-secondary">固定链接</a>
+                        <a href="/automation_center" class="btn btn-xhs">进入自动化中心</a>
+                    </div>
+                </div>
+                <div id="projectStatusMsg" class="text-muted small mb-3"></div>
+
+                <div id="projectStatusHero" class="row g-3 mb-3">
+                    <div class="col-md-3"><div class="status-summary-card text-muted">加载中...</div></div>
+                </div>
+
+                <div class="status-section-card mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <h6 class="mb-0">里程碑进度</h6>
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="loadProjectStatus(true)">刷新状态</button>
+                    </div>
+                    <div id="projectStatusMilestoneWrap" class="row g-3">
+                        <div class="col-md-4 text-muted">加载中...</div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-lg-6">
+                        <div class="status-section-card h-100">
+                            <h6 class="mb-3">下一步建议</h6>
+                            <div id="projectStatusActionWrap" class="status-list text-muted">加载中...</div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="status-section-card h-100">
+                            <h6 class="mb-3">当前阻塞项</h6>
+                            <div id="projectStatusBlockerWrap" class="status-list text-muted">加载中...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="status-section-card mb-3">
+                    <h6 class="mb-3">模块完成度</h6>
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <thead>
+                                <tr>
+                                    <th>模块</th>
+                                    <th>阶段</th>
+                                    <th>状态</th>
+                                    <th>进度</th>
+                                    <th>说明</th>
+                                    <th>下一步</th>
+                                </tr>
+                            </thead>
+                            <tbody id="projectStatusModuleTableBody">
+                                <tr><td colspan="6" class="text-muted text-center">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-lg-7">
+                        <div class="status-section-card h-100">
+                            <h6 class="mb-3">当前数据快照</h6>
+                            <div id="projectStatusCountsWrap" class="row g-3 text-muted">加载中...</div>
+                        </div>
+                    </div>
+                    <div class="col-lg-5">
+                        <div class="status-section-card h-100">
+                            <h6 class="mb-3">相关文档</h6>
+                            <div id="projectStatusDocsWrap" class="status-list text-muted">加载中...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- 活动管理 -->
-            <div id="tab-activities">
+            <div id="tab-activities" {% if initial_admin_tab != 'activities' %}style="display:none;"{% endif %}>
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h4>活动管理</h4>
                     <button class="btn btn-xhs" data-bs-toggle="modal" data-bs-target="#activityModal">
@@ -1167,6 +1264,7 @@
     <script>
         let selectedCreatorAccountId = null;
         let creatorAccountCache = {};
+        let projectStatusCache = null;
         let siteConfigCache = null;
         let announcementCache = {};
         let adminUserCache = {};
@@ -1183,6 +1281,7 @@
         }
 
         function showTab(tab) {
+            document.getElementById('tab-status').style.display = 'none';
             document.getElementById('tab-activities').style.display = 'none';
             document.getElementById('tab-topics').style.display = 'none';
             document.getElementById('tab-portal').style.display = 'none';
@@ -1193,6 +1292,9 @@
             document.getElementById('tab-logs').style.display = 'none';
             document.getElementById('tab-system').style.display = 'none';
             document.getElementById('tab-' + tab).style.display = 'block';
+            if (tab === 'status') {
+                loadProjectStatus();
+            }
             if (tab === 'portal') {
                 loadSiteConfig();
                 loadAnnouncements();
@@ -1210,6 +1312,148 @@
                 loadSystemSettings();
                 loadAdminUsers();
                 loadRoles();
+            }
+        }
+
+        function projectStatusBadge(status) {
+            if (status === 'done') return '<span class="status-badge status-badge-done">已完成</span>';
+            if (status === 'in_progress') return '<span class="status-badge status-badge-progress">进行中</span>';
+            return '<span class="status-badge status-badge-pending">未开始</span>';
+        }
+
+        function renderProjectStatus(data) {
+            const summary = data.summary || {};
+            const readiness = data.readiness?.summary || {};
+            const capability = data.capabilities || {};
+            document.getElementById('projectStatusHero').innerHTML = `
+                <div class="col-md-3"><div class="status-summary-card"><div class="status-kpi-label">估算完成度</div><div class="status-kpi-number">${summary.estimated_completion || 0}%</div><div class="status-kpi-note">${escapeHtml(summary.current_stage || '-')}</div></div></div>
+                <div class="col-md-3"><div class="status-summary-card"><div class="status-kpi-label">交付判断</div><div class="status-kpi-number" style="font-size:22px;">${escapeHtml(summary.delivery_status || '-')}</div><div class="status-kpi-note">${escapeHtml(summary.key_message || '-')}</div></div></div>
+                <div class="col-md-3"><div class="status-summary-card"><div class="status-kpi-label">Readiness</div><div class="status-kpi-number">${summary.readiness_rate || 0}%</div><div class="status-kpi-note">通过 ${readiness.passed || 0} / ${readiness.total || 0} 项</div></div></div>
+                <div class="col-md-3"><div class="status-summary-card"><div class="status-kpi-label">图片能力</div><div class="status-kpi-number" style="font-size:22px;">${escapeHtml(capability.image_provider_name || '-')}</div><div class="status-kpi-note">${capability.fallback_mode ? '当前仍为 SVG 兜底模式' : '已切到真实图片模式'}</div></div></div>
+            `;
+
+            document.getElementById('projectStatusMilestoneWrap').innerHTML = (data.milestones || []).map((item) => `
+                <div class="col-md-4">
+                    <div class="status-summary-card">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong>${escapeHtml(item.key)} · ${escapeHtml(item.name)}</strong>
+                            ${projectStatusBadge(item.status)}
+                        </div>
+                        <div class="status-progress-track mb-2"><span style="width:${Math.max(item.progress || 0, 2)}%"></span></div>
+                        <div class="small text-muted mb-1">进度 ${item.progress || 0}%</div>
+                        <div class="small text-muted">${escapeHtml(item.summary || '-')}</div>
+                    </div>
+                </div>
+            `).join('') || '<div class="col-12 text-muted">暂无里程碑数据</div>';
+
+            document.getElementById('projectStatusActionWrap').innerHTML = (data.recommended_actions || []).map((item) => `
+                <div class="status-list-item">
+                    <div class="d-flex justify-content-between align-items-center gap-2">
+                        <strong>${escapeHtml(item.title || '-')}</strong>
+                        <span class="badge bg-light text-dark border">${escapeHtml(item.priority || '-')}</span>
+                    </div>
+                    <div class="small text-muted mt-2">${escapeHtml(item.detail || '-')}</div>
+                    ${item.url ? `<div class="mt-3"><a class="btn btn-sm btn-outline-primary" href="${item.url}">进入处理</a></div>` : ''}
+                </div>
+            `).join('') || '<div class="text-muted">当前没有待办建议</div>';
+
+            document.getElementById('projectStatusBlockerWrap').innerHTML = (data.blockers || []).map((item) => `
+                <div class="status-list-item">
+                    <strong>${escapeHtml(item.title || '-')}</strong>
+                    <div class="small text-muted mt-2">${escapeHtml(item.detail || '-')}</div>
+                </div>
+            `).join('') || '<div class="text-muted">当前没有显式阻塞项</div>';
+
+            document.getElementById('projectStatusModuleTableBody').innerHTML = (data.modules || []).map((item) => `
+                <tr>
+                    <td><strong>${escapeHtml(item.key || '-')}</strong><div class="small text-muted">${escapeHtml(item.name || '-')}</div></td>
+                    <td>${escapeHtml(item.phase || '-')}</td>
+                    <td>${projectStatusBadge(item.status)}</td>
+                    <td style="min-width: 160px;">
+                        <div class="small mb-1">${item.progress || 0}%</div>
+                        <div class="status-progress-track"><span style="width:${Math.max(item.progress || 0, 2)}%"></span></div>
+                    </td>
+                    <td>
+                        <div>${escapeHtml(item.summary || '-')}</div>
+                        <div class="small text-muted mt-1">${escapeHtml(item.evidence || '-')}</div>
+                    </td>
+                    <td class="small text-muted">${escapeHtml(item.next_step || '-')}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="6" class="text-muted text-center">暂无模块数据</td></tr>';
+
+            const counts = data.counts || {};
+            const countItems = [
+                ['活动期', counts.activities],
+                ['正式话题', counts.topics],
+                ['报名', counts.registrations],
+                ['提报', counts.submissions],
+                ['语料', counts.corpus_entries],
+                ['热点', counts.trend_notes],
+                ['候选话题', counts.topic_ideas],
+                ['抓取任务', counts.data_source_tasks],
+                ['图片任务', counts.asset_generation_tasks],
+                ['账号', counts.creator_accounts],
+                ['笔记', counts.creator_posts],
+                ['日志', counts.operation_logs]
+            ];
+            document.getElementById('projectStatusCountsWrap').innerHTML = countItems.map(([label, value]) => `
+                <div class="col-md-4 col-6">
+                    <div class="mini-card">
+                        <div class="text-muted small">${escapeHtml(label)}</div>
+                        <div class="fw-bold fs-5 mt-1">${value || 0}</div>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('projectStatusDocsWrap').innerHTML = (data.docs || []).map((item) => `
+                <div class="status-list-item">
+                    <strong>${escapeHtml(item.title || '-')}</strong>
+                    <div class="small text-muted mt-2"><code>${escapeHtml(item.path || '-')}</code></div>
+                </div>
+            `).join('') || '<div class="text-muted">暂无文档</div>';
+        }
+
+        async function loadProjectStatus(forceReload = false) {
+            if (projectStatusCache && !forceReload) {
+                renderProjectStatus(projectStatusCache);
+                return;
+            }
+            const res = await fetch('/api/admin/project-status');
+            const data = await res.json();
+            if (!data.success) {
+                document.getElementById('projectStatusHero').innerHTML = '<div class="col-12"><div class="status-summary-card text-danger">项目状态加载失败</div></div>';
+                return;
+            }
+            projectStatusCache = data;
+            renderProjectStatus(data);
+        }
+
+        async function bootstrapProjectDemoData() {
+            const confirmed = window.confirm('补齐演示数据只会为当前为空的模块写入示例记录，不会覆盖已有真实数据。现在开始吗？');
+            if (!confirmed) return;
+            document.getElementById('projectStatusMsg').textContent = '正在补齐演示数据...';
+            const res = await fetch('/api/admin/project-status/bootstrap-demo-data', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({})
+            });
+            const data = await res.json();
+            if (!data.success) {
+                document.getElementById('projectStatusMsg').textContent = data.message || '演示数据补齐失败';
+                return;
+            }
+            const created = data.created || {};
+            const createdSummary = Object.entries(created)
+                .map(([key, value]) => `${key}:${value}`)
+                .join(' / ');
+            document.getElementById('projectStatusMsg').textContent = createdSummary
+                ? `${data.message || '演示数据补齐完成'} ｜ ${createdSummary}`
+                : (data.message || '当前已有数据，本次未新增演示记录');
+            projectStatusCache = data.project_status || null;
+            if (projectStatusCache) {
+                renderProjectStatus(projectStatusCache);
+            } else {
+                loadProjectStatus(true);
             }
         }
 
@@ -2202,6 +2446,7 @@
         }
 
         ensureSnapshotDate();
+        showTab('{{ initial_admin_tab or "activities" }}');
     </script>
 </body>
 </html>

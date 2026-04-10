@@ -3,111 +3,321 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>话题详情 - 福瑞医科小红书任务</title>
+    <title>话题详情 - {{ topic.topic_name }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/static/css/public_site.css">
     <style>
-        :root { --xhs-red: #ff2442; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; background: #fff7f8; }
-        .navbar { background: linear-gradient(135deg, var(--xhs-red) 0%, #ff6b6b 100%); }
-        .btn-xhs { background: var(--xhs-red); color: white; border: none; border-radius: 25px; }
-        .card { border: none; border-radius: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
-        .info-label { color: #666; font-size: 14px; }
-        .info-value { color: #333; font-size: 14px; }
-    
-        /* MOBILE_PATCH */
-        @media (max-width: 768px) {
-            .container { padding-left: 12px; padding-right: 12px; }
-            .card { padding: 14px !important; }
-            .btn-xhs { width: 100%; }
+        :root {
+            --public-brand: {{ site_theme.primary_color or '#ef4e45' }};
+            --public-brand-deep: {{ site_theme.nav_gradient_start or '#1f3247' }};
+            --public-brand-soft: {{ site_theme.primary_soft_color or '#fff1ec' }};
+            --public-accent: {{ site_theme.secondary_color or '#145f5a' }};
+            --public-accent-soft: {{ site_theme.secondary_soft_color or '#eef8f7' }};
         }
 
+        .topic-hero-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+            gap: 22px;
+            align-items: stretch;
+        }
+
+        .topic-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            background: rgba(20, 95, 90, 0.08);
+            color: var(--public-accent);
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .topic-stat-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .topic-stat {
+            padding: 16px 18px;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.86);
+            border: 1px solid rgba(22, 33, 43, 0.08);
+        }
+
+        .topic-stat-label {
+            color: var(--public-muted);
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+
+        .topic-stat-value {
+            font-size: 26px;
+            line-height: 1;
+            font-weight: 800;
+            color: var(--public-brand);
+        }
+
+        .topic-aside-card {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .public-form-grid {
+            display: grid;
+            gap: 14px;
+        }
+
+        .public-info-columns {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        @media (max-width: 992px) {
+            .topic-hero-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .topic-stat-grid,
+            .public-info-columns {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
-<body>
-    <nav class="navbar navbar-dark mb-4">
-        <div class="container">
-            <a class="navbar-brand" href="/">← 返回首页</a>
-        </div>
-    </nav>
-
-    <div class="container">
-        <div class="card p-4 mb-4">
-            <h4 class="mb-3">{{ topic.topic_name }}</h4>
-            
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <span class="info-label">组号：</span>
-                    <span class="info-value">{{ topic.group_num }}</span>
+<body class="public-body">
+    <div class="public-shell">
+        <nav class="navbar navbar-expand-lg navbar-dark public-navbar">
+            <div class="container public-container">
+                <a class="navbar-brand" href="/">
+                    <i class="bi bi-grid-1x2-fill me-2"></i>
+                    {{ site_config.site_name or '福瑞医科' }}
+                </a>
+                <div class="ms-auto d-flex flex-wrap gap-3">
+                    <a class="nav-link" href="/">话题广场</a>
+                    <a class="nav-link" href="/my_registration">我的报名</a>
                 </div>
-                <div class="col-md-6">
-                    <span class="info-label">报名状态：</span>
-                    {% if topic.filled >= topic.quota %}
-                    <span class="badge bg-secondary">已报满</span>
+            </div>
+        </nav>
+
+        <main class="public-container py-4">
+            <section class="public-hero-card public-card-soft p-4 p-lg-5 mb-4">
+                <div class="topic-hero-layout">
+                    <div class="d-flex flex-column gap-4">
+                        <div>
+                            <div class="topic-badge mb-3">
+                                <i class="bi bi-lightning-charge-fill"></i>
+                                Topic Brief
+                            </div>
+                            <h1 class="public-title mb-3">{{ topic.topic_name }}</h1>
+                            <p class="public-subtitle mb-0">
+                                面向报名人开放的话题说明页。这里会统一给出关键词、撰写方向、剩余名额和报名入口，方便快速判断是否适合参与。
+                            </p>
+                        </div>
+
+                        <div class="topic-stat-grid">
+                            <div class="topic-stat">
+                                <div class="topic-stat-label">当前组别</div>
+                                <div class="topic-stat-value" style="font-size:18px;">{{ topic.group_num or '待分组' }}</div>
+                            </div>
+                            <div class="topic-stat">
+                                <div class="topic-stat-label">剩余名额</div>
+                                <div class="topic-stat-value">{{ (topic.quota or 0) - (topic.filled or 0) }}</div>
+                            </div>
+                            <div class="topic-stat">
+                                <div class="topic-stat-label">总名额</div>
+                                <div class="topic-stat-value">{{ topic.quota or 0 }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="public-card topic-aside-card p-4">
+                        <div>
+                            <div class="public-note mb-2">报名状态</div>
+                            {% if topic.filled >= topic.quota %}
+                            <span class="public-status-pill public-status-muted">
+                                <i class="bi bi-pause-circle"></i>
+                                已报满
+                            </span>
+                            {% else %}
+                            <span class="public-status-pill public-status-open">
+                                <i class="bi bi-check-circle"></i>
+                                正在开放报名
+                            </span>
+                            {% endif %}
+                        </div>
+
+                        <div class="public-info-list">
+                            <div class="public-info-row">
+                                <div class="public-info-label">关键词</div>
+                                <div class="public-info-value">{{ topic.keywords or '暂无关键词' }}</div>
+                            </div>
+                            <div class="public-info-row">
+                                <div class="public-info-label">参考方向</div>
+                                <div class="public-info-value">{{ topic.direction or '暂无方向说明' }}</div>
+                            </div>
+                        </div>
+
+                        {% if topic.filled < topic.quota %}
+                        <a href="#registerCard" class="public-btn-brand">
+                            <i class="bi bi-pencil-square"></i>
+                            进入报名表单
+                        </a>
+                        {% else %}
+                        <a href="/" class="public-btn-outline">
+                            <i class="bi bi-arrow-left"></i>
+                            返回查看其他话题
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </section>
+
+            <section class="row g-4">
+                <div class="col-lg-7">
+                    <div class="public-card p-4 p-lg-5 mb-4">
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+                            <div>
+                                <h2 class="public-section-title mb-2">话题说明</h2>
+                                <div class="public-section-kicker">Topic Guidance</div>
+                            </div>
+                            <span class="public-chip">
+                                <i class="bi bi-people"></i>
+                                已报名 {{ topic.filled or 0 }} / {{ topic.quota or 0 }}
+                            </span>
+                        </div>
+
+                        <div class="public-info-columns">
+                            <div class="public-info-row">
+                                <div class="public-info-label">关键词</div>
+                                <div class="public-info-value">{{ topic.keywords or '暂无关键词' }}</div>
+                            </div>
+                            <div class="public-info-row">
+                                <div class="public-info-label">推荐组别</div>
+                                <div class="public-info-value">{{ topic.group_num or '待分配' }}</div>
+                            </div>
+                        </div>
+
+                        <div class="public-info-row mt-3">
+                            <div class="public-info-label">撰写方向</div>
+                            <div class="public-info-value">{{ topic.direction or '暂无撰写方向' }}</div>
+                        </div>
+
+                        {% if topic.reference_content %}
+                        <div class="public-info-row mt-3">
+                            <div class="public-info-label">参考内容</div>
+                            <div class="public-info-value">{{ topic.reference_content }}</div>
+                        </div>
+                        {% endif %}
+
+                        {% if topic.reference_link %}
+                        <div class="public-info-row mt-3">
+                            <div class="public-info-label">参考链接</div>
+                            <div class="public-info-value">
+                                {% for link in topic.reference_link.split() %}
+                                    {% if 'http' in link %}
+                                    <div class="mb-2">
+                                        <a class="public-btn-outline" href="{{ link }}" target="_blank" rel="noreferrer" style="padding:8px 14px; font-size:13px;">
+                                            <i class="bi bi-box-arrow-up-right"></i>
+                                            参考 {{ loop.index }}
+                                        </a>
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="col-lg-5">
+                    {% if topic.filled < topic.quota %}
+                    <div id="registerCard" class="public-card p-4 p-lg-5">
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+                            <div>
+                                <h2 class="public-section-title mb-2">立即报名</h2>
+                                <div class="public-section-kicker">Quick Registration</div>
+                            </div>
+                            <span class="public-chip">
+                                <i class="bi bi-stars"></i>
+                                报名后可直接进入图文生成页
+                            </span>
+                        </div>
+
+                        <form id="registerForm" class="public-form-grid">
+                            <input type="hidden" name="topic_id" value="{{ topic.id }}">
+                            <input type="hidden" name="topic_name" value="{{ topic.topic_name }}">
+
+                            <div>
+                                <label class="form-label">选择组号 *</label>
+                                <select name="group_num" class="form-select" required>
+                                    <option value="">请选择组号</option>
+                                    <option value="第一组">第一组</option>
+                                    <option value="第二组">第二组</option>
+                                    <option value="第三组">第三组</option>
+                                    <option value="第四组">第四组</option>
+                                    <option value="第五组">第五组</option>
+                                    <option value="第六组">第六组</option>
+                                    <option value="第七组">第七组</option>
+                                    <option value="第八组">第八组</option>
+                                    <option value="第九组">第九组</option>
+                                </select>
+                            </div>
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">姓名 *</label>
+                                    <input type="text" name="name" class="form-control" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">联系方式 *</label>
+                                    <input type="tel" id="phoneInput" name="phone" class="form-control" required>
+                                    <div id="phoneHint" class="public-note mt-2"></div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="form-label">小红书账号 *</label>
+                                <input type="text" id="xhsInput" name="xhs_account" class="form-control" required>
+                            </div>
+
+                            <button type="submit" class="public-btn-brand">
+                                <i class="bi bi-arrow-right-circle"></i>
+                                确认报名并进入生成页
+                            </button>
+                        </form>
+                    </div>
                     {% else %}
-                    <span class="badge bg-danger">报名中</span>
+                    <div class="public-card p-4 p-lg-5 text-center">
+                        <div class="topic-badge mb-3">
+                            <i class="bi bi-lock"></i>
+                            Registration Closed
+                        </div>
+                        <h2 class="public-section-title mb-3">当前话题已报满</h2>
+                        <p class="public-subtitle mb-4">这个话题的名额已经用完了，你可以返回首页继续选择其他仍可报名的话题。</p>
+                        <a href="/" class="public-btn-brand">
+                            <i class="bi bi-arrow-left"></i>
+                            返回首页
+                        </a>
+                    </div>
                     {% endif %}
                 </div>
-            </div>
-            
-            <div class="mb-3">
-                <span class="info-label">关键词：</span>
-                <span class="info-value">{{ topic.keywords }}</span>
-            </div>
-            
-            <div class="mb-3">
-                <span class="info-label">撰写方向：</span>
-                <span class="info-value">{{ topic.direction }}</span>
-            </div>
-            
-            <div class="mb-3">
-                <span class="info-label">剩余名额：</span>
-                <span class="info-value text-danger">{{ topic.quota - topic.filled }}/{{ topic.quota }}</span>
-            </div>
-        </div>
+            </section>
+        </main>
 
-        {% if topic.filled < topic.quota %}
-        <div class="card p-4">
-            <h5 class="mb-4"><i class="bi bi-pencil-square"></i> 一键报名</h5>
-            <form id="registerForm">
-                <input type="hidden" name="topic_id" value="{{ topic.id }}">
-                <input type="hidden" name="topic_name" value="{{ topic.topic_name }}">
-                <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">选择组号 *</label>
-                        <select name="group_num" class="form-select" required>
-                            <option value="">请选择组号</option>
-                            <option value="第一组">第一组</option>
-                            <option value="第二组">第二组</option>
-                            <option value="第三组">第三组</option>
-                            <option value="第四组">第四组</option>
-                            <option value="第五组">第五组</option>
-                            <option value="第六组">第六组</option>
-                            <option value="第七组">第七组</option>
-                            <option value="第八组">第八组</option>
-                            <option value="第九组">第九组</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">姓名 *</label>
-                        <input type="text" name="name" class="form-control" required>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">联系方式 *</label>
-                        <input type="tel" id="phoneInput" name="phone" class="form-control" required>
-                        <small id="phoneHint" class="text-muted"></small>
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">小红书账号 *</label>
-                    <input type="text" id="xhsInput" name="xhs_account" class="form-control" required>
-                </div>
-                <button type="submit" class="btn btn-xhs w-100 py-2">立即报名</button>
-            </form>
-        </div>
-        {% else %}
-        <div class="alert alert-secondary">该话题名额已满，看看其他话题吧</div>
-        {% endif %}
+        <footer class="public-footer">
+            {{ site_config.footer_text or site_theme.footer_text or '福瑞医科内容运营平台' }}
+        </footer>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -139,20 +349,19 @@
             }
         });
 
-        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+        document.getElementById('registerForm')?.addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData(e.target);
             const data = Object.fromEntries(formData);
-            
+
             const res = await fetch('/api/register', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(data)
             });
             const result = await res.json();
-            
+
             if (result.success) {
-                // 跳转到报名成功页面，包含一键生成文案功能
                 location.href = '/register_success/' + result.registration_id;
             } else {
                 alert(result.message);
