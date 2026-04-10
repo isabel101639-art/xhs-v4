@@ -674,6 +674,62 @@
 
                 <div class="card mb-3">
                     <div class="card-body">
+                        <h6 class="mb-3">批量导入账号数据</h6>
+                        <div class="text-muted small mb-3">支持粘贴 JSON，结构可为 `{"accounts":[],"posts":[],"snapshots":[]}`，也支持只传其中一段。适合把真实账号、笔记表现和快照一次性灌进系统。</div>
+                        <div class="row g-3">
+                            <div class="col-md-12">
+                                <textarea id="creatorImportPayload" class="form-control" rows="8" placeholder='{
+  "accounts": [
+    {
+      "platform": "xhs",
+      "owner_name": "张三",
+      "owner_phone": "13800000000",
+      "account_handle": "@zhangsan",
+      "display_name": "张三说肝病",
+      "follower_count": 12000
+    }
+  ],
+  "posts": [
+    {
+      "platform": "xhs",
+      "account_handle": "@zhangsan",
+      "title": "脂肪肝复查重点",
+      "publish_time": "2026-04-10 10:00:00",
+      "views": 12000,
+      "likes": 560,
+      "favorites": 220,
+      "comments": 90
+    }
+  ],
+  "snapshots": [
+    {
+      "platform": "xhs",
+      "account_handle": "@zhangsan",
+      "snapshot_date": "2026-04-10",
+      "follower_count": 12000,
+      "post_count": 18,
+      "total_views": 180000,
+      "total_interactions": 12600
+    }
+  ]
+}'></textarea>
+                            </div>
+                            <div class="col-md-12 d-flex gap-2 flex-wrap">
+                                <button type="button" class="btn btn-outline-primary" onclick="previewCreatorImport()">预览导入</button>
+                                <button type="button" class="btn btn-outline-success" onclick="importCreatorBundle()">正式导入</button>
+                            </div>
+                            <div class="col-md-12">
+                                <div id="creatorImportMsg" class="text-muted small"></div>
+                            </div>
+                            <div class="col-md-12">
+                                <pre id="creatorImportPreview" style="white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 300px; overflow: auto;">导入预览会显示在这里</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
                         <div class="row g-3 align-items-end">
                             <div class="col-md-3">
                                 <label class="form-label">平台</label>
@@ -1934,6 +1990,53 @@
             document.getElementById('creatorKeywordFilter').value = '';
             document.getElementById('creatorViralOnlyFilter').checked = false;
             loadCreatorAccounts();
+        }
+
+        async function previewCreatorImport() {
+            const rawPayload = document.getElementById('creatorImportPayload').value.trim();
+            if (!rawPayload) {
+                document.getElementById('creatorImportMsg').textContent = '请先粘贴导入 JSON';
+                return;
+            }
+            const res = await fetch('/api/creator_accounts/import_preview', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ raw_payload: rawPayload })
+            });
+            const data = await res.json();
+            document.getElementById('creatorImportMsg').textContent = data.message || '已处理';
+            if (!data.success) {
+                document.getElementById('creatorImportPreview').textContent = data.message || '导入预览失败';
+                return;
+            }
+            document.getElementById('creatorImportPreview').textContent = JSON.stringify({
+                summary: data.summary || {},
+                samples: data.samples || {}
+            }, null, 2);
+        }
+
+        async function importCreatorBundle() {
+            const rawPayload = document.getElementById('creatorImportPayload').value.trim();
+            if (!rawPayload) {
+                document.getElementById('creatorImportMsg').textContent = '请先粘贴导入 JSON';
+                return;
+            }
+            const confirmed = window.confirm('确认把这批账号 / 笔记 / 快照数据导入系统吗？');
+            if (!confirmed) return;
+            const res = await fetch('/api/creator_accounts/import', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ raw_payload: rawPayload })
+            });
+            const data = await res.json();
+            document.getElementById('creatorImportMsg').textContent = data.message || '已处理';
+            if (!data.success) {
+                document.getElementById('creatorImportPreview').textContent = data.message || '导入失败';
+                return;
+            }
+            document.getElementById('creatorImportPreview').textContent = JSON.stringify(data.summary || {}, null, 2);
+            loadCreatorAccounts();
+            resetCreatorAccountForm();
         }
 
         async function loadCreatorAccounts() {
