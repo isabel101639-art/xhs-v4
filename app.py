@@ -10,7 +10,7 @@ load_dotenv()
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
-from sqlalchemy import or_, text
+from sqlalchemy import or_, text, inspect
 from werkzeug.middleware.proxy_fix import ProxyFix
 import os
 import json
@@ -8774,123 +8774,103 @@ def init_db():
     with app.app_context():
         db.create_all()
 
-        if _is_sqlite_backend():
-            # 历史 SQLite 数据库迁移：补齐新增字段
-            conn = db.engine.raw_connection()
-            try:
-                cursor = conn.cursor()
-                cursor.execute("PRAGMA table_info(activity)")
-                activity_columns = {row[1] for row in cursor.fetchall()}
-                if 'archived_at' not in activity_columns:
-                    cursor.execute("ALTER TABLE activity ADD COLUMN archived_at DATETIME")
-                activity_required_columns = {
-                    'source_type': "VARCHAR(30) DEFAULT 'manual'",
-                    'source_activity_id': 'INTEGER',
-                    'source_snapshot_id': 'INTEGER',
-                }
-                for col, col_type in activity_required_columns.items():
-                    if col not in activity_columns:
-                        cursor.execute(f"ALTER TABLE activity ADD COLUMN {col} {col_type}")
+        timestamp_type = 'TIMESTAMP'
+        schema_required_columns = {
+            'activity': {
+                'archived_at': timestamp_type,
+                'source_type': "VARCHAR(30) DEFAULT 'manual'",
+                'source_activity_id': 'INTEGER',
+                'source_snapshot_id': 'INTEGER',
+            },
+            'topic': {
+                'pool_status': "VARCHAR(20) DEFAULT 'formal'",
+                'source_type': "VARCHAR(30) DEFAULT 'manual'",
+                'source_ref_id': 'INTEGER',
+                'source_snapshot_id': 'INTEGER',
+                'published_at': timestamp_type,
+            },
+            'corpus_entry': {
+                'pool_status': "VARCHAR(20) DEFAULT 'reserve'",
+            },
+            'trend_note': {
+                'pool_status': "VARCHAR(20) DEFAULT 'reserve'",
+                'source_template_key': "VARCHAR(50) DEFAULT 'generic_lines'",
+                'hot_score': 'INTEGER DEFAULT 0',
+                'source_rank': 'INTEGER DEFAULT 0',
+            },
+            'submission': {
+                'xhs_views': 'INTEGER DEFAULT 0',
+                'xhs_likes': 'INTEGER DEFAULT 0',
+                'xhs_favorites': 'INTEGER DEFAULT 0',
+                'xhs_comments': 'INTEGER DEFAULT 0',
+                'douyin_link': 'VARCHAR(500)',
+                'douyin_views': 'INTEGER DEFAULT 0',
+                'douyin_likes': 'INTEGER DEFAULT 0',
+                'douyin_favorites': 'INTEGER DEFAULT 0',
+                'douyin_comments': 'INTEGER DEFAULT 0',
+                'video_link': 'VARCHAR(500)',
+                'video_views': 'INTEGER DEFAULT 0',
+                'video_likes': 'INTEGER DEFAULT 0',
+                'video_favorites': 'INTEGER DEFAULT 0',
+                'video_comments': 'INTEGER DEFAULT 0',
+                'weibo_link': 'VARCHAR(500)',
+                'weibo_views': 'INTEGER DEFAULT 0',
+                'weibo_likes': 'INTEGER DEFAULT 0',
+                'weibo_favorites': 'INTEGER DEFAULT 0',
+                'weibo_comments': 'INTEGER DEFAULT 0',
+                'content_type': "VARCHAR(30) DEFAULT '未识别'",
+                'note_title': 'VARCHAR(300)',
+                'note_content': 'TEXT',
+            },
+            'topic_idea': {
+                'quota': 'INTEGER DEFAULT 30',
+                'review_note': 'TEXT',
+                'reviewed_at': timestamp_type,
+                'published_at': timestamp_type,
+                'published_topic_id': 'INTEGER',
+            },
+        }
 
-                cursor.execute("PRAGMA table_info(topic)")
-                topic_columns = {row[1] for row in cursor.fetchall()}
-                topic_required_columns = {
-                    'pool_status': "VARCHAR(20) DEFAULT 'formal'",
-                    'source_type': "VARCHAR(30) DEFAULT 'manual'",
-                    'source_ref_id': 'INTEGER',
-                    'source_snapshot_id': 'INTEGER',
-                    'published_at': 'DATETIME',
-                }
-                for col, col_type in topic_required_columns.items():
-                    if col not in topic_columns:
-                        cursor.execute(f"ALTER TABLE topic ADD COLUMN {col} {col_type}")
+        def current_columns(table_name):
+            return {column['name'] for column in inspect(db.engine).get_columns(table_name)}
 
-                cursor.execute("PRAGMA table_info(corpus_entry)")
-                corpus_columns = {row[1] for row in cursor.fetchall()}
-                if 'pool_status' not in corpus_columns:
-                    cursor.execute("ALTER TABLE corpus_entry ADD COLUMN pool_status VARCHAR(20) DEFAULT 'reserve'")
+        def ensure_columns(conn, table_name, required_columns):
+            existing = current_columns(table_name)
+            for column_name, column_type in required_columns.items():
+                if column_name in existing:
+                    continue
+                conn.execute(text(f'ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}'))
+                existing.add(column_name)
+            return existing
 
-                cursor.execute("PRAGMA table_info(trend_note)")
-                trend_columns = {row[1] for row in cursor.fetchall()}
-                trend_required_columns = {
-                    'pool_status': "VARCHAR(20) DEFAULT 'reserve'",
-                    'source_template_key': "VARCHAR(50) DEFAULT 'generic_lines'",
-                    'hot_score': 'INTEGER DEFAULT 0',
-                    'source_rank': 'INTEGER DEFAULT 0',
-                }
-                for col, col_type in trend_required_columns.items():
-                    if col not in trend_columns:
-                        cursor.execute(f"ALTER TABLE trend_note ADD COLUMN {col} {col_type}")
+        with db.engine.begin() as conn:
+            existing_columns = {}
+            for table_name, required_columns in schema_required_columns.items():
+                existing_columns[table_name] = ensure_columns(conn, table_name, required_columns)
 
-                cursor.execute("PRAGMA table_info(submission)")
-                existing_columns = {row[1] for row in cursor.fetchall()}
+            submission_columns = existing_columns.get('submission', set())
+            if {'likes', 'favorites', 'comments'}.issubset(submission_columns):
+                conn.execute(text(
+                    "UPDATE submission SET "
+                    "xhs_likes = COALESCE(xhs_likes, likes), "
+                    "xhs_favorites = COALESCE(xhs_favorites, favorites), "
+                    "xhs_comments = COALESCE(xhs_comments, comments)"
+                ))
 
-                required_columns = {
-                    'xhs_views': 'INTEGER DEFAULT 0',
-                    'xhs_likes': 'INTEGER DEFAULT 0',
-                    'xhs_favorites': 'INTEGER DEFAULT 0',
-                    'xhs_comments': 'INTEGER DEFAULT 0',
-                    'douyin_link': 'VARCHAR(500)',
-                    'douyin_views': 'INTEGER DEFAULT 0',
-                    'douyin_likes': 'INTEGER DEFAULT 0',
-                    'douyin_favorites': 'INTEGER DEFAULT 0',
-                    'douyin_comments': 'INTEGER DEFAULT 0',
-                    'video_link': 'VARCHAR(500)',
-                    'video_views': 'INTEGER DEFAULT 0',
-                    'video_likes': 'INTEGER DEFAULT 0',
-                    'video_favorites': 'INTEGER DEFAULT 0',
-                    'video_comments': 'INTEGER DEFAULT 0',
-                    'weibo_link': 'VARCHAR(500)',
-                    'weibo_views': 'INTEGER DEFAULT 0',
-                    'weibo_likes': 'INTEGER DEFAULT 0',
-                    'weibo_favorites': 'INTEGER DEFAULT 0',
-                    'weibo_comments': 'INTEGER DEFAULT 0',
-                    'content_type': "VARCHAR(30) DEFAULT '未识别'",
-                    'note_title': 'VARCHAR(300)',
-                    'note_content': 'TEXT',
-                }
-
-                for col, col_type in required_columns.items():
-                    if col not in existing_columns:
-                        cursor.execute(f"ALTER TABLE submission ADD COLUMN {col} {col_type}")
-
-                if {'likes', 'favorites', 'comments'}.issubset(existing_columns):
-                    cursor.execute("UPDATE submission SET xhs_likes = COALESCE(xhs_likes, likes), xhs_favorites = COALESCE(xhs_favorites, favorites), xhs_comments = COALESCE(xhs_comments, comments)")
-
-                cursor.execute("PRAGMA table_info(topic_idea)")
-                topic_idea_columns = {row[1] for row in cursor.fetchall()}
-                topic_idea_required_columns = {
-                    'quota': 'INTEGER DEFAULT 30',
-                    'review_note': 'TEXT',
-                    'reviewed_at': 'DATETIME',
-                    'published_at': 'DATETIME',
-                    'published_topic_id': 'INTEGER',
-                }
-                for col, col_type in topic_idea_required_columns.items():
-                    if col not in topic_idea_columns:
-                        cursor.execute(f"ALTER TABLE topic_idea ADD COLUMN {col} {col_type}")
-
-                if 'quota' in topic_idea_columns or 'quota' in topic_idea_required_columns:
-                    cursor.execute("UPDATE topic_idea SET quota = COALESCE(quota, 30)")
-
-                cursor.execute(
-                    "UPDATE topic_idea SET status = 'pending_review' "
-                    "WHERE status IS NULL OR status = '' OR status = 'draft'"
-                )
-
-                cursor.execute("UPDATE topic SET pool_status = COALESCE(pool_status, 'formal')")
-                cursor.execute("UPDATE topic SET source_type = COALESCE(source_type, 'manual')")
-                cursor.execute("UPDATE topic SET published_at = COALESCE(published_at, created_at)")
-                cursor.execute("UPDATE activity SET source_type = COALESCE(source_type, 'manual')")
-                cursor.execute("UPDATE corpus_entry SET pool_status = COALESCE(pool_status, 'reserve')")
-                cursor.execute("UPDATE trend_note SET pool_status = COALESCE(pool_status, 'reserve')")
-                cursor.execute("UPDATE trend_note SET source_template_key = COALESCE(source_template_key, 'generic_lines')")
-                cursor.execute("UPDATE trend_note SET hot_score = COALESCE(hot_score, 0)")
-                cursor.execute("UPDATE trend_note SET source_rank = COALESCE(source_rank, 0)")
-
-                conn.commit()
-            finally:
-                conn.close()
+            conn.execute(text(
+                "UPDATE topic_idea SET status = 'pending_review' "
+                "WHERE status IS NULL OR status = '' OR status = 'draft'"
+            ))
+            conn.execute(text("UPDATE topic_idea SET quota = COALESCE(quota, 30)"))
+            conn.execute(text("UPDATE topic SET pool_status = COALESCE(pool_status, 'formal')"))
+            conn.execute(text("UPDATE topic SET source_type = COALESCE(source_type, 'manual')"))
+            conn.execute(text("UPDATE topic SET published_at = COALESCE(published_at, created_at)"))
+            conn.execute(text("UPDATE activity SET source_type = COALESCE(source_type, 'manual')"))
+            conn.execute(text("UPDATE corpus_entry SET pool_status = COALESCE(pool_status, 'reserve')"))
+            conn.execute(text("UPDATE trend_note SET pool_status = COALESCE(pool_status, 'reserve')"))
+            conn.execute(text("UPDATE trend_note SET source_template_key = COALESCE(source_template_key, 'generic_lines')"))
+            conn.execute(text("UPDATE trend_note SET hot_score = COALESCE(hot_score, 0)"))
+            conn.execute(text("UPDATE trend_note SET source_rank = COALESCE(source_rank, 0)"))
 
         # 通用回填：PostgreSQL/SQLite 都可安全执行
         Activity.query.filter(Activity.source_type.is_(None)).update(
