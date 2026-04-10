@@ -146,9 +146,9 @@ def sync_hotwords_job(data_source_task_id):
     from app import (
         _append_data_source_log,
         _automation_keyword_seeds,
-        _build_hotword_skeleton_rows,
         _load_json_value,
         _log_operation,
+        _resolve_hotword_rows,
         DataSourceTask,
         TrendNote,
         db,
@@ -167,7 +167,7 @@ def sync_hotwords_job(data_source_task_id):
     try:
         task_record.status = 'running'
         task_record.started_at = datetime.now()
-        task_record.message = 'Worker 正在生成热点抓取骨架结果'
+        task_record.message = 'Worker 正在执行热点抓取任务'
         db.session.flush()
         _append_data_source_log(task_record.id, 'Worker 已接管任务，开始生成热点抓取骨架', detail={
             'batch_name': task_record.batch_name,
@@ -181,18 +181,19 @@ def sync_hotwords_job(data_source_task_id):
         if not isinstance(keywords, list) or not keywords:
             keywords = _automation_keyword_seeds()[:max(task_record.keyword_limit or 10, 1)]
         keywords = [str(item).strip() for item in keywords if str(item).strip()]
-        rows = _build_hotword_skeleton_rows(
-            keywords,
-            source_platform=task_record.source_platform or '小红书',
-            source_channel=task_record.source_channel or 'Worker骨架',
-            batch_name=task_record.batch_name or '',
-        )
+        resolved = _resolve_hotword_rows(task_record, params, keywords)
+        rows = resolved.get('rows') or []
+        mode = resolved.get('mode') or task_record.mode or 'skeleton'
+        template_key = resolved.get('template_key') or params.get('template_key') or 'generic_lines'
+        request_preview = resolved.get('request_preview') or {}
+        response_preview = resolved.get('response_preview') or {}
 
         inserted_count = 0
         for row in rows:
             note = TrendNote(
                 source_platform=row.get('source_platform') or task_record.source_platform or '小红书',
                 source_channel=row.get('source_channel') or task_record.source_channel or 'Worker骨架',
+                source_template_key=template_key,
                 import_batch=row.get('import_batch') or task_record.batch_name,
                 keyword=row.get('keyword') or '',
                 topic_category=row.get('topic_category') or '热点骨架',
@@ -214,23 +215,34 @@ def sync_hotwords_job(data_source_task_id):
         task_record.status = 'success'
         task_record.item_count = inserted_count
         task_record.finished_at = datetime.now()
-        task_record.message = f'热点抓取骨架执行完成，已生成 {inserted_count} 条热点样例'
+        task_record.message = (
+            f'远端热点抓取执行完成，已生成 {inserted_count} 条热点'
+            if mode == 'remote' else
+            f'热点抓取骨架执行完成，已生成 {inserted_count} 条热点样例'
+        )
         task_record.result_payload = json.dumps({
             'inserted_count': inserted_count,
             'batch_name': task_record.batch_name,
             'keywords': keywords,
-            'mode': task_record.mode,
+            'mode': mode,
+            'template_key': template_key,
+            'request_preview': request_preview,
+            'response_preview': response_preview,
         }, ensure_ascii=False)
         db.session.flush()
-        _append_data_source_log(task_record.id, '热点抓取骨架执行完成，已写入热点池', detail={
+        _append_data_source_log(task_record.id, '热点抓取任务执行完成，已写入热点池', detail={
             'inserted_count': inserted_count,
             'batch_name': task_record.batch_name,
             'keywords': keywords,
+            'mode': mode,
+            'template_key': template_key,
         })
         _log_operation('worker_sync', 'data_source_task', target_id=task_record.id, message='Worker 执行热点抓取骨架任务', detail={
             'inserted_count': inserted_count,
             'batch_name': task_record.batch_name,
             'source_platform': task_record.source_platform,
+            'mode': mode,
+            'template_key': template_key,
         })
         db.session.commit()
         return {
@@ -238,6 +250,7 @@ def sync_hotwords_job(data_source_task_id):
             'data_source_task_id': task_record.id,
             'inserted_count': inserted_count,
             'batch_name': task_record.batch_name,
+            'mode': mode,
         }
     except Exception as exc:
         db.session.rollback()

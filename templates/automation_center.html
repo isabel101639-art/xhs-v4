@@ -253,6 +253,49 @@
                     <label class="form-label subtle">热点默认关键词数量</label>
                     <input id="configHotwordKeywordLimit" type="number" min="1" max="30" class="form-control">
                 </div>
+                <div class="col-lg-2">
+                    <label class="form-label subtle">热点抓取模式</label>
+                    <select id="configHotwordFetchMode" class="form-select">
+                        <option value="auto">auto</option>
+                        <option value="skeleton">skeleton</option>
+                        <option value="remote">remote</option>
+                    </select>
+                </div>
+                <div class="col-lg-4">
+                    <label class="form-label subtle">热点 API URL</label>
+                    <input id="configHotwordApiUrl" class="form-control" placeholder="如 https://api.example.com/hotwords">
+                </div>
+                <div class="col-lg-2">
+                    <label class="form-label subtle">热点 API Method</label>
+                    <select id="configHotwordApiMethod" class="form-select">
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                    </select>
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label subtle">热点结果路径</label>
+                    <input id="configHotwordResultPath" class="form-control" placeholder="如 data.items">
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label subtle">关键词参数名</label>
+                    <input id="configHotwordKeywordParam" class="form-control" placeholder="如 keyword">
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label subtle">热点超时秒数</label>
+                    <input id="configHotwordTimeout" type="number" min="5" max="120" class="form-control">
+                </div>
+                <div class="col-lg-6">
+                    <label class="form-label subtle">热点请求头 JSON</label>
+                    <textarea id="configHotwordHeadersJson" rows="2" class="form-control" placeholder='如 {"Authorization":"Bearer xxx"}'></textarea>
+                </div>
+                <div class="col-lg-6">
+                    <label class="form-label subtle">热点 Query JSON</label>
+                    <textarea id="configHotwordQueryJson" rows="2" class="form-control" placeholder='如 {"keyword":"{{keywords}}"}'></textarea>
+                </div>
+                <div class="col-lg-6">
+                    <label class="form-label subtle">热点 Body JSON</label>
+                    <textarea id="configHotwordBodyJson" rows="2" class="form-control" placeholder='如 {"keywords":"{{keywords_list}}"}'></textarea>
+                </div>
                 <div class="col-lg-3">
                     <label class="form-label subtle">图片提供方</label>
                     <select id="configImageProvider" class="form-select">
@@ -472,8 +515,8 @@
         </div>
 
         <div class="panel p-4 mb-4">
-            <div class="section-title">热点抓取任务骨架</div>
-            <div class="subtle mb-3">这版先按 Worker skeleton 模式跑通“任务创建 → 异步执行 → 热点池落数 → 任务记录回显”。后续接真实 API 时，只需要替换 Worker 里的数据获取段。</div>
+            <div class="section-title">热点抓取任务</div>
+            <div class="subtle mb-3">当前支持两种模式：`skeleton` 用于快速联调，`remote` 用于对接真实热点 JSON 接口。默认会按运维配置自动选择。</div>
             <div class="row g-3 mb-3">
                 <div class="col-md-3">
                     <label class="form-label subtle">来源平台</label>
@@ -501,7 +544,7 @@
                     <textarea id="hotwordKeywordInput" rows="3" class="form-control" placeholder="可留空，系统默认读取热点词池；也可手填，如：脂肪肝,肝纤维化,FibroScan"></textarea>
                 </div>
                 <div class="col-md-12 d-flex gap-2 flex-wrap">
-                    <button class="btn btn-accent" onclick="runHotwordSync()">异步生成热点骨架</button>
+                    <button class="btn btn-accent" onclick="runHotwordSync()">异步抓取热点</button>
                     <button class="btn btn-outline-primary" onclick="loadDataSourceTasks()">刷新抓取任务</button>
                 </div>
             </div>
@@ -1091,6 +1134,15 @@
             renderHotwordTemplateOptions(hotwordTemplates || [], config.hotword_source_template || 'generic_lines');
             document.getElementById('configHotwordChannel').value = config.hotword_source_channel || 'Worker骨架';
             document.getElementById('configHotwordKeywordLimit').value = config.hotword_keyword_limit || 10;
+            document.getElementById('configHotwordFetchMode').value = config.hotword_fetch_mode || 'auto';
+            document.getElementById('configHotwordApiUrl').value = config.hotword_api_url || '';
+            document.getElementById('configHotwordApiMethod').value = config.hotword_api_method || 'GET';
+            document.getElementById('configHotwordResultPath').value = config.hotword_result_path || '';
+            document.getElementById('configHotwordKeywordParam').value = config.hotword_keyword_param || 'keyword';
+            document.getElementById('configHotwordTimeout').value = config.hotword_timeout_seconds || 30;
+            document.getElementById('configHotwordHeadersJson').value = config.hotword_api_headers_json || '';
+            document.getElementById('configHotwordQueryJson').value = config.hotword_api_query_json || '';
+            document.getElementById('configHotwordBodyJson').value = config.hotword_api_body_json || '';
             document.getElementById('configImageProvider').value = config.image_provider || 'svg_fallback';
             document.getElementById('configImageApiBase').value = config.image_api_base || '';
             document.getElementById('configImageApiUrl').value = config.image_api_url || '';
@@ -1146,6 +1198,11 @@
                         <div class="subtle">渠道：${escapeHtml(data.hotword_preview?.source_channel || '-')}</div>
                         <div class="subtle">关键词数量：${data.hotword_preview?.keyword_limit || 0}</div>
                         <div class="subtle">预览关键词：${escapeHtml((data.hotword_preview?.keywords || []).join('、'))}</div>
+                        <div class="subtle">抓取模式：${escapeHtml(data.hotword_preview?.fetch_mode || 'skeleton')}</div>
+                        <div class="subtle">API URL：${escapeHtml(data.hotword_preview?.api_url || '-')}</div>
+                        <div class="subtle">Method：${escapeHtml(data.hotword_preview?.api_method || '-')}</div>
+                        <div class="subtle">结果路径：${escapeHtml(data.hotword_preview?.result_path || '-')}</div>
+                        ${data.hotword_preview_error ? `<div class="subtle text-danger mt-2">预览错误：${escapeHtml(data.hotword_preview_error)}</div>` : ''}
                     </div>
                     <div class="col-lg-3">
                         <strong>图片类型预览</strong>
@@ -1153,6 +1210,10 @@
                         <div class="subtle">说明：${escapeHtml(data.style_meta?.description || '-')}</div>
                         <div class="subtle">资产类型：${escapeHtml(data.style_meta?.asset_type || '-')}</div>
                         <div class="subtle">默认尺寸：${escapeHtml(data.style_meta?.default_size || '-')}</div>
+                    </div>
+                    <div class="col-lg-4">
+                        <strong>热点请求预览</strong>
+                        <div class="json-box mt-2">${escapeHtml(JSON.stringify(data.hotword_request_preview || {}, null, 2))}</div>
                     </div>
                     <div class="col-lg-4">
                         <strong>图片请求预览</strong>
@@ -1163,11 +1224,34 @@
         }
 
         async function saveAutomationConfig() {
+            const hotwordJsonFields = [
+                ['热点请求头 JSON', document.getElementById('configHotwordHeadersJson').value.trim()],
+                ['热点 Query JSON', document.getElementById('configHotwordQueryJson').value.trim()],
+                ['热点 Body JSON', document.getElementById('configHotwordBodyJson').value.trim()]
+            ];
+            for (const [label, value] of hotwordJsonFields) {
+                if (!value) continue;
+                try {
+                    JSON.parse(value);
+                } catch (err) {
+                    document.getElementById('automationConfigNote').textContent = `${label} 格式不正确：${err}`;
+                    return;
+                }
+            }
             const payload = {
                 hotword_source_platform: document.getElementById('configHotwordPlatform').value,
                 hotword_source_template: document.getElementById('configHotwordTemplate').value,
                 hotword_source_channel: document.getElementById('configHotwordChannel').value.trim(),
                 hotword_keyword_limit: parseInt(document.getElementById('configHotwordKeywordLimit').value || '10', 10),
+                hotword_fetch_mode: document.getElementById('configHotwordFetchMode').value,
+                hotword_api_url: document.getElementById('configHotwordApiUrl').value.trim(),
+                hotword_api_method: document.getElementById('configHotwordApiMethod').value,
+                hotword_api_headers_json: document.getElementById('configHotwordHeadersJson').value.trim(),
+                hotword_api_query_json: document.getElementById('configHotwordQueryJson').value.trim(),
+                hotword_api_body_json: document.getElementById('configHotwordBodyJson').value.trim(),
+                hotword_result_path: document.getElementById('configHotwordResultPath').value.trim(),
+                hotword_keyword_param: document.getElementById('configHotwordKeywordParam').value.trim(),
+                hotword_timeout_seconds: parseInt(document.getElementById('configHotwordTimeout').value || '30', 10),
                 image_provider: document.getElementById('configImageProvider').value,
                 image_api_base: document.getElementById('configImageApiBase').value.trim(),
                 image_api_url: document.getElementById('configImageApiUrl').value.trim(),
@@ -1352,6 +1436,8 @@
                         <div class="subtle">CELERY_RESULT_BACKEND：${runtime.celery_backend_configured ? '已配置' : '未配置'}</div>
                         <div class="subtle">SECRET_KEY：${runtime.secret_key_configured ? '已配置' : '未配置'}</div>
                         <div class="subtle">DEEPSEEK：${runtime.deepseek_configured ? '已配置' : '未配置'}</div>
+                        <div class="subtle">热点模式：${escapeHtml(runtime.hotword_fetch_mode || 'skeleton')}</div>
+                        <div class="subtle">热点 API：${escapeHtml(runtime.hotword_api_url || '-')}</div>
                     </div>
                     <div class="col-lg-3">
                         <strong>Worker 链路</strong>

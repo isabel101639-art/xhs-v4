@@ -21,6 +21,17 @@ import random
 import re
 from collections import Counter, defaultdict
 
+from automation_hotwords import (
+    build_hotword_skeleton_rows,
+    build_remote_hotword_request_preview,
+    fetch_remote_hotword_items,
+    hotword_source_template_meta,
+    hotword_source_template_options,
+    normalize_trend_items,
+    parse_trend_payload,
+    split_keywords as split_hotword_keywords,
+)
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -646,7 +657,15 @@ AUTOMATION_RUNTIME_CONFIG_DEFAULTS = {
     'hotword_source_template': 'generic_lines',
     'hotword_source_channel': 'Worker骨架',
     'hotword_keyword_limit': 10,
-    'hotword_source_template': 'generic_lines',
+    'hotword_fetch_mode': 'auto',
+    'hotword_api_url': '',
+    'hotword_api_method': 'GET',
+    'hotword_api_headers_json': '',
+    'hotword_api_query_json': '',
+    'hotword_api_body_json': '',
+    'hotword_result_path': '',
+    'hotword_keyword_param': 'keyword',
+    'hotword_timeout_seconds': 30,
     'image_provider': 'svg_fallback',
     'image_api_url': '',
     'image_api_base': '',
@@ -764,33 +783,6 @@ VOLCENGINE_MODEL_OPTIONS = [
     {'key': 'doubao-seedream-4-5-251128', 'label': 'Seedream 4.5', 'provider': 'volcengine_las'},
     {'key': 'doubao-seedream-4-0-250828', 'label': 'Seedream 4.0', 'provider': 'volcengine_las'},
     {'key': 'doubao-seededit-3-0-i2i-250628', 'label': 'SeedEdit 3.0', 'provider': 'volcengine_ark'},
-]
-
-HOTWORD_SOURCE_TEMPLATE_OPTIONS = [
-    {
-        'key': 'generic_lines',
-        'label': '通用行文本',
-        'source_platform': '手工整理',
-        'description': '每行一条，按“关键词|标题|链接|点赞|收藏|评论|传播量|作者|摘要”粘贴',
-    },
-    {
-        'key': 'generic_json',
-        'label': '通用 JSON',
-        'source_platform': '手工整理',
-        'description': 'JSON 数组或 {items: []} 结构，字段包含 keyword、title、views 等',
-    },
-    {
-        'key': 'douyin_hotwords',
-        'label': '抖音热点词接口',
-        'source_platform': '抖音',
-        'description': '适配抖音热点词/热榜类接口的 words、sentence_id、hot_value 结构',
-    },
-    {
-        'key': 'qiangua_notes',
-        'label': '千瓜笔记导出',
-        'source_platform': '千瓜数据',
-        'description': '适配千瓜笔记/爆文导出常见字段，如 title、like_count、collect_count、comment_count',
-    },
 ]
 
 MEDICAL_SCIENCE_LAYOUT_VARIANTS = {
@@ -960,6 +952,41 @@ def _automation_runtime_config():
     return config
 
 
+def _hotword_runtime_settings():
+    config = dict(_automation_runtime_config())
+    env_overrides = {
+        'hotword_fetch_mode': (os.environ.get('HOTWORD_FETCH_MODE') or '').strip(),
+        'hotword_api_url': (os.environ.get('HOTWORD_API_URL') or '').strip(),
+        'hotword_api_method': (os.environ.get('HOTWORD_API_METHOD') or '').strip(),
+        'hotword_api_headers_json': (os.environ.get('HOTWORD_API_HEADERS_JSON') or '').strip(),
+        'hotword_api_query_json': (os.environ.get('HOTWORD_API_QUERY_JSON') or '').strip(),
+        'hotword_api_body_json': (os.environ.get('HOTWORD_API_BODY_JSON') or '').strip(),
+        'hotword_result_path': (os.environ.get('HOTWORD_RESULT_PATH') or '').strip(),
+        'hotword_keyword_param': (os.environ.get('HOTWORD_KEYWORD_PARAM') or '').strip(),
+    }
+    timeout_value = (os.environ.get('HOTWORD_TIMEOUT_SECONDS') or '').strip()
+    if timeout_value:
+        env_overrides['hotword_timeout_seconds'] = _safe_int(timeout_value, config.get('hotword_timeout_seconds', 30))
+
+    for key, value in env_overrides.items():
+        if value not in [None, '']:
+            config[key] = value
+    config['hotword_timeout_seconds'] = min(max(_safe_int(config.get('hotword_timeout_seconds'), 30), 5), 120)
+    config['hotword_fetch_mode'] = (config.get('hotword_fetch_mode') or 'auto').strip().lower() or 'auto'
+    config['hotword_api_method'] = (config.get('hotword_api_method') or 'GET').strip().upper() or 'GET'
+    config['hotword_keyword_param'] = (config.get('hotword_keyword_param') or 'keyword').strip() or 'keyword'
+    return config
+
+
+def _resolved_hotword_mode(runtime_settings=None):
+    runtime_settings = runtime_settings or _hotword_runtime_settings()
+    configured_mode = (runtime_settings.get('hotword_fetch_mode') or 'auto').strip().lower() or 'auto'
+    api_url = (runtime_settings.get('hotword_api_url') or '').strip()
+    if configured_mode == 'auto':
+        return 'remote' if api_url else 'skeleton'
+    return configured_mode if configured_mode in {'remote', 'skeleton'} else 'skeleton'
+
+
 def _image_provider_options():
     return [dict(item) for item in IMAGE_PROVIDER_OPTIONS]
 
@@ -989,15 +1016,11 @@ def _image_model_options(provider=''):
 
 
 def _hotword_source_template_options():
-    return [dict(item) for item in HOTWORD_SOURCE_TEMPLATE_OPTIONS]
+    return hotword_source_template_options()
 
 
 def _hotword_source_template_meta(template_key=''):
-    raw = (template_key or '').strip()
-    for item in HOTWORD_SOURCE_TEMPLATE_OPTIONS:
-        if raw == item['key']:
-            return dict(item)
-    return dict(HOTWORD_SOURCE_TEMPLATE_OPTIONS[0])
+    return hotword_source_template_meta(template_key)
 
 
 def _safe_int(value, default=0):
@@ -2812,6 +2835,15 @@ def _deployment_config_value(key, runtime_config=None):
         return env_value, 'env'
 
     runtime_key_map = {
+        'HOTWORD_FETCH_MODE': 'hotword_fetch_mode',
+        'HOTWORD_API_URL': 'hotword_api_url',
+        'HOTWORD_API_METHOD': 'hotword_api_method',
+        'HOTWORD_API_HEADERS_JSON': 'hotword_api_headers_json',
+        'HOTWORD_API_QUERY_JSON': 'hotword_api_query_json',
+        'HOTWORD_API_BODY_JSON': 'hotword_api_body_json',
+        'HOTWORD_RESULT_PATH': 'hotword_result_path',
+        'HOTWORD_KEYWORD_PARAM': 'hotword_keyword_param',
+        'HOTWORD_TIMEOUT_SECONDS': 'hotword_timeout_seconds',
         'ASSET_IMAGE_PROVIDER': 'image_provider',
         'ASSET_IMAGE_API_BASE': 'image_api_base',
         'ASSET_IMAGE_API_URL': 'image_api_url',
@@ -2827,6 +2859,7 @@ def _deployment_config_value(key, runtime_config=None):
 
 def _build_deployment_helper_payload():
     runtime_config = _automation_runtime_config()
+    hotword_settings = _hotword_runtime_settings()
     capabilities = _image_provider_capabilities()
     sensitive_keys = {
         'SECRET_KEY',
@@ -2848,6 +2881,15 @@ def _build_deployment_helper_payload():
         'SESSION_COOKIE_SECURE': os.environ.get('SESSION_COOKIE_SECURE', 'false') or 'false',
         'ENABLE_AUTOMATION_BEAT': os.environ.get('ENABLE_AUTOMATION_BEAT', 'true') or 'true',
         'CELERY_BEAT_LOG_LEVEL': os.environ.get('CELERY_BEAT_LOG_LEVEL', 'info') or 'info',
+        'HOTWORD_FETCH_MODE': _resolved_hotword_mode(hotword_settings),
+        'HOTWORD_API_URL': (hotword_settings.get('hotword_api_url') or ''),
+        'HOTWORD_API_METHOD': (hotword_settings.get('hotword_api_method') or 'GET'),
+        'HOTWORD_API_HEADERS_JSON': (hotword_settings.get('hotword_api_headers_json') or ''),
+        'HOTWORD_API_QUERY_JSON': (hotword_settings.get('hotword_api_query_json') or ''),
+        'HOTWORD_API_BODY_JSON': (hotword_settings.get('hotword_api_body_json') or ''),
+        'HOTWORD_RESULT_PATH': (hotword_settings.get('hotword_result_path') or ''),
+        'HOTWORD_KEYWORD_PARAM': (hotword_settings.get('hotword_keyword_param') or 'keyword'),
+        'HOTWORD_TIMEOUT_SECONDS': str(hotword_settings.get('hotword_timeout_seconds') or 30),
         'ASSET_IMAGE_PROVIDER': capabilities.get('image_provider_name') or 'svg_fallback',
         'ASSET_IMAGE_API_BASE': capabilities.get('image_provider_api_base') or '',
         'ASSET_IMAGE_API_URL': capabilities.get('image_provider_api_url') or '',
@@ -2898,6 +2940,15 @@ def _build_deployment_helper_payload():
                 env_item('DEFAULT_TOPIC_QUOTA', required=False),
                 env_item('PREFERRED_URL_SCHEME', required=False),
                 env_item('SESSION_COOKIE_SECURE', required=False),
+                env_item('HOTWORD_FETCH_MODE', required=False),
+                env_item('HOTWORD_API_URL', required=False),
+                env_item('HOTWORD_API_METHOD', required=False),
+                env_item('HOTWORD_API_HEADERS_JSON', required=False),
+                env_item('HOTWORD_API_QUERY_JSON', required=False),
+                env_item('HOTWORD_API_BODY_JSON', required=False),
+                env_item('HOTWORD_RESULT_PATH', required=False),
+                env_item('HOTWORD_KEYWORD_PARAM', required=False),
+                env_item('HOTWORD_TIMEOUT_SECONDS', required=False),
                 env_item('ASSET_IMAGE_PROVIDER', required=False),
                 env_item('ASSET_IMAGE_API_BASE', required=False),
                 env_item('ASSET_IMAGE_API_URL', required=False),
@@ -2921,6 +2972,15 @@ def _build_deployment_helper_payload():
             'optional_envs': [
                 env_item('DEFAULT_TOPIC_QUOTA', required=False),
                 env_item('DEEPSEEK_API_KEY', required=False),
+                env_item('HOTWORD_FETCH_MODE', required=False),
+                env_item('HOTWORD_API_URL', required=False),
+                env_item('HOTWORD_API_METHOD', required=False),
+                env_item('HOTWORD_API_HEADERS_JSON', required=False),
+                env_item('HOTWORD_API_QUERY_JSON', required=False),
+                env_item('HOTWORD_API_BODY_JSON', required=False),
+                env_item('HOTWORD_RESULT_PATH', required=False),
+                env_item('HOTWORD_KEYWORD_PARAM', required=False),
+                env_item('HOTWORD_TIMEOUT_SECONDS', required=False),
                 env_item('ASSET_IMAGE_PROVIDER', required=False),
                 env_item('ASSET_IMAGE_API_BASE', required=False),
                 env_item('ASSET_IMAGE_API_URL', required=False),
@@ -5958,6 +6018,7 @@ def runtime_diagnostics():
     if guard:
         return guard
 
+    hotword_settings = _hotword_runtime_settings()
     last_worker_ping = _latest_worker_ping_snapshot()
     worker_health_status = 'unknown'
     worker_health_message = '尚未执行 Worker 联通检查'
@@ -5996,6 +6057,10 @@ def runtime_diagnostics():
             'session_cookie_secure': _env_flag('SESSION_COOKIE_SECURE', False),
             'default_topic_quota': _default_topic_quota(),
             'beat_enabled': _coerce_bool(os.environ.get('ENABLE_AUTOMATION_BEAT', 'true')),
+            'hotword_fetch_mode': _resolved_hotword_mode(hotword_settings),
+            'hotword_api_url': hotword_settings.get('hotword_api_url') or '',
+            'hotword_api_method': hotword_settings.get('hotword_api_method') or 'GET',
+            'hotword_result_path': hotword_settings.get('hotword_result_path') or '',
         },
         'worker': {
             'broker_ready': bool((os.environ.get('CELERY_BROKER_URL') or '').strip()),
@@ -6108,6 +6173,15 @@ def automation_config():
         next_config['hotword_source_template'] = (data.get('hotword_source_template') or current['hotword_source_template']).strip()[:50]
         next_config['hotword_source_channel'] = (data.get('hotword_source_channel') or current['hotword_source_channel']).strip()[:50]
         next_config['hotword_keyword_limit'] = min(max(_safe_int(data.get('hotword_keyword_limit'), current['hotword_keyword_limit']), 1), 30)
+        next_config['hotword_fetch_mode'] = (data.get('hotword_fetch_mode') or current.get('hotword_fetch_mode') or 'auto').strip()[:20]
+        next_config['hotword_api_url'] = (data.get('hotword_api_url') or current.get('hotword_api_url') or '').strip()[:500]
+        next_config['hotword_api_method'] = (data.get('hotword_api_method') or current.get('hotword_api_method') or 'GET').strip()[:10]
+        next_config['hotword_api_headers_json'] = (data.get('hotword_api_headers_json') or current.get('hotword_api_headers_json') or '').strip()[:4000]
+        next_config['hotword_api_query_json'] = (data.get('hotword_api_query_json') or current.get('hotword_api_query_json') or '').strip()[:4000]
+        next_config['hotword_api_body_json'] = (data.get('hotword_api_body_json') or current.get('hotword_api_body_json') or '').strip()[:4000]
+        next_config['hotword_result_path'] = (data.get('hotword_result_path') or current.get('hotword_result_path') or '').strip()[:200]
+        next_config['hotword_keyword_param'] = (data.get('hotword_keyword_param') or current.get('hotword_keyword_param') or 'keyword').strip()[:50]
+        next_config['hotword_timeout_seconds'] = min(max(_safe_int(data.get('hotword_timeout_seconds'), current.get('hotword_timeout_seconds') or 30), 5), 120)
         next_config['image_provider'] = (data.get('image_provider') or current['image_provider']).strip()[:50]
         next_config['image_api_base'] = (data.get('image_api_base') or current['image_api_base']).strip()[:500]
         next_config['image_api_url'] = (data.get('image_api_url') or current['image_api_url']).strip()[:500]
@@ -6127,7 +6201,7 @@ def automation_config():
         _log_operation('save', 'automation_runtime_config', message='更新自动化运维配置', detail=next_config)
         db.session.commit()
 
-    runtime_config = _automation_runtime_config()
+    runtime_config = _hotword_runtime_settings()
     capabilities = _image_provider_capabilities()
     return jsonify({
         'success': True,
@@ -6150,7 +6224,7 @@ def automation_config_preview():
     if guard:
         return guard
 
-    runtime_config = _automation_runtime_config()
+    runtime_config = _hotword_runtime_settings()
     capabilities = _image_provider_capabilities()
     hotword_preview = {
         'source_platform': runtime_config.get('hotword_source_platform'),
@@ -6158,7 +6232,26 @@ def automation_config_preview():
         'source_channel': runtime_config.get('hotword_source_channel'),
         'keyword_limit': runtime_config.get('hotword_keyword_limit'),
         'keywords': _automation_keyword_seeds()[:min(max(_safe_int(runtime_config.get('hotword_keyword_limit'), 10), 1), 10)],
+        'fetch_mode': _resolved_hotword_mode(runtime_config),
+        'api_url': runtime_config.get('hotword_api_url') or '',
+        'api_method': runtime_config.get('hotword_api_method') or 'GET',
+        'result_path': runtime_config.get('hotword_result_path') or '',
+        'keyword_param': runtime_config.get('hotword_keyword_param') or 'keyword',
+        'timeout_seconds': runtime_config.get('hotword_timeout_seconds') or 30,
     }
+    hotword_request_preview = {}
+    hotword_preview_error = ''
+    if hotword_preview['fetch_mode'] == 'remote':
+        try:
+            hotword_request_preview = _build_hotword_remote_preview(
+                runtime_config,
+                hotword_preview['keywords'],
+                source_platform=hotword_preview['source_platform'],
+                source_channel=hotword_preview['source_channel'],
+                batch_name='preview_runtime_config',
+            )
+        except Exception as exc:
+            hotword_preview_error = str(exc)
     image_prompt_preview = _build_asset_generation_prompt_from_context(
         topic_name='脂肪肝管理',
         topic_keywords='脂肪肝,瘦型脂肪肝,内脏脂肪',
@@ -6178,6 +6271,8 @@ def automation_config_preview():
         'success': True,
         'hotword_preview': hotword_preview,
         'hotword_template': _hotword_source_template_meta(runtime_config.get('hotword_source_template')),
+        'hotword_request_preview': hotword_request_preview,
+        'hotword_preview_error': hotword_preview_error,
         'image_request_preview': image_request_preview,
         'capabilities': capabilities,
         'style_meta': _asset_style_meta(capabilities.get('image_default_style_type')),
@@ -6617,189 +6712,157 @@ def promote_corpus_reserve():
 
 
 def _parse_trend_payload(raw_payload):
-    payload = (raw_payload or '').strip()
-    if not payload:
-        return []
-
-    items = []
-    if payload.startswith('[') or payload.startswith('{'):
-        parsed = json.loads(payload)
-        if isinstance(parsed, dict):
-            parsed = parsed.get('items', [])
-        if isinstance(parsed, list):
-            for row in parsed:
-                if isinstance(row, dict):
-                    items.append(row)
-        return items
-
-    for line in payload.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        parts = [part.strip() for part in re.split(r'[\t|]', line)]
-        if len(parts) < 2:
-            continue
-        items.append({
-            'keyword': parts[0],
-            'title': parts[1],
-            'link': parts[2] if len(parts) > 2 else '',
-            'likes': parts[3] if len(parts) > 3 else 0,
-            'favorites': parts[4] if len(parts) > 4 else 0,
-            'comments': parts[5] if len(parts) > 5 else 0,
-            'views': parts[6] if len(parts) > 6 else 0,
-            'author': parts[7] if len(parts) > 7 else '',
-            'summary': parts[8] if len(parts) > 8 else '',
-        })
-    return items
-
-
-def _extract_first_non_empty(row, keys, default=''):
-    for key in keys:
-        value = row.get(key)
-        if value is None:
-            continue
-        text = str(value).strip()
-        if text:
-            return text
-    return default
-
-
-def _extract_first_number(row, keys, default=0):
-    for key in keys:
-        value = row.get(key)
-        if value in [None, '']:
-            continue
-        number = _safe_int(value, None)
-        if number is not None:
-            return number
-    return default
+    return parse_trend_payload(raw_payload)
 
 
 def _normalize_trend_items(items, template_key='generic_lines', source_platform='', source_channel='', batch_name=''):
-    template = _hotword_source_template_meta(template_key)
-    normalized = []
-    for index, row in enumerate(items or [], start=1):
-        if not isinstance(row, dict):
-            continue
-
-        if template['key'] in {'generic_lines', 'generic_json'}:
-            keyword = _extract_first_non_empty(row, ['keyword', 'hot_word', 'query'])
-            title = _extract_first_non_empty(row, ['title', 'sentence', 'name'])
-            link = _extract_first_non_empty(row, ['link', 'url', 'share_url'])
-            author = _extract_first_non_empty(row, ['author', 'nickname', 'user_name'])
-            summary = _extract_first_non_empty(row, ['summary', 'desc', 'description'])
-            views = _extract_first_number(row, ['views', 'view_count', 'play_count', 'read_count'])
-            likes = _extract_first_number(row, ['likes', 'like_count', 'digg_count'])
-            favorites = _extract_first_number(row, ['favorites', 'collect_count', 'favorite_count'])
-            comments = _extract_first_number(row, ['comments', 'comment_count'])
-            publish_time = _extract_first_non_empty(row, ['publish_time', 'create_time'])
-        elif template['key'] == 'douyin_hotwords':
-            keyword = _extract_first_non_empty(row, ['word', 'hot_word', 'keyword', 'sentence'])
-            title = _extract_first_non_empty(row, ['sentence', 'title', 'word']) or keyword
-            link = _extract_first_non_empty(row, ['url', 'link'])
-            author = _extract_first_non_empty(row, ['source', 'board_name'])
-            summary = _extract_first_non_empty(row, ['sentence_tag', 'summary', 'description'])
-            views = _extract_first_number(row, ['hot_value', 'hot_score', 'search_cnt'])
-            likes = _extract_first_number(row, ['like_count', 'digg_count'])
-            favorites = _extract_first_number(row, ['collect_count', 'favorite_count'])
-            comments = _extract_first_number(row, ['comment_count'])
-            publish_time = _extract_first_non_empty(row, ['event_time', 'create_time'])
-        elif template['key'] == 'qiangua_notes':
-            keyword = _extract_first_non_empty(row, ['keyword', 'search_word', 'topic'])
-            title = _extract_first_non_empty(row, ['title', 'note_title'])
-            link = _extract_first_non_empty(row, ['link', 'note_url', 'url'])
-            author = _extract_first_non_empty(row, ['author', 'nickname', 'account_name'])
-            summary = _extract_first_non_empty(row, ['summary', 'content_summary', 'desc'])
-            views = _extract_first_number(row, ['views', 'view_count', 'read_num'])
-            likes = _extract_first_number(row, ['likes', 'like_count'])
-            favorites = _extract_first_number(row, ['favorites', 'collect_count', 'favorite_count'])
-            comments = _extract_first_number(row, ['comments', 'comment_count'])
-            publish_time = _extract_first_non_empty(row, ['publish_time', 'create_time'])
-        else:
-            continue
-
-        if not title:
-            continue
-
-        normalized_row = {
-            'keyword': keyword,
-            'title': title,
-            'link': link,
-            'author': author,
-            'summary': summary,
-            'views': views,
-            'likes': likes,
-            'favorites': favorites,
-            'comments': comments,
-            'publish_time': publish_time,
-            'source_platform': source_platform or template.get('source_platform') or '手工整理',
-            'source_channel': source_channel or template['label'],
-            'import_batch': batch_name,
-            'topic_category': template['label'],
-            'raw_payload': row,
-            'normalized_rank': index,
-        }
-        normalized_row['interactions'] = likes + favorites + comments
-        score_seed = (
-            normalized_row['views']
-            + normalized_row['likes'] * 3
-            + normalized_row['favorites'] * 4
-            + normalized_row['comments'] * 5
-            + max(0, 100 - index * 3)
-        )
-        normalized_row['hot_score'] = score_seed
-        normalized.append(normalized_row)
-    return normalized
+    return normalize_trend_items(
+        items,
+        template_key=template_key,
+        source_platform=source_platform,
+        source_channel=source_channel,
+        batch_name=batch_name,
+    )
 
 
 def _build_hotword_skeleton_rows(keywords, source_platform='小红书', source_channel='Worker骨架', batch_name=''):
-    rows = []
-    templates = [
-        '体检后最容易忽视的3个点',
-        '门诊咨询量上升的真实问题',
-        '最近一周讨论度明显提升',
-        '用户最常追问的复查场景',
-        '适合继续延展的内容方向',
+    return build_hotword_skeleton_rows(
+        keywords,
+        source_platform=source_platform,
+        source_channel=source_channel,
+        batch_name=batch_name,
+    )
+
+
+def _build_hotword_request_config(payload=None):
+    payload = payload or {}
+    runtime_settings = _hotword_runtime_settings()
+    merged = dict(runtime_settings)
+    override_keys = [
+        'hotword_fetch_mode',
+        'hotword_api_url',
+        'hotword_api_method',
+        'hotword_api_headers_json',
+        'hotword_api_query_json',
+        'hotword_api_body_json',
+        'hotword_result_path',
+        'hotword_keyword_param',
+        'hotword_timeout_seconds',
     ]
-    for idx, keyword in enumerate(keywords, start=1):
-        title = f'{keyword}{templates[(idx - 1) % len(templates)]}'
-        rows.append({
-            'keyword': keyword,
-            'title': title,
-            'link': '',
-            'views': 4200 + idx * 830,
-            'likes': 160 + idx * 25,
-            'favorites': 72 + idx * 12,
-            'comments': 18 + idx * 5,
-            'author': f'热点样例账号{idx}',
-            'summary': f'Worker 骨架模式生成，供热点池、候选话题生成和后续真实数据源接入联调使用。关键词：{keyword}',
-            'source_platform': source_platform,
-            'source_channel': source_channel,
-            'import_batch': batch_name,
-            'topic_category': '热点骨架',
-            'publish_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'raw_payload': {
-                'mode': 'skeleton',
-                'keyword_rank': idx,
-                'batch_name': batch_name,
-            }
-        })
-    return rows
+    for key in override_keys:
+        if payload.get(key) not in [None, '']:
+            merged[key] = payload.get(key)
+    merged['hotword_timeout_seconds'] = min(max(_safe_int(merged.get('hotword_timeout_seconds'), 30), 5), 120)
+    merged['hotword_fetch_mode'] = _resolved_hotword_mode(merged)
+    merged['hotword_api_method'] = (merged.get('hotword_api_method') or 'GET').strip().upper() or 'GET'
+    return merged
+
+
+def _build_hotword_remote_preview(payload=None, keywords=None, source_platform='', source_channel='', batch_name=''):
+    keywords = keywords or []
+    request_config = _build_hotword_request_config(payload)
+    return build_remote_hotword_request_preview(
+        {
+            'api_url': request_config.get('hotword_api_url'),
+            'api_method': request_config.get('hotword_api_method'),
+            'headers_json': request_config.get('hotword_api_headers_json'),
+            'query_json': request_config.get('hotword_api_query_json'),
+            'body_json': request_config.get('hotword_api_body_json'),
+            'result_path': request_config.get('hotword_result_path'),
+            'keyword_param': request_config.get('hotword_keyword_param'),
+            'timeout_seconds': request_config.get('hotword_timeout_seconds'),
+        },
+        keywords,
+        source_platform=source_platform,
+        source_channel=source_channel,
+        batch_name=batch_name,
+    )
+
+
+def _resolve_hotword_rows(task_record, params, keywords):
+    template_key = (params.get('template_key') or _hotword_runtime_settings().get('hotword_source_template') or 'generic_lines').strip()
+    mode = (task_record.mode or '').strip().lower() or 'skeleton'
+    source_platform = task_record.source_platform or '小红书'
+    source_channel = task_record.source_channel or 'Worker骨架'
+    batch_name = task_record.batch_name or ''
+
+    if mode == 'remote':
+        remote_result = fetch_remote_hotword_items(
+            {
+                'api_url': params.get('hotword_api_url'),
+                'api_method': params.get('hotword_api_method'),
+                'headers_json': params.get('hotword_api_headers_json'),
+                'query_json': params.get('hotword_api_query_json'),
+                'body_json': params.get('hotword_api_body_json'),
+                'result_path': params.get('hotword_result_path'),
+                'keyword_param': params.get('hotword_keyword_param'),
+                'timeout_seconds': params.get('hotword_timeout_seconds'),
+            },
+            keywords,
+            source_platform=source_platform,
+            source_channel=source_channel,
+            batch_name=batch_name,
+        )
+        response_preview = remote_result.get('response_preview') or {}
+        if isinstance(response_preview, list):
+            response_preview = response_preview[:5]
+        elif isinstance(response_preview, dict):
+            preview_copy = dict(response_preview)
+            for key in ['items', 'data', 'results', 'list']:
+                if isinstance(preview_copy.get(key), list):
+                    preview_copy[key] = preview_copy[key][:5]
+            response_preview = preview_copy
+        rows = _normalize_trend_items(
+            remote_result.get('items') or [],
+            template_key=template_key,
+            source_platform=source_platform,
+            source_channel=source_channel,
+            batch_name=batch_name,
+        )
+        return {
+            'mode': 'remote',
+            'template_key': template_key,
+            'rows': rows,
+            'request_preview': remote_result.get('request_preview') or {},
+            'response_preview': response_preview,
+        }
+
+    return {
+        'mode': 'skeleton',
+        'template_key': template_key,
+        'rows': _build_hotword_skeleton_rows(
+            keywords,
+            source_platform=source_platform,
+            source_channel=source_channel,
+            batch_name=batch_name,
+        ),
+        'request_preview': {},
+        'response_preview': {},
+    }
 
 
 def _dispatch_hotword_sync(payload, actor='system'):
     runtime_config = _automation_runtime_config()
+    request_config = _build_hotword_request_config(payload)
     source_platform = (payload.get('source_platform') or str(runtime_config.get('hotword_source_platform') or '小红书')).strip()
     source_channel = (payload.get('source_channel') or str(runtime_config.get('hotword_source_channel') or 'Worker骨架')).strip()
-    mode = (payload.get('mode') or 'skeleton').strip() or 'skeleton'
+    mode = request_config.get('hotword_fetch_mode') or 'skeleton'
     keyword_limit = min(max(_safe_int(payload.get('keyword_limit'), runtime_config.get('hotword_keyword_limit') or 10), 1), 30)
     batch_name = (payload.get('batch_name') or datetime.now().strftime('hotword_%Y%m%d_%H%M%S')).strip()[:120]
     raw_keywords = payload.get('keywords')
     if isinstance(raw_keywords, list):
         keyword_items = [str(item).strip() for item in raw_keywords if str(item).strip()]
     else:
-        keyword_items = _split_keywords(raw_keywords or '')
+        keyword_items = split_hotword_keywords(raw_keywords or '')
     keywords = keyword_items[:keyword_limit] if keyword_items else _automation_keyword_seeds()[:keyword_limit]
+    template_key = (payload.get('template_key') or runtime_config.get('hotword_source_template') or 'generic_lines').strip()
+    remote_preview = _build_hotword_remote_preview(
+        request_config,
+        keywords,
+        source_platform=source_platform,
+        source_channel=source_channel,
+        batch_name=batch_name,
+    ) if mode == 'remote' else {}
 
     task_record = DataSourceTask(
         task_type='hotword_sync',
@@ -6810,14 +6873,24 @@ def _dispatch_hotword_sync(payload, actor='system'):
         batch_name=batch_name,
         keyword_limit=len(keywords),
         activity_id=_safe_int(payload.get('activity_id'), 0) or None,
-        message='等待 Worker 执行热点抓取骨架',
+        message='等待 Worker 执行远端热点抓取' if mode == 'remote' else '等待 Worker 执行热点抓取骨架',
         params_payload=json.dumps({
             'keywords': keywords,
             'keyword_limit': keyword_limit,
             'source_platform': source_platform,
             'source_channel': source_channel,
             'mode': mode,
+            'template_key': template_key,
             'batch_name': batch_name,
+            'hotword_api_url': request_config.get('hotword_api_url'),
+            'hotword_api_method': request_config.get('hotword_api_method'),
+            'hotword_api_headers_json': request_config.get('hotword_api_headers_json'),
+            'hotword_api_query_json': request_config.get('hotword_api_query_json'),
+            'hotword_api_body_json': request_config.get('hotword_api_body_json'),
+            'hotword_result_path': request_config.get('hotword_result_path'),
+            'hotword_keyword_param': request_config.get('hotword_keyword_param'),
+            'hotword_timeout_seconds': request_config.get('hotword_timeout_seconds'),
+            'request_preview': remote_preview,
         }, ensure_ascii=False),
     )
     db.session.add(task_record)
@@ -6827,7 +6900,9 @@ def _dispatch_hotword_sync(payload, actor='system'):
         'source_platform': source_platform,
         'source_channel': source_channel,
         'mode': mode,
+        'template_key': template_key,
         'batch_name': batch_name,
+        'request_preview': remote_preview,
     })
 
     from celery_app import sync_hotwords_job
@@ -6841,6 +6916,8 @@ def _dispatch_hotword_sync(payload, actor='system'):
         'source_platform': source_platform,
         'batch_name': batch_name,
         'keyword_count': len(keywords),
+        'mode': mode,
+        'template_key': template_key,
         'actor': actor,
     })
     db.session.commit()
