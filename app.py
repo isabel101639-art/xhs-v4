@@ -30,6 +30,9 @@ from automation_hotwords import (
     parse_trend_payload,
     split_keywords as split_hotword_keywords,
 )
+from automation_dashboard_routes import register_automation_dashboard_routes
+from automation_asset_routes import register_automation_asset_routes
+from analytics_routes import register_analytics_routes
 from automation_runtime import (
     AUTOMATION_RUNTIME_CONFIG_DEFAULTS,
     ASSET_STYLE_TYPE_DEFINITIONS,
@@ -5225,710 +5228,6 @@ def update_data():
     db.session.commit()
     return jsonify({'success': True, 'message': '数据更新成功'})
 
-@app.route('/data_analysis')
-def data_analysis():
-    activities = Activity.query.order_by(Activity.created_at.desc()).all()
-    return render_template('data_analysis.html', activities=activities)
-
-
-@app.route('/automation_center')
-def automation_center():
-    if not session.get('admin_logged_in'):
-        return redirect(url_for('admin_login'))
-
-    activities = Activity.query.order_by(Activity.created_at.desc()).all()
-    return render_template(
-        'automation_center.html',
-        activities=activities,
-        default_topic_quota=_default_topic_quota(),
-        asset_style_types=_asset_style_type_options(),
-        image_provider_options=_image_provider_options(),
-        image_model_options=_image_model_options('volcengine_las'),
-    )
-
-
-@app.route('/api/automation/overview')
-def automation_overview():
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    return jsonify({
-        'success': True,
-        'counts': {
-            'corpus_entries': CorpusEntry.query.count(),
-            'trend_notes': TrendNote.query.count(),
-            'topic_ideas': TopicIdea.query.count(),
-            'published_ideas': TopicIdea.query.filter_by(status='published').count(),
-            'data_source_tasks': DataSourceTask.query.count(),
-            'running_data_source_tasks': DataSourceTask.query.filter(DataSourceTask.status.in_(['queued', 'running'])).count(),
-            'asset_generation_tasks': AssetGenerationTask.query.count(),
-            'asset_library_items': AssetLibrary.query.count(),
-            'automation_schedules': AutomationSchedule.query.count(),
-            'enabled_schedules': AutomationSchedule.query.filter_by(enabled=True).count(),
-        },
-        'default_keywords': _automation_keyword_seeds(),
-        'capabilities': _image_provider_capabilities(),
-        'latest_batches': [
-            row.import_batch for row in TrendNote.query
-            .filter(TrendNote.import_batch.isnot(None))
-            .order_by(TrendNote.created_at.desc())
-            .limit(10)
-            .all()
-        ]
-    })
-
-
-@app.route('/api/admin/data-source-tasks')
-def list_data_source_tasks():
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    task_type = (request.args.get('task_type') or '').strip()
-    status = (request.args.get('status') or '').strip()
-    source_platform = (request.args.get('source_platform') or '').strip()
-    limit = min(max(_safe_int(request.args.get('limit'), 20), 1), 100)
-
-    query = DataSourceTask.query
-    if task_type:
-        query = query.filter_by(task_type=task_type)
-    if status:
-        query = query.filter_by(status=status)
-    if source_platform:
-        query = query.filter_by(source_platform=source_platform)
-
-    items = query.order_by(DataSourceTask.created_at.desc(), DataSourceTask.id.desc()).limit(limit).all()
-    return jsonify({
-        'success': True,
-        'items': [_serialize_data_source_task(item) for item in items]
-    })
-
-
-@app.route('/api/admin/data-source-tasks/<int:task_id>')
-def data_source_task_detail(task_id):
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    task = DataSourceTask.query.get_or_404(task_id)
-    return jsonify({
-        'success': True,
-        'item': _serialize_data_source_task(task, detail=True),
-    })
-
-
-@app.route('/api/admin/runtime-diagnostics')
-def runtime_diagnostics():
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    hotword_settings = _hotword_runtime_settings()
-    last_worker_ping = _latest_worker_ping_snapshot()
-    worker_health_status = 'unknown'
-    worker_health_message = '尚未执行 Worker 联通检查'
-    if last_worker_ping.get('has_result'):
-        if last_worker_ping.get('status') == 'success':
-            worker_health_status = 'healthy'
-            worker_health_message = last_worker_ping.get('message') or '最近一次 Worker 联通检查成功'
-        else:
-            worker_health_status = 'degraded'
-            worker_health_message = last_worker_ping.get('message') or '最近一次 Worker 联通检查失败'
-
-    schedules = AutomationSchedule.query.order_by(AutomationSchedule.id.asc()).all()
-    next_runs = [{
-        'job_key': item.job_key,
-        'name': item.name,
-        'enabled': bool(item.enabled),
-        'next_run_at': _format_datetime(item.next_run_at),
-        'last_status': item.last_status or 'idle',
-    } for item in schedules[:10]]
-
-    recent_jobs = OperationLog.query.filter(OperationLog.action.in_([
-        'dispatch_job', 'worker_generate', 'worker_sync', 'worker_generate_asset', 'scheduler_tick', 'worker_ping_check', 'worker_ping_check_failed'
-    ])).order_by(OperationLog.created_at.desc()).limit(10).all()
-
-    return jsonify({
-        'success': True,
-        'runtime': {
-            'database_backend': 'sqlite' if _is_sqlite_backend() else 'postgresql',
-            'database_url_configured': bool((os.environ.get('DATABASE_URL') or '').strip()),
-            'redis_url_configured': bool((os.environ.get('REDIS_URL') or '').strip()),
-            'celery_broker_configured': bool((os.environ.get('CELERY_BROKER_URL') or '').strip()),
-            'celery_backend_configured': bool((os.environ.get('CELERY_RESULT_BACKEND') or '').strip()),
-            'secret_key_configured': bool((os.environ.get('SECRET_KEY') or '').strip()),
-            'deepseek_configured': bool((os.environ.get('DEEPSEEK_API_KEY') or '').strip()),
-            'preferred_url_scheme': os.environ.get('PREFERRED_URL_SCHEME', 'https'),
-            'session_cookie_secure': _env_flag('SESSION_COOKIE_SECURE', False),
-            'default_topic_quota': _default_topic_quota(),
-            'beat_enabled': _coerce_bool(os.environ.get('ENABLE_AUTOMATION_BEAT', 'true')),
-            'hotword_fetch_mode': _resolved_hotword_mode(hotword_settings),
-            'hotword_api_url': hotword_settings.get('hotword_api_url') or '',
-            'hotword_api_method': hotword_settings.get('hotword_api_method') or 'GET',
-            'hotword_result_path': hotword_settings.get('hotword_result_path') or '',
-        },
-        'worker': {
-            'broker_ready': bool((os.environ.get('CELERY_BROKER_URL') or '').strip()),
-            'result_backend_ready': bool((os.environ.get('CELERY_RESULT_BACKEND') or '').strip()),
-            'health_status': worker_health_status,
-            'health_message': worker_health_message,
-            'last_ping': last_worker_ping,
-        },
-        'capabilities': _image_provider_capabilities(),
-        'counts': {
-            'activities': Activity.query.count(),
-            'topics': Topic.query.count(),
-            'registrations': Registration.query.count(),
-            'submissions': Submission.query.count(),
-            'trend_notes': TrendNote.query.count(),
-            'corpus_entries': CorpusEntry.query.count(),
-            'topic_ideas': TopicIdea.query.count(),
-            'data_source_tasks': DataSourceTask.query.count(),
-            'asset_generation_tasks': AssetGenerationTask.query.count(),
-            'schedules': AutomationSchedule.query.count(),
-            'enabled_schedules': AutomationSchedule.query.filter_by(enabled=True).count(),
-        },
-        'schedules': next_runs,
-        'recent_jobs': [_serialize_operation_log(item) for item in recent_jobs],
-    })
-
-
-@app.route('/api/admin/readiness-check')
-def readiness_check():
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    checks = _build_readiness_checks()
-    return jsonify({
-        'success': True,
-        **checks,
-    })
-
-
-@app.route('/api/admin/project-status')
-def project_status():
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    return jsonify(_build_project_status_payload())
-
-
-@app.route('/api/admin/project-status/bootstrap-demo-data', methods=['POST'])
-def bootstrap_project_demo_data():
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    result = _bootstrap_demo_operational_data()
-    db.session.commit()
-    return jsonify({
-        'success': True,
-        **result,
-        'project_status': _build_project_status_payload(),
-    })
-
-
-@app.route('/api/admin/project-status/clear-demo-data', methods=['POST'])
-def clear_project_demo_data():
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    result = _clear_demo_operational_data()
-    db.session.commit()
-    return jsonify({
-        'success': True,
-        **result,
-        'project_status': _build_project_status_payload(),
-    })
-
-
-@app.route('/api/admin/deployment-helper')
-def deployment_helper():
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    return jsonify(_build_deployment_helper_payload())
-
-
-@app.route('/api/admin/failed-jobs')
-def failed_jobs():
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    limit = request.args.get('limit')
-    return jsonify(_build_recent_failed_jobs_payload(limit=limit))
-
-
-@app.route('/api/admin/automation-config', methods=['GET', 'POST'])
-def automation_config():
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    if request.method == 'POST':
-        data = request.json or {}
-        current = _automation_runtime_config()
-        next_config = dict(current)
-        next_config['hotword_source_platform'] = (data.get('hotword_source_platform') or current['hotword_source_platform']).strip()[:50]
-        next_config['hotword_source_template'] = (data.get('hotword_source_template') or current['hotword_source_template']).strip()[:50]
-        next_config['hotword_source_channel'] = (data.get('hotword_source_channel') or current['hotword_source_channel']).strip()[:50]
-        next_config['hotword_keyword_limit'] = min(max(_safe_int(data.get('hotword_keyword_limit'), current['hotword_keyword_limit']), 1), 30)
-        next_config['hotword_fetch_mode'] = (data.get('hotword_fetch_mode') or current.get('hotword_fetch_mode') or 'auto').strip()[:20]
-        next_config['hotword_api_url'] = (data.get('hotword_api_url') or current.get('hotword_api_url') or '').strip()[:500]
-        next_config['hotword_api_method'] = (data.get('hotword_api_method') or current.get('hotword_api_method') or 'GET').strip()[:10]
-        next_config['hotword_api_headers_json'] = (data.get('hotword_api_headers_json') or current.get('hotword_api_headers_json') or '').strip()[:4000]
-        next_config['hotword_api_query_json'] = (data.get('hotword_api_query_json') or current.get('hotword_api_query_json') or '').strip()[:4000]
-        next_config['hotword_api_body_json'] = (data.get('hotword_api_body_json') or current.get('hotword_api_body_json') or '').strip()[:4000]
-        next_config['hotword_result_path'] = (data.get('hotword_result_path') or current.get('hotword_result_path') or '').strip()[:200]
-        next_config['hotword_keyword_param'] = (data.get('hotword_keyword_param') or current.get('hotword_keyword_param') or 'keyword').strip()[:50]
-        next_config['hotword_timeout_seconds'] = min(max(_safe_int(data.get('hotword_timeout_seconds'), current.get('hotword_timeout_seconds') or 30), 5), 120)
-        next_config['image_provider'] = (data.get('image_provider') or current['image_provider']).strip()[:50]
-        next_config['image_api_base'] = (data.get('image_api_base') or current['image_api_base']).strip()[:500]
-        next_config['image_api_url'] = (data.get('image_api_url') or current['image_api_url']).strip()[:500]
-        next_config['image_model'] = (data.get('image_model') or current['image_model']).strip()[:100]
-        next_config['image_size'] = (data.get('image_size') or current['image_size']).strip()[:50]
-        next_config['image_timeout_seconds'] = min(max(_safe_int(data.get('image_timeout_seconds'), current['image_timeout_seconds']), 10), 300)
-        next_config['image_style_preset'] = (data.get('image_style_preset') or current['image_style_preset']).strip()[:50]
-        next_config['image_default_style_type'] = (data.get('image_default_style_type') or current['image_default_style_type']).strip()[:50]
-        next_config['image_optimize_prompt_mode'] = (data.get('image_optimize_prompt_mode') or current['image_optimize_prompt_mode']).strip()[:50]
-        next_config['image_prompt_suffix'] = (data.get('image_prompt_suffix') or current['image_prompt_suffix']).strip()[:500]
-
-        setting = Settings.query.filter_by(key='automation_runtime_config').first()
-        if not setting:
-            setting = Settings(key='automation_runtime_config', value='{}')
-            db.session.add(setting)
-        setting.value = json.dumps(next_config, ensure_ascii=False)
-        _log_operation('save', 'automation_runtime_config', message='更新自动化运维配置', detail=next_config)
-        db.session.commit()
-
-    runtime_config = _hotword_runtime_settings()
-    capabilities = _image_provider_capabilities()
-    return jsonify({
-        'success': True,
-        'config': runtime_config,
-        'capabilities': capabilities,
-        'provider_options': _image_provider_options(),
-        'style_types': _asset_style_type_options(),
-        'model_options': _image_model_options(runtime_config.get('image_provider')),
-        'hotword_templates': _hotword_source_template_options(),
-        'notes': {
-            'api_key_managed_by_env': True,
-            'api_key_configured': capabilities.get('api_key_configured', False),
-        }
-    })
-
-
-@app.route('/api/admin/automation-config/preview')
-def automation_config_preview():
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    runtime_config = _hotword_runtime_settings()
-    capabilities = _image_provider_capabilities()
-    hotword_preview = {
-        'source_platform': runtime_config.get('hotword_source_platform'),
-        'source_template': runtime_config.get('hotword_source_template'),
-        'source_channel': runtime_config.get('hotword_source_channel'),
-        'keyword_limit': runtime_config.get('hotword_keyword_limit'),
-        'keywords': _automation_keyword_seeds()[:min(max(_safe_int(runtime_config.get('hotword_keyword_limit'), 10), 1), 10)],
-        'fetch_mode': _resolved_hotword_mode(runtime_config),
-        'api_url': runtime_config.get('hotword_api_url') or '',
-        'api_method': runtime_config.get('hotword_api_method') or 'GET',
-        'result_path': runtime_config.get('hotword_result_path') or '',
-        'keyword_param': runtime_config.get('hotword_keyword_param') or 'keyword',
-        'timeout_seconds': runtime_config.get('hotword_timeout_seconds') or 30,
-    }
-    hotword_request_preview = {}
-    hotword_preview_error = ''
-    if hotword_preview['fetch_mode'] == 'remote':
-        try:
-            hotword_request_preview = _build_hotword_remote_preview(
-                runtime_config,
-                hotword_preview['keywords'],
-                source_platform=hotword_preview['source_platform'],
-                source_channel=hotword_preview['source_channel'],
-                batch_name='preview_runtime_config',
-            )
-        except Exception as exc:
-            hotword_preview_error = str(exc)
-    image_prompt_preview = _build_asset_generation_prompt_from_context(
-        topic_name='脂肪肝管理',
-        topic_keywords='脂肪肝,瘦型脂肪肝,内脏脂肪',
-        selected_content='标题：什么是瘦型脂肪肝？\n内文：体重正常也可能有脂肪肝。先解释成因，再讲风险和检查建议，适合做收藏型知识卡片。',
-        style_preset=capabilities.get('image_default_style_type') or runtime_config.get('image_default_style_type') or 'medical_science',
-        title_hint='什么是瘦型脂肪肝？',
-    )
-    image_request_preview = _build_asset_provider_request_preview(
-        capabilities.get('image_provider_name'),
-        capabilities.get('image_provider_model'),
-        image_prompt_preview + (' ' + capabilities.get('image_prompt_suffix', '') if capabilities.get('image_prompt_suffix') else ''),
-        capabilities.get('image_provider_size'),
-        _asset_style_meta(capabilities.get('image_default_style_type')).get('label'),
-        image_count=3,
-    )
-    return jsonify({
-        'success': True,
-        'hotword_preview': hotword_preview,
-        'hotword_template': _hotword_source_template_meta(runtime_config.get('hotword_source_template')),
-        'hotword_request_preview': hotword_request_preview,
-        'hotword_preview_error': hotword_preview_error,
-        'image_request_preview': image_request_preview,
-        'capabilities': capabilities,
-        'style_meta': _asset_style_meta(capabilities.get('image_default_style_type')),
-    })
-
-
-@app.route('/api/admin/assets/tasks')
-def list_asset_generation_tasks():
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    status = (request.args.get('status') or '').strip()
-    source_provider = (request.args.get('source_provider') or '').strip()
-    limit = min(max(_safe_int(request.args.get('limit'), 20), 1), 100)
-    query = AssetGenerationTask.query
-    if status:
-        query = query.filter_by(status=status)
-    if source_provider:
-        query = query.filter_by(source_provider=source_provider)
-
-    items = query.order_by(AssetGenerationTask.created_at.desc(), AssetGenerationTask.id.desc()).limit(limit).all()
-    return jsonify({
-        'success': True,
-        'items': [_serialize_asset_generation_task(item) for item in items]
-    })
-
-
-@app.route('/api/admin/assets/library')
-def list_asset_library():
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    library_type = (request.args.get('library_type') or '').strip()
-    pool_status = (request.args.get('pool_status') or '').strip()
-    source_provider = (request.args.get('source_provider') or '').strip()
-    keyword = (request.args.get('keyword') or '').strip()
-    limit = min(max(_safe_int(request.args.get('limit'), 30), 1), 100)
-
-    query = AssetLibrary.query
-    if library_type:
-        query = query.filter_by(library_type=library_type)
-    if pool_status:
-        query = query.filter_by(pool_status=pool_status)
-    if source_provider:
-        query = query.filter_by(source_provider=source_provider)
-    if keyword:
-        query = query.filter(or_(
-            AssetLibrary.title.contains(keyword),
-            AssetLibrary.subtitle.contains(keyword),
-            AssetLibrary.tags.contains(keyword),
-        ))
-
-    items = query.order_by(AssetLibrary.created_at.desc(), AssetLibrary.id.desc()).limit(limit).all()
-    return jsonify({
-        'success': True,
-        'items': [_serialize_asset_library_item(item) for item in items]
-    })
-
-
-@app.route('/api/admin/assets/library', methods=['POST'])
-def save_asset_library_item():
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    data = request.json or {}
-    library_type = (data.get('library_type') or 'content').strip()
-    if library_type not in {'generated', 'product', 'content'}:
-        return jsonify({'success': False, 'message': '不支持的图库类型'})
-
-    title = (data.get('title') or '').strip()
-    preview_url = (data.get('preview_url') or '').strip()
-    if not title:
-        return jsonify({'success': False, 'message': '资产标题不能为空'})
-    if not preview_url:
-        return jsonify({'success': False, 'message': '预览链接不能为空'})
-
-    item = AssetLibrary(
-        library_type=library_type,
-        asset_type=(data.get('asset_type') or '知识卡片').strip()[:50],
-        title=title[:200],
-        subtitle=(data.get('subtitle') or '').strip()[:300],
-        source_provider=(data.get('source_provider') or 'manual_upload').strip()[:50],
-        model_name=(data.get('model_name') or '').strip()[:100],
-        pool_status=(data.get('pool_status') or 'reserve').strip()[:20],
-        status='active',
-        tags=(data.get('tags') or '').strip()[:300],
-        prompt_text=(data.get('prompt_text') or '').strip(),
-        preview_url=preview_url,
-        download_name=(data.get('download_name') or '').strip()[:200],
-        raw_payload=json.dumps({
-            'manual': True,
-            'library_type': library_type,
-            'preview_url': preview_url,
-        }, ensure_ascii=False),
-    )
-    db.session.add(item)
-    db.session.flush()
-    _log_operation('create', 'asset_library', target_id=item.id, message='手工新增图片资产', detail={
-        'title': item.title,
-        'library_type': item.library_type,
-        'asset_type': item.asset_type,
-        'pool_status': item.pool_status,
-    })
-    db.session.commit()
-    return jsonify({
-        'success': True,
-        'message': '图片资产已入库',
-        'item': _serialize_asset_library_item(item)
-    })
-
-
-@app.route('/api/admin/assets/library/export')
-def export_asset_library():
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    library_type = (request.args.get('library_type') or '').strip()
-    pool_status = (request.args.get('pool_status') or '').strip()
-    source_provider = (request.args.get('source_provider') or '').strip()
-    keyword = (request.args.get('keyword') or '').strip()
-
-    query = AssetLibrary.query
-    if library_type:
-        query = query.filter_by(library_type=library_type)
-    if pool_status:
-        query = query.filter_by(pool_status=pool_status)
-    if source_provider:
-        query = query.filter_by(source_provider=source_provider)
-    if keyword:
-        query = query.filter(or_(
-            AssetLibrary.title.contains(keyword),
-            AssetLibrary.subtitle.contains(keyword),
-            AssetLibrary.tags.contains(keyword),
-        ))
-
-    items = query.order_by(AssetLibrary.created_at.desc(), AssetLibrary.id.desc()).all()
-    rows = ['图库类型,资产类型,标题,副标题,来源提供方,模型,池状态,标签,预览链接,创建时间']
-    for item in items:
-        serialized = _serialize_asset_library_item(item)
-        rows.append(','.join([
-            (serialized.get('library_type_label') or '').replace(',', ' '),
-            (serialized.get('asset_type') or '').replace(',', ' '),
-            (serialized.get('title') or '').replace(',', ' '),
-            (serialized.get('subtitle') or '').replace(',', ' '),
-            (serialized.get('source_provider') or '').replace(',', ' '),
-            (serialized.get('model_name') or '').replace(',', ' '),
-            (serialized.get('pool_status_label') or '').replace(',', ' '),
-            (serialized.get('tags') or '').replace(',', ' '),
-            (serialized.get('preview_url') or '').replace(',', ' '),
-            (serialized.get('created_at') or '').replace(',', ' '),
-        ]))
-
-    _log_operation('export', 'asset_library', message='导出图片资产库', detail={
-        'library_type': library_type,
-        'pool_status': pool_status,
-        'source_provider': source_provider,
-        'keyword': keyword,
-        'count': len(items),
-    })
-    db.session.commit()
-    content = '\n'.join(rows)
-    return content, 200, {
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': 'attachment; filename=asset_library.csv'
-    }
-
-
-@app.route('/api/admin/assets/library/<int:item_id>')
-def asset_library_detail(item_id):
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    item = AssetLibrary.query.get_or_404(item_id)
-    return jsonify({
-        'success': True,
-        'item': _serialize_asset_library_item(item, detail=True)
-    })
-
-
-@app.route('/api/admin/assets/library/<int:item_id>/pool_status', methods=['POST'])
-def update_asset_library_pool_status(item_id):
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    payload = request.json or {}
-    pool_status = (payload.get('pool_status') or '').strip()
-    if pool_status not in {'reserve', 'candidate', 'formal', 'archived'}:
-        return jsonify({'success': False, 'message': '不支持的资产池状态'})
-
-    item = AssetLibrary.query.get_or_404(item_id)
-    item.pool_status = pool_status
-    if pool_status == 'archived':
-        item.status = 'archived'
-    elif item.status == 'archived':
-        item.status = 'active'
-    _log_operation('move_pool', 'asset_library', target_id=item.id, message='更新图片资产池状态', detail={
-        'title': item.title,
-        'pool_status': pool_status,
-    })
-    db.session.commit()
-    return jsonify({
-        'success': True,
-        'message': f'图片资产已移动到{_pool_status_label(pool_status)}',
-        'item': _serialize_asset_library_item(item)
-    })
-
-
-@app.route('/api/admin/assets/tasks/<int:task_id>')
-def admin_asset_generation_task_detail(task_id):
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    task = AssetGenerationTask.query.get_or_404(task_id)
-    return jsonify({
-        'success': True,
-        'item': _serialize_asset_generation_task(task, detail=True),
-    })
-
-
-@app.route('/api/admin/assets/tasks/<int:task_id>/retry', methods=['POST'])
-def retry_asset_generation_task(task_id):
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    task = AssetGenerationTask.query.get_or_404(task_id)
-    payload = {
-        'registration_id': task.registration_id,
-        'selected_content': task.selected_content or '',
-        'style_preset': task.style_preset or '小红书图文',
-        'image_count': task.image_count or 3,
-        'title_hint': task.title_hint or '',
-    }
-    try:
-        dispatched = _dispatch_asset_generation(payload, actor=_current_actor())
-    except ValueError as exc:
-        return jsonify({'success': False, 'message': str(exc)})
-    return jsonify({
-        'success': True,
-        'message': '已重新派发图片生成任务',
-        'task_id': dispatched['task_id'],
-        'asset_task_id': dispatched['task_record'].id,
-    })
-
-
-@app.route('/api/asset_tasks/<int:task_id>')
-def asset_generation_task_detail(task_id):
-    task = AssetGenerationTask.query.get_or_404(task_id)
-    registration_id = _safe_int(request.args.get('registration_id'), 0)
-    if task.registration_id:
-        if not registration_id or task.registration_id != registration_id:
-            return jsonify({'success': False, 'message': '任务归属不匹配'}), 403
-    return jsonify({
-        'success': True,
-        'item': _serialize_asset_generation_task(task)
-    })
-
-
-@app.route('/api/admin/data-source-tasks/<int:task_id>/retry', methods=['POST'])
-def retry_data_source_task(task_id):
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    task = DataSourceTask.query.get_or_404(task_id)
-    payload = _load_json_value(task.params_payload, {})
-    payload['source_platform'] = payload.get('source_platform') or task.source_platform or '小红书'
-    payload['source_channel'] = payload.get('source_channel') or task.source_channel or 'Worker骨架'
-    payload['mode'] = payload.get('mode') or task.mode or 'skeleton'
-    payload['batch_name'] = f"{task.batch_name or 'retry'}_retry_{datetime.now().strftime('%H%M%S')}"
-    dispatched = _dispatch_hotword_sync(payload, actor=_current_actor())
-    return jsonify({
-        'success': True,
-        'message': '已重新派发热点抓取任务',
-        'task_id': dispatched['task_id'],
-        'data_source_task_id': dispatched['task_record'].id,
-    })
-
-
-@app.route('/api/admin/schedules')
-def list_automation_schedules():
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    items = AutomationSchedule.query.order_by(AutomationSchedule.id.asc()).all()
-    return jsonify({
-        'success': True,
-        'items': [_serialize_automation_schedule(item) for item in items]
-    })
-
-
-@app.route('/api/admin/schedules/<int:schedule_id>', methods=['POST'])
-def save_automation_schedule(schedule_id):
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    schedule = AutomationSchedule.query.get_or_404(schedule_id)
-    data = request.json or {}
-    previous_enabled = bool(schedule.enabled)
-    schedule.enabled = _coerce_bool(data.get('enabled'))
-    schedule.interval_minutes = min(max(_safe_int(data.get('interval_minutes'), schedule.interval_minutes or 60), 1), 10080)
-    params_payload = data.get('params_payload')
-    if isinstance(params_payload, dict):
-        schedule.params_payload = json.dumps(params_payload, ensure_ascii=False)
-    if schedule.enabled and (not previous_enabled or not schedule.next_run_at):
-        schedule.next_run_at = _next_schedule_time(schedule.interval_minutes)
-    if not schedule.enabled:
-        schedule.last_status = 'paused'
-        schedule.last_message = '已暂停自动调度'
-    _log_operation('save_schedule', 'automation_schedule', target_id=schedule.id, message='更新自动化调度配置', detail={
-        'job_key': schedule.job_key,
-        'enabled': bool(schedule.enabled),
-        'interval_minutes': schedule.interval_minutes,
-    })
-    db.session.commit()
-    return jsonify({
-        'success': True,
-        'message': '调度配置已保存',
-        'item': _serialize_automation_schedule(schedule),
-    })
-
-
-@app.route('/api/admin/schedules/<int:schedule_id>/run', methods=['POST'])
-def run_automation_schedule(schedule_id):
-    guard = _admin_json_guard()
-    if guard:
-        return guard
-
-    schedule = AutomationSchedule.query.get_or_404(schedule_id)
-    try:
-        dispatched = _dispatch_automation_schedule(schedule, actor=_current_actor())
-    except ValueError as exc:
-        return jsonify({'success': False, 'message': str(exc)})
-    return jsonify({
-        'success': True,
-        'message': '已立即执行调度任务',
-        'task_id': dispatched.get('task_id', ''),
-        'item': _serialize_automation_schedule(schedule),
-    })
-
-
 @app.route('/api/corpus', methods=['GET', 'POST'])
 def corpus_entries():
     guard = _admin_json_guard()
@@ -6338,6 +5637,71 @@ def _dispatch_automation_schedule(schedule, actor='system'):
 
     db.session.commit()
     return dispatched
+
+
+register_automation_dashboard_routes(app, {
+    'admin_json_guard': _admin_json_guard,
+    'default_topic_quota': _default_topic_quota,
+    'asset_style_type_options': _asset_style_type_options,
+    'image_provider_options': _image_provider_options,
+    'image_model_options': _image_model_options,
+    'safe_int': _safe_int,
+    'build_readiness_checks': _build_readiness_checks,
+    'build_project_status_payload': _build_project_status_payload,
+    'bootstrap_demo_operational_data': _bootstrap_demo_operational_data,
+    'clear_demo_operational_data': _clear_demo_operational_data,
+    'build_deployment_helper_payload': _build_deployment_helper_payload,
+    'build_recent_failed_jobs_payload': _build_recent_failed_jobs_payload,
+    'hotword_runtime_settings': _hotword_runtime_settings,
+    'image_provider_capabilities': _image_provider_capabilities,
+    'build_asset_provider_request_preview': _build_asset_provider_request_preview,
+    'build_asset_generation_prompt_from_context': _build_asset_generation_prompt_from_context,
+    'asset_style_meta': _asset_style_meta,
+    'hotword_source_template_meta': _hotword_source_template_meta,
+    'hotword_source_template_options': _hotword_source_template_options,
+    'automation_keyword_seeds': _automation_keyword_seeds,
+    'build_hotword_remote_preview': _build_hotword_remote_preview,
+    'resolved_hotword_mode': _resolved_hotword_mode,
+    'log_operation': _log_operation,
+    'serialize_data_source_task': _serialize_data_source_task,
+    'latest_worker_ping_snapshot': _latest_worker_ping_snapshot,
+    'format_datetime': _format_datetime,
+    'operation_log_model': OperationLog,
+    'is_sqlite_backend': _is_sqlite_backend,
+    'os': os,
+    'env_flag': _env_flag,
+    'coerce_bool': _coerce_bool,
+    'topic_model': Topic,
+    'registration_model': Registration,
+    'submission_model': Submission,
+    'serialize_operation_log': _serialize_operation_log,
+    'json': json,
+})
+
+register_automation_asset_routes(app, {
+    'admin_json_guard': _admin_json_guard,
+    'safe_int': _safe_int,
+    'serialize_asset_generation_task': _serialize_asset_generation_task,
+    'serialize_asset_library_item': _serialize_asset_library_item,
+    'serialize_automation_schedule': _serialize_automation_schedule,
+    'pool_status_label': _pool_status_label,
+    'current_actor': _current_actor,
+    'load_json_value': _load_json_value,
+    'dispatch_asset_generation': _dispatch_asset_generation,
+    'dispatch_hotword_sync': _dispatch_hotword_sync,
+    'dispatch_automation_schedule': _dispatch_automation_schedule,
+    'log_operation': _log_operation,
+    'db': db,
+    'datetime': datetime,
+    'normalize_quota': _normalize_quota,
+    'coerce_bool': _coerce_bool,
+    'next_schedule_time': _next_schedule_time,
+})
+
+register_analytics_routes(app, {
+    'build_dashboard_stats': _build_dashboard_stats,
+    'build_report_markdown': _build_report_markdown,
+})
 
 
 @app.route('/api/trends/import', methods=['POST'])
@@ -7427,45 +6791,6 @@ def activity_list():
 def activity_detail(activity_id):
     activity = Activity.query.get_or_404(activity_id)
     return render_template('activity_detail.html', activity=activity)
-
-@app.route('/api/stats/<int:activity_id>')
-def get_stats(activity_id):
-    return jsonify(_build_dashboard_stats(activity_id, request.args))
-
-
-@app.route('/api/weekly_report/<int:activity_id>')
-def export_weekly_report(activity_id):
-    activity = Activity.query.get_or_404(activity_id)
-    stats = _build_dashboard_stats(activity_id, request.args)
-    report = _build_report_markdown(activity, stats, report_type='weekly')
-
-    return report, 200, {
-        'Content-Type': 'text/markdown; charset=utf-8',
-        'Content-Disposition': f"attachment; filename=weekly_report_activity_{activity_id}.md"
-    }
-
-
-@app.route('/api/monthly_report/<int:activity_id>')
-def export_monthly_report(activity_id):
-    activity = Activity.query.get_or_404(activity_id)
-    stats = _build_dashboard_stats(activity_id, request.args)
-    report = _build_report_markdown(activity, stats, report_type='monthly')
-    return report, 200, {
-        'Content-Type': 'text/markdown; charset=utf-8',
-        'Content-Disposition': f"attachment; filename=monthly_report_activity_{activity_id}.md"
-    }
-
-
-@app.route('/api/review_report/<int:activity_id>')
-def export_review_report(activity_id):
-    activity = Activity.query.get_or_404(activity_id)
-    stats = _build_dashboard_stats(activity_id, request.args)
-    report = _build_report_markdown(activity, stats, report_type='review')
-    return report, 200, {
-        'Content-Type': 'text/markdown; charset=utf-8',
-        'Content-Disposition': f"attachment; filename=review_report_activity_{activity_id}.md"
-    }
-
 
 @app.route('/api/activity/<int:activity_id>/snapshots')
 def list_activity_snapshots(activity_id):
