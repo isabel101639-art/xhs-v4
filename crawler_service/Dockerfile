@@ -14,6 +14,7 @@ COPY requirements.txt /app/requirements.txt
 
 RUN pip install --upgrade pip \
     && pip install -r /app/requirements.txt \
+    && python -m playwright install --with-deps chromium \
     && useradd --create-home --shell /bin/sh appuser
 
 COPY . /app

@@ -45,6 +45,8 @@ class CrawlerSettings:
     xhs_post_favorites_selector: str
     xhs_post_views_selector: str
     xhs_post_time_selector: str
+    xhs_wait_after_login_seconds: int
+    xhs_debug_output_dir: str
     xhs_max_posts_per_account: int
     mock_posts_per_account: int
 
@@ -73,6 +75,8 @@ def get_settings():
         xhs_post_favorites_selector=(os.environ.get('XHS_POST_FAVORITES_SELECTOR') or '').strip(),
         xhs_post_views_selector=(os.environ.get('XHS_POST_VIEWS_SELECTOR') or '').strip(),
         xhs_post_time_selector=(os.environ.get('XHS_POST_TIME_SELECTOR') or '').strip(),
+        xhs_wait_after_login_seconds=_env_int('XHS_WAIT_AFTER_LOGIN_SECONDS', 90, 5, 600),
+        xhs_debug_output_dir=(os.environ.get('XHS_DEBUG_OUTPUT_DIR') or '/tmp/xhs_crawler_debug').strip(),
         xhs_max_posts_per_account=_env_int('XHS_MAX_POSTS_PER_ACCOUNT', 20, 1, 100),
         mock_posts_per_account=_env_int('MOCK_POSTS_PER_ACCOUNT', 2, 1, 20),
     )

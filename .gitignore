@@ -8,6 +8,10 @@ venv/
 xhs_system.db
 nohup.log
 run.log
+.state/
+crawler_service/.venv/
+crawler_service/.state/
+crawler_service/debug/
 *.swp
 *.bak*
 postgres_data/
