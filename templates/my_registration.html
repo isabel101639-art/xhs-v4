@@ -101,6 +101,7 @@
         <div class="card p-4">
             <h5 class="mb-3">您的报名记录（共{{ registrations|length }}条）</h5>
             {% for reg in registrations %}
+            {% set tracking = tracking_summaries.get(reg.id) if tracking_summaries else None %}
             <div class="border rounded p-3 mb-3">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
@@ -144,6 +145,19 @@
                             </div>
                         </div>
                         {% endif %}
+                        {% if tracking and tracking.enabled %}
+                        <div class="alert alert-light border mt-3 mb-0">
+                            <div class="fw-semibold text-danger mb-1">小红书账号持续跟踪</div>
+                            <div class="small text-muted mb-1">{{ tracking.message }}</div>
+                            <div class="small">
+                                累计笔记 {{ tracking.total_post_count or 0 }} 条 ｜ 总阅读 {{ tracking.total_views or 0 }} ｜ 总互动 {{ tracking.total_interactions or 0 }}
+                                {% if tracking.last_synced_at %}｜ 最近同步 {{ tracking.last_synced_at }}{% endif %}
+                            </div>
+                            {% if tracking.profile_url %}
+                            <div class="small mt-1"><a href="{{ tracking.profile_url }}" target="_blank">查看账号主页</a></div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
                     </div>
                     <div>
                         {% if reg.submission and reg.submission.xhs_link %}
@@ -151,6 +165,11 @@
                         <a href="{{ reg.submission.xhs_link }}" target="_blank" class="btn btn-sm btn-outline-primary ms-2">查看链接</a>
                         <button type="button" class="btn btn-sm btn-primary ms-2"
                                 onclick="openUpdateDataModal({{ reg.id }}, {
+                                    xhs_profile_link: {{ (reg.submission.xhs_profile_link or (tracking.profile_url if tracking else ''))|tojson }},
+                                    xhs_link: {{ (reg.submission.xhs_link or '')|tojson }},
+                                    douyin_link: {{ (reg.submission.douyin_link or '')|tojson }},
+                                    video_link: {{ (reg.submission.video_link or '')|tojson }},
+                                    weibo_link: {{ (reg.submission.weibo_link or '')|tojson }},
                                     xhs_views: {{ reg.submission.xhs_views or 0 }}, xhs_likes: {{ reg.submission.xhs_likes or 0 }}, xhs_favorites: {{ reg.submission.xhs_favorites or 0 }}, xhs_comments: {{ reg.submission.xhs_comments or 0 }},
                                     douyin_views: {{ reg.submission.douyin_views or 0 }}, douyin_likes: {{ reg.submission.douyin_likes or 0 }}, douyin_favorites: {{ reg.submission.douyin_favorites or 0 }}, douyin_comments: {{ reg.submission.douyin_comments or 0 }},
                                     video_views: {{ reg.submission.video_views or 0 }}, video_likes: {{ reg.submission.video_likes or 0 }}, video_favorites: {{ reg.submission.video_favorites or 0 }}, video_comments: {{ reg.submission.video_comments or 0 }},
@@ -161,6 +180,7 @@
                         <a href="{{ reg.submission.xhs_link if reg.submission and reg.submission.xhs_link else ('/topic/' ~ reg.topic_id) }}" target="_blank" class="btn btn-sm btn-xhs ms-2">查看详情</a>
 <button type="button" class="btn btn-sm btn-primary ms-2"
 onclick='openUpdateDataModal({{ reg.id }}, {
+xhs_profile_link: {{ (reg.submission.xhs_profile_link or (tracking.profile_url if tracking else ""))|tojson if reg.submission or tracking else '""' }},
 xhs_link: {{ (reg.submission.xhs_link or "")|tojson if reg.submission else '""' }},
 douyin_link: {{ (reg.submission.douyin_link or "")|tojson if reg.submission else '""' }},
 video_link: {{ (reg.submission.video_link or "")|tojson if reg.submission else '""' }},
@@ -279,6 +299,7 @@ weibo_comments: {{ reg.submission.weibo_comments or 0 if reg.submission else 0 }
                             <input type="hidden" name="registration_id" value="{{ registration.id }}">
 
                             <h6 class="text-danger">小红书</h6>
+                            <input type="url" name="xhs_profile_link" class="form-control mb-2" placeholder="小红书账号主页链接（只需填写一次）" value="{{ registration.submission.xhs_profile_link if registration.submission and registration.submission.xhs_profile_link else ((tracking_summaries.get(registration.id).profile_url) if tracking_summaries and tracking_summaries.get(registration.id) else '') }}">
                             <input type="url" name="xhs_link" class="form-control mb-2" placeholder="小红书链接">
                             <div class="row g-2 mb-3 align-items-end">
                                 <div class="col"><label class="form-label small mb-1">传播量</label><input type="number" name="xhs_views" class="form-control" min="0" value="0" placeholder="传播量"></div>
@@ -316,8 +337,8 @@ weibo_comments: {{ reg.submission.weibo_comments or 0 if reg.submission else 0 }
                         </div>
                         <div class="border rounded p-3 mb-2">
                         <h6 class="mb-2">可选补充（用于自动识别内容类型）</h6>
-                        <div class="mb-2"><input type="text" class="form-control" id="u_note_title" placeholder="笔记标题（可选）"></div>
-                        <div><textarea class="form-control" id="u_note_content" rows="3" placeholder="可粘贴正文，帮助系统分析哪类内容效果最好"></textarea></div>
+                        <div class="mb-2"><input type="text" class="form-control" id="u_note_title" name="note_title" placeholder="笔记标题（可选）"></div>
+                        <div><textarea class="form-control" id="u_note_content" name="note_content" rows="3" placeholder="可粘贴正文，帮助系统分析哪类内容效果最好"></textarea></div>
                     </div>
                     <div class="modal-footer">
                             <button type="submit" class="btn btn-xhs">提交</button>
@@ -342,6 +363,7 @@ weibo_comments: {{ reg.submission.weibo_comments or 0 if reg.submission else 0 }
                         <input type="hidden" id="update_registration_id">
                         <div class="row g-2 mb-3">
                             <div class="col-12"><strong>小红书</strong></div>
+ <div class="col-12"><label class="form-label small">账号主页链接</label><input type="url" class="form-control" id="u_xhs_profile_link" placeholder="https://..."></div>
  <div class="col-12"><label class="form-label small">链接</label><input type="url" class="form-control" id="u_xhs_link" placeholder="https://..."></div>
                             <div class="col-md-3"><label class="form-label small">传播量</label><input type="number" class="form-control" id="u_xhs_views" min="0" value="0"></div>
                             <div class="col-md-3"><label class="form-label small">点赞量</label><input type="number" class="form-control" id="u_xhs_likes" min="0" value="0"></div>
@@ -391,10 +413,12 @@ weibo_comments: {{ reg.submission.weibo_comments or 0 if reg.submission else 0 }
         let updateModal;
         function openUpdateDataModal(regId, metrics) {
             document.getElementById('update_registration_id').value = regId;
-            const fields = ['xhs_link','douyin_link','video_link','weibo_link','xhs_views','xhs_likes','xhs_favorites','xhs_comments','douyin_views','douyin_likes','douyin_favorites','douyin_comments','video_views','video_likes','video_favorites','video_comments','weibo_views','weibo_likes','weibo_favorites','weibo_comments'];
+            const fields = ['xhs_profile_link','xhs_link','douyin_link','video_link','weibo_link','xhs_views','xhs_likes','xhs_favorites','xhs_comments','douyin_views','douyin_likes','douyin_favorites','douyin_comments','video_views','video_likes','video_favorites','video_comments','weibo_views','weibo_likes','weibo_favorites','weibo_comments'];
             fields.forEach(k => {
                 const el = document.getElementById('u_' + k);
-                if (el) el.value = (metrics && metrics[k] != null) ? metrics[k] : 0;
+                if (!el) return;
+                const fallback = k.endsWith('_link') ? '' : 0;
+                el.value = (metrics && metrics[k] != null) ? metrics[k] : fallback;
             });
             if (!updateModal) updateModal = new bootstrap.Modal(document.getElementById('updateDataModal'));
             updateModal.show();
@@ -404,6 +428,7 @@ weibo_comments: {{ reg.submission.weibo_comments or 0 if reg.submission else 0 }
             e.preventDefault();
             const payload = {
                 registration_id: parseInt(document.getElementById('update_registration_id').value),
+ xhs_profile_link: (document.getElementById('u_xhs_profile_link').value || '').trim(),
  xhs_link: (document.getElementById('u_xhs_link').value || '').trim(),
  douyin_link: (document.getElementById('u_douyin_link').value || '').trim(),
  video_link: (document.getElementById('u_video_link').value || '').trim(),
@@ -434,7 +459,7 @@ weibo_comments: {{ reg.submission.weibo_comments or 0 if reg.submission else 0 }
             });
             const result = await res.json();
             if (result.success) {
-                alert('更新数据成功！');
+                alert(result.message || '更新数据成功！');
                 location.reload();
             } else {
                 alert(result.message || '更新失败');

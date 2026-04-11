@@ -7,7 +7,7 @@ load_dotenv()
 完全基于需求定制开发
 """
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session, send_file
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, send_file, has_request_context
 from flask_cors import CORS
 from sqlalchemy import or_, text, inspect
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -30,9 +30,14 @@ from automation_hotwords import (
     parse_trend_payload,
     split_keywords as split_hotword_keywords,
 )
+from automation_accounts import (
+    build_creator_sync_request_preview,
+    fetch_remote_creator_bundle,
+)
 from automation_dashboard_routes import register_automation_dashboard_routes
 from automation_asset_routes import register_automation_asset_routes
 from analytics_routes import register_analytics_routes
+from public_routes import register_public_routes
 from automation_runtime import (
     AUTOMATION_RUNTIME_CONFIG_DEFAULTS,
     ASSET_STYLE_TYPE_DEFINITIONS,
@@ -43,6 +48,8 @@ from automation_runtime import (
     _automation_runtime_config,
     _hotword_runtime_settings,
     _resolved_hotword_mode,
+    _creator_sync_runtime_settings,
+    _resolved_creator_sync_mode,
     _image_provider_options,
     _asset_style_type_options,
     _asset_style_meta,
@@ -53,6 +60,14 @@ from creator_import import (
     parse_creator_import_bundle,
     preview_creator_import_bundle,
     import_creator_bundle,
+)
+from creator_tracking import (
+    backfill_submission_tracking,
+    build_registration_tracking_summary,
+    canonicalize_xhs_post_url,
+    normalize_tracking_url,
+    sync_tracking_for_creator_account,
+    sync_tracking_from_submission,
 )
 from models import (
     db,
@@ -327,6 +342,18 @@ def _default_automation_schedules(default_quota=30):
                 'quota': default_quota,
             }, ensure_ascii=False),
         },
+        {
+            'job_key': 'creator_accounts_sync_half_hourly',
+            'name': '报名人账号持续同步',
+            'task_type': 'creator_account_sync',
+            'enabled': False,
+            'interval_minutes': 30,
+            'params_payload': json.dumps({
+                'source_platform': '小红书',
+                'source_channel': 'Crawler服务',
+                'batch_limit': 20,
+            }, ensure_ascii=False),
+        },
     ]
 
 
@@ -468,6 +495,8 @@ def _pool_status_label(status):
 
 
 def _current_actor():
+    if not has_request_context():
+        return 'system'
     return session.get('admin_username') or 'system'
 
 
@@ -1112,6 +1141,9 @@ def _serialize_creator_post(post):
         'id': post.id,
         'creator_account_id': post.creator_account_id,
         'platform_post_id': post.platform_post_id or '',
+        'registration_id': post.registration_id,
+        'topic_id': post.topic_id,
+        'submission_id': post.submission_id,
         'title': post.title,
         'post_url': post.post_url or '',
         'publish_time': post.publish_time.strftime('%Y-%m-%d %H:%M:%S') if post.publish_time else '',
@@ -1441,9 +1473,17 @@ def _build_project_status_payload():
             'phase': 'P1',
             'status': 'in_progress',
             'progress': 58 if counts['creator_accounts'] > 0 else 48,
-            'summary': '账号、笔记、快照、统计接口和后台看板都在，但当前库里还没有运营样本。',
+            'summary': (
+                '账号、笔记、快照、统计接口和后台看板都在，已开始有样本回流，但覆盖面还不够。'
+                if counts['creator_accounts'] > 0 else
+                '账号、笔记、快照、统计接口和后台看板都在，但当前库里还没有运营样本。'
+            ),
             'evidence': f'账号 {counts["creator_accounts"]} 个，笔记 {counts["creator_posts"]} 条。',
-            'next_step': '先导入一批演示或真实账号数据，验证排行和趋势是否符合预期。',
+            'next_step': (
+                '继续扩大真实样本覆盖，并把账号跟踪同步链路稳定下来。'
+                if counts['creator_accounts'] > 0 else
+                '先导入一批演示或真实账号数据，验证排行和趋势是否符合预期。'
+            ),
         },
         {
             'key': 'M12',
@@ -2153,6 +2193,16 @@ def _deployment_config_value(key, runtime_config=None):
         'HOTWORD_RESULT_PATH': 'hotword_result_path',
         'HOTWORD_KEYWORD_PARAM': 'hotword_keyword_param',
         'HOTWORD_TIMEOUT_SECONDS': 'hotword_timeout_seconds',
+        'CREATOR_SYNC_SOURCE_CHANNEL': 'creator_sync_source_channel',
+        'CREATOR_SYNC_FETCH_MODE': 'creator_sync_fetch_mode',
+        'CREATOR_SYNC_API_URL': 'creator_sync_api_url',
+        'CREATOR_SYNC_API_METHOD': 'creator_sync_api_method',
+        'CREATOR_SYNC_API_HEADERS_JSON': 'creator_sync_api_headers_json',
+        'CREATOR_SYNC_API_QUERY_JSON': 'creator_sync_api_query_json',
+        'CREATOR_SYNC_API_BODY_JSON': 'creator_sync_api_body_json',
+        'CREATOR_SYNC_RESULT_PATH': 'creator_sync_result_path',
+        'CREATOR_SYNC_TIMEOUT_SECONDS': 'creator_sync_timeout_seconds',
+        'CREATOR_SYNC_BATCH_LIMIT': 'creator_sync_batch_limit',
         'ASSET_IMAGE_PROVIDER': 'image_provider',
         'ASSET_IMAGE_API_BASE': 'image_api_base',
         'ASSET_IMAGE_API_URL': 'image_api_url',
@@ -2169,6 +2219,7 @@ def _deployment_config_value(key, runtime_config=None):
 def _build_deployment_helper_payload():
     runtime_config = _automation_runtime_config()
     hotword_settings = _hotword_runtime_settings()
+    creator_sync_settings = _creator_sync_runtime_settings()
     capabilities = _image_provider_capabilities()
     sensitive_keys = {
         'SECRET_KEY',
@@ -2199,6 +2250,16 @@ def _build_deployment_helper_payload():
         'HOTWORD_RESULT_PATH': (hotword_settings.get('hotword_result_path') or ''),
         'HOTWORD_KEYWORD_PARAM': (hotword_settings.get('hotword_keyword_param') or 'keyword'),
         'HOTWORD_TIMEOUT_SECONDS': str(hotword_settings.get('hotword_timeout_seconds') or 30),
+        'CREATOR_SYNC_SOURCE_CHANNEL': (creator_sync_settings.get('creator_sync_source_channel') or 'Crawler服务'),
+        'CREATOR_SYNC_FETCH_MODE': _resolved_creator_sync_mode(creator_sync_settings),
+        'CREATOR_SYNC_API_URL': (creator_sync_settings.get('creator_sync_api_url') or ''),
+        'CREATOR_SYNC_API_METHOD': (creator_sync_settings.get('creator_sync_api_method') or 'POST'),
+        'CREATOR_SYNC_API_HEADERS_JSON': (creator_sync_settings.get('creator_sync_api_headers_json') or ''),
+        'CREATOR_SYNC_API_QUERY_JSON': (creator_sync_settings.get('creator_sync_api_query_json') or ''),
+        'CREATOR_SYNC_API_BODY_JSON': (creator_sync_settings.get('creator_sync_api_body_json') or ''),
+        'CREATOR_SYNC_RESULT_PATH': (creator_sync_settings.get('creator_sync_result_path') or ''),
+        'CREATOR_SYNC_TIMEOUT_SECONDS': str(creator_sync_settings.get('creator_sync_timeout_seconds') or 60),
+        'CREATOR_SYNC_BATCH_LIMIT': str(creator_sync_settings.get('creator_sync_batch_limit') or 20),
         'ASSET_IMAGE_PROVIDER': capabilities.get('image_provider_name') or 'svg_fallback',
         'ASSET_IMAGE_API_BASE': capabilities.get('image_provider_api_base') or '',
         'ASSET_IMAGE_API_URL': capabilities.get('image_provider_api_url') or '',
@@ -2384,15 +2445,17 @@ def _build_recent_failed_jobs_payload(limit=10):
         DataSourceTask.finished_at.desc(), DataSourceTask.updated_at.desc(), DataSourceTask.created_at.desc(), DataSourceTask.id.desc()
     ).limit(safe_limit).all()
     for task in failed_data_source_tasks:
+        kind_label = '报名人账号同步任务' if task.task_type == 'creator_account_sync' else '热点抓取任务'
+        retry_label = '重试账号同步' if task.task_type == 'creator_account_sync' else '重试抓取'
         items.append({
             'kind': 'data_source_task',
-            'kind_label': '热点抓取任务',
+            'kind_label': kind_label,
             'id': task.id,
-            'title': task.batch_name or task.task_type or '热点抓取任务',
+            'title': task.batch_name or task.task_type or kind_label,
             'occurred_at': _format_datetime(task.finished_at or task.updated_at or task.created_at),
             'status': task.status or 'failed',
             'status_label': task.status or 'failed',
-            'message': task.message or '抓取任务失败',
+            'message': task.message or f'{kind_label}失败',
             'task_id': task.celery_task_id or '',
             'source_label': f'{task.source_platform or "-"} / {task.source_channel or "-"}',
             'detail': {
@@ -2406,7 +2469,7 @@ def _build_recent_failed_jobs_payload(limit=10):
             'retry': {
                 'type': 'data_source_task',
                 'id': task.id,
-                'label': '重试抓取',
+                'label': retry_label,
             },
         })
 
@@ -3966,126 +4029,6 @@ def _build_public_shell_context():
 
 # ==================== 路由 ====================
 
-@app.route('/')
-def index():
-    activity = Activity.query.filter_by(status='published').order_by(Activity.created_at.desc()).first()
-    if not activity:
-        activities = Activity.query.order_by(Activity.created_at.desc()).all()
-        if activities:
-            activity = activities[0]
-
-    page_config = _get_site_page_config('home')
-    theme = _get_active_site_theme()
-    site_config = _serialize_site_page_config(page_config) if page_config else {
-        **DEFAULT_HOME_PAGE_CONFIG,
-        'nav_items': [dict(item) for item in DEFAULT_SITE_NAV_ITEMS],
-    }
-    site_theme = _serialize_site_theme(theme) if theme else dict(DEFAULT_SITE_THEME)
-
-    split_index = _normalize_quota(site_config.get('primary_topic_limit'), default=DEFAULT_HOME_PAGE_CONFIG['primary_topic_limit'], min_value=1, max_value=120)
-    all_topics = list(activity.topics) if activity else []
-    primary_topics = all_topics[:split_index]
-    secondary_topics = all_topics[split_index:]
-    first_available_topic = next((topic for topic in all_topics if (topic.filled or 0) < (topic.quota or 0)), None)
-    announcements = [_serialize_announcement(item) for item in _list_announcements(limit=4)]
-    trend_notes = [{
-        'id': note.id,
-        'title': note.title or '',
-        'keyword': note.keyword or '',
-        'source_platform': note.source_platform or '',
-        'likes': note.likes or 0,
-        'favorites': note.favorites or 0,
-        'comments': note.comments or 0,
-        'views': note.views or 0,
-        'link': note.link or '',
-    } for note in TrendNote.query.order_by(TrendNote.created_at.desc()).limit(6).all()]
-
-    hero_title = (site_config.get('hero_title') or '').strip() or (activity.title if activity else '')
-    hero_subtitle = (site_config.get('hero_subtitle') or '').strip() or (activity.description if activity else '')
-    hero_badge = (site_config.get('hero_badge') or '').strip() or (activity.name if activity else '内容运营平台')
-
-    return render_template(
-        'index.html',
-        activity=activity,
-        primary_topics=primary_topics,
-        secondary_topics=secondary_topics,
-        first_available_topic=first_available_topic,
-        announcements=announcements,
-        trend_notes=trend_notes,
-        site_config={
-            **site_config,
-            'hero_title': hero_title,
-            'hero_subtitle': hero_subtitle,
-            'hero_badge': hero_badge,
-        },
-        site_theme=site_theme,
-    )
-
-@app.route('/topic/<int:topic_id>')
-def topic_detail(topic_id):
-    topic = Topic.query.get_or_404(topic_id)
-    return render_template('topic_detail.html', topic=topic, **_build_public_shell_context())
-
-# 报名成功页面（带一键生成文案）
-@app.route('/register_success/<int:reg_id>')
-def register_success(reg_id):
-    reg = Registration.query.get_or_404(reg_id)
-    return render_template(
-        'register_success.html',
-        registration=reg,
-        asset_style_types=_asset_style_type_options(),
-        **_build_public_shell_context(),
-    )
-
-@app.route('/my_registration', methods=['GET', 'POST'])
-def my_registration():
-    # 如果有reg_id参数，仍按"列表卡片"统一展示（避免不同人展示样式不一致）
-    reg_id = request.args.get('reg_id')
-    if reg_id:
-        reg = Registration.query.get(int(reg_id))
-        if reg:
-            return render_template('my_registration.html', registrations=[reg], **_build_public_shell_context())
-
-    if request.method == 'POST':
-        group_num = request.form.get('group_num')
-        name = request.form.get('name')
-
-        # 查询该姓名下的所有报名记录
-        regs = Registration.query.filter_by(group_num=group_num, name=name).all()
-        if regs:
-            # 统一走同一展示模板：无论几条都用列表卡片
-            return render_template('my_registration.html', registrations=regs, **_build_public_shell_context())
-        else:
-            return render_template('my_registration.html', error='未找到报名信息', **_build_public_shell_context())
-
-    return render_template('my_registration.html', **_build_public_shell_context())
-
-@app.route('/api/topics/<int:activity_id>')
-def get_topics(activity_id):
-    topics = Topic.query.filter_by(activity_id=activity_id).all()
-    return jsonify([_serialize_topic(topic) for topic in topics])
-
-
-@app.route('/api/profile_by_phone')
-def profile_by_phone():
-    phone = (request.args.get('phone') or '').strip()
-    if not phone:
-        return jsonify({'success': False, 'message': '手机号不能为空'})
-
-    reg = Registration.query.filter_by(phone=phone).order_by(Registration.created_at.desc()).first()
-    if not reg:
-        return jsonify({'success': True, 'found': False})
-
-    return jsonify({
-        'success': True,
-        'found': True,
-        'profile': {
-            'name': reg.name or '',
-            'xhs_account': reg.xhs_account or '',
-            'group_num': reg.group_num or ''
-        }
-    })
-
 
 @app.route('/api/admin/site-config', methods=['GET', 'POST'])
 def admin_site_config():
@@ -4269,38 +4212,6 @@ def update_announcement_status(announcement_id):
         'item': _serialize_announcement(announcement),
     })
 
-
-@app.route('/api/register', methods=['POST'])
-def register():
-    data = request.json
-    topic = Topic.query.get(data.get('topic_id'))
-
-    if not topic:
-        return jsonify({'success': False, 'message': '话题不存在'})
-
-    if topic.filled >= topic.quota:
-        return jsonify({'success': False, 'message': '名额已满'})
-
-    # 检查是否已报名
-    existing = Registration.query.filter_by(
-        topic_id=data.get('topic_id'),
-        xhs_account=data.get('xhs_account')
-    ).first()
-    if existing:
-        return jsonify({'success': False, 'message': '您已报名此话题'})
-
-    reg = Registration(
-        topic_id=data.get('topic_id'),
-        group_num=data.get('group_num'),
-        name=data.get('name'),
-        phone=data.get('phone'),
-        xhs_account=data.get('xhs_account')
-    )
-    db.session.add(reg)
-    topic.filled += 1
-    db.session.commit()
-
-    return jsonify({'success': True, 'message': '报名成功', 'registration_id': reg.id})
 
 # AI生成文案API - 接入DeepSeek
 import requests
@@ -4838,6 +4749,12 @@ def _validate_partial_platform_data(data, require_at_least_one_link=False):
 
     normalized = {}
     link_count = 0
+    xhs_profile_link = (data.get('xhs_profile_link') or '').strip() if isinstance(data.get('xhs_profile_link'), str) else ''
+    if xhs_profile_link:
+        if not (xhs_profile_link.startswith('http://') or xhs_profile_link.startswith('https://')):
+            raise ValueError('小红书账号主页链接格式不正确')
+        normalized['xhs_profile_link'] = xhs_profile_link
+
     for key, label in platform_defs:
         raw_link = data.get(f'{key}_link')
         link = (raw_link or '').strip() if isinstance(raw_link, str) else ''
@@ -4881,6 +4798,30 @@ def _auto_detect_content_type(note_text: str, topic_text: str = '') -> str:
     if any(k in text for k in ['为什么', '是什么', '科普', '原理', '问答']):
         return '轻科普问答型'
     return '其他型'
+
+
+register_public_routes(app, {
+    'build_public_shell_context': _build_public_shell_context,
+    'build_registration_tracking_summary': build_registration_tracking_summary,
+    'serialize_topic': _serialize_topic,
+    'serialize_announcement': _serialize_announcement,
+    'list_announcements': _list_announcements,
+    'serialize_site_page_config': _serialize_site_page_config,
+    'serialize_site_theme': _serialize_site_theme,
+    'get_site_page_config': _get_site_page_config,
+    'get_active_site_theme': _get_active_site_theme,
+    'normalize_quota': _normalize_quota,
+    'default_home_page_config': DEFAULT_HOME_PAGE_CONFIG,
+    'default_site_nav_items': DEFAULT_SITE_NAV_ITEMS,
+    'default_site_theme': DEFAULT_SITE_THEME,
+    'asset_style_type_options': _asset_style_type_options,
+    'validate_required_platform_data': _validate_required_platform_data,
+    'validate_partial_platform_data': _validate_partial_platform_data,
+    'auto_detect_content_type': _auto_detect_content_type,
+    'sync_tracking_from_submission': sync_tracking_from_submission,
+    'db': db,
+    'datetime': datetime,
+})
 
 
 def _extract_prompt_terms(user_prompt: str):
@@ -5142,92 +5083,6 @@ def _validate_platform_metrics_only(data):
     return normalized
 
 
-@app.route('/api/submit', methods=['POST'])
-def submit_data():
-    data = request.json or {}
-    reg = Registration.query.get(data.get('registration_id'))
-
-    if not reg:
-        return jsonify({'success': False, 'message': '报名信息不存在'})
-
-    try:
-        normalized = _validate_required_platform_data(data)
-    except ValueError as e:
-        return jsonify({'success': False, 'message': str(e)})
-
-    note_title = (data.get('note_title') or '').strip()
-    note_content = (data.get('note_content') or '').strip()
-    auto_type = _auto_detect_content_type(f"{note_title} {note_content}", reg.topic.topic_name if reg and reg.topic else '')
-    if note_title:
-        normalized['note_title'] = note_title
-    if note_content:
-        normalized['note_content'] = note_content
-    normalized['content_type'] = auto_type
-
-    # 检查关键词（以小红书链接为主；分平台提交时允许为空）
-    topic = reg.topic
-    keywords = topic.keywords.split(',') if topic.keywords else []
-
-    existing_submission = Submission.query.filter_by(registration_id=reg.id).first()
-    xhs_for_check = normalized.get('xhs_link')
-    if not xhs_for_check and existing_submission:
-        xhs_for_check = existing_submission.xhs_link or ''
-    keyword_check = any(k.strip() in (xhs_for_check or '') for k in keywords if k.strip())
-
-    if existing_submission:
-        for k, v in normalized.items():
-            setattr(existing_submission, k, v)
-        existing_submission.keyword_check = keyword_check
-        existing_submission.created_at = datetime.now()
-    else:
-        submission = Submission(
-            registration_id=reg.id,
-            keyword_check=keyword_check,
-            **normalized
-        )
-        db.session.add(submission)
-
-    reg.status = 'submitted'
-    db.session.commit()
-
-    return jsonify({'success': True, 'message': '提交成功'})
-
-# 数据更新API - 仅更新多平台互动数据（不要求重新提交链接）
-@app.route('/api/update_data', methods=['POST'])
-def update_data():
-    data = request.json or {}
-    reg = Registration.query.get(data.get('registration_id'))
-
-    if not reg:
-        return jsonify({'success': False, 'message': '报名信息不存在'})
-
-    submission = Submission.query.filter_by(registration_id=reg.id).first()
-
-    if not submission:
-        submission = Submission(registration_id=reg.id)
-        db.session.add(submission)
-
-    try:
-        partial = _validate_partial_platform_data(data, require_at_least_one_link=False)
-    except ValueError as e:
-        return jsonify({'success': False, 'message': str(e)})
-
-    for k, v in partial.items():
-        setattr(submission, k, v)
-
-    # 可选：根据补充的标题/正文重新识别类型
-    note_title = (data.get('note_title') or '').strip()
-    note_content = (data.get('note_content') or '').strip()
-    if note_title:
-        submission.note_title = note_title
-    if note_content:
-        submission.note_content = note_content
-    if note_title or note_content or (submission.note_title or submission.note_content):
-        submission.content_type = _auto_detect_content_type(f"{submission.note_title or ''} {submission.note_content or ''}", reg.topic.topic_name if reg and reg.topic else '')
-
-    db.session.commit()
-    return jsonify({'success': True, 'message': '数据更新成功'})
-
 @app.route('/api/corpus', methods=['GET', 'POST'])
 def corpus_entries():
     guard = _admin_json_guard()
@@ -5446,6 +5301,127 @@ def _resolve_hotword_rows(task_record, params, keywords):
     }
 
 
+def _tracked_creator_sync_targets(limit=20, registration_id=0, creator_account_id=0):
+    limit = min(max(_safe_int(limit, 20), 1), 200)
+    registration_id = _safe_int(registration_id, 0)
+    creator_account_id = _safe_int(creator_account_id, 0)
+
+    rows = []
+    for submission in Submission.query.order_by(Submission.id.asc()).all():
+        registration = submission.registration
+        if not registration:
+            continue
+        if registration_id and registration.id != registration_id:
+            continue
+        if creator_account_id and _safe_int(submission.xhs_creator_account_id, 0) != creator_account_id:
+            continue
+
+        profile_url = (submission.xhs_profile_link or '').strip()
+        account = CreatorAccount.query.get(submission.xhs_creator_account_id) if submission.xhs_creator_account_id else None
+        account_handle = (
+            (account.account_handle if account else '') or
+            (registration.xhs_account or '')
+        ).strip()
+        owner_phone = ((account.owner_phone if account else '') or (registration.phone or '')).strip()
+        if not profile_url and account and account.profile_url:
+            profile_url = (account.profile_url or '').strip()
+
+        if not (profile_url or account_handle or owner_phone):
+            continue
+
+        rows.append({
+            'registration_id': registration.id,
+            'submission_id': submission.id,
+            'topic_id': registration.topic_id,
+            'creator_account_id': _safe_int(submission.xhs_creator_account_id, 0) or (account.id if account else 0),
+            'profile_url': profile_url,
+            'account_handle': account_handle,
+            'owner_name': ((account.owner_name if account else '') or (registration.name or '')).strip(),
+            'owner_phone': owner_phone,
+            'last_synced_at': submission.xhs_last_synced_at or (account.last_synced_at if account else None) or submission.created_at,
+            'note_url': (submission.xhs_link or '').strip(),
+        })
+
+    rows.sort(key=lambda item: item.get('last_synced_at') or datetime(1970, 1, 1))
+
+    deduped = []
+    dedupe_map = {}
+    for item in rows:
+        dedupe_key = (
+            item.get('creator_account_id') or 0,
+            item.get('profile_url') or '',
+            item.get('account_handle') or '',
+            item.get('owner_phone') or '',
+        )
+        existing = dedupe_map.get(dedupe_key)
+        if not existing:
+            item['registration_ids'] = [item['registration_id']]
+            item['submission_ids'] = [item['submission_id']]
+            dedupe_map[dedupe_key] = item
+            deduped.append(item)
+            continue
+        if item['registration_id'] not in existing['registration_ids']:
+            existing['registration_ids'].append(item['registration_id'])
+        if item['submission_id'] not in existing['submission_ids']:
+            existing['submission_ids'].append(item['submission_id'])
+        if item.get('last_synced_at') and (not existing.get('last_synced_at') or item['last_synced_at'] < existing['last_synced_at']):
+            existing['last_synced_at'] = item['last_synced_at']
+
+    result = []
+    for item in deduped[:limit]:
+        result.append({
+            **item,
+            'last_synced_at': _format_datetime(item.get('last_synced_at')),
+        })
+    return result
+
+
+def _build_creator_sync_request_config(payload=None):
+    payload = payload or {}
+    runtime_settings = _creator_sync_runtime_settings()
+    merged = dict(runtime_settings)
+    override_keys = [
+        'creator_sync_source_channel',
+        'creator_sync_fetch_mode',
+        'creator_sync_api_url',
+        'creator_sync_api_method',
+        'creator_sync_api_headers_json',
+        'creator_sync_api_query_json',
+        'creator_sync_api_body_json',
+        'creator_sync_result_path',
+        'creator_sync_timeout_seconds',
+        'creator_sync_batch_limit',
+    ]
+    for key in override_keys:
+        if payload.get(key) not in [None, '']:
+            merged[key] = payload.get(key)
+    merged['creator_sync_source_channel'] = (merged.get('creator_sync_source_channel') or 'Crawler服务').strip()[:50] or 'Crawler服务'
+    merged['creator_sync_timeout_seconds'] = min(max(_safe_int(merged.get('creator_sync_timeout_seconds'), 60), 5), 300)
+    merged['creator_sync_batch_limit'] = min(max(_safe_int(merged.get('creator_sync_batch_limit'), 20), 1), 200)
+    merged['creator_sync_fetch_mode'] = _resolved_creator_sync_mode(merged)
+    merged['creator_sync_api_method'] = (merged.get('creator_sync_api_method') or 'POST').strip().upper() or 'POST'
+    return merged
+
+
+def _build_creator_sync_remote_preview(payload=None, targets=None, source_channel='', batch_name=''):
+    targets = targets or []
+    request_config = _build_creator_sync_request_config(payload)
+    return build_creator_sync_request_preview(
+        {
+            'api_url': request_config.get('creator_sync_api_url'),
+            'api_method': request_config.get('creator_sync_api_method'),
+            'headers_json': request_config.get('creator_sync_api_headers_json'),
+            'query_json': request_config.get('creator_sync_api_query_json'),
+            'body_json': request_config.get('creator_sync_api_body_json'),
+            'result_path': request_config.get('creator_sync_result_path'),
+            'timeout_seconds': request_config.get('creator_sync_timeout_seconds'),
+        },
+        targets,
+        source_channel=source_channel or request_config.get('creator_sync_source_channel') or 'Crawler服务',
+        batch_name=batch_name,
+    )
+
+
 def _dispatch_hotword_sync(payload, actor='system'):
     runtime_config = _automation_runtime_config()
     request_config = _build_hotword_request_config(payload)
@@ -5530,6 +5506,94 @@ def _dispatch_hotword_sync(payload, actor='system'):
         'task_record': task_record,
         'task_id': async_task.id,
         'keyword_count': len(keywords),
+    }
+
+
+def _dispatch_creator_account_sync(payload, actor='system'):
+    request_config = _build_creator_sync_request_config(payload)
+    mode = request_config.get('creator_sync_fetch_mode') or 'disabled'
+    if mode != 'remote':
+        raise ValueError('账号同步接口尚未配置，请先在自动化中心填写账号同步 API URL')
+
+    source_platform = (payload.get('source_platform') or '小红书').strip() or '小红书'
+    source_channel = (payload.get('source_channel') or request_config.get('creator_sync_source_channel') or 'Crawler服务').strip() or 'Crawler服务'
+    batch_limit = min(max(_safe_int(payload.get('batch_limit'), request_config.get('creator_sync_batch_limit') or 20), 1), 200)
+    batch_name = (payload.get('batch_name') or datetime.now().strftime('creator_sync_%Y%m%d_%H%M%S')).strip()[:120]
+    registration_id = _safe_int(payload.get('registration_id'), 0)
+    creator_account_id = _safe_int(payload.get('creator_account_id'), 0)
+    targets = _tracked_creator_sync_targets(
+        limit=batch_limit,
+        registration_id=registration_id,
+        creator_account_id=creator_account_id,
+    )
+    if not targets:
+        raise ValueError('当前没有可同步的报名人账号，请先填写账号主页链接并提交一次笔记')
+
+    remote_preview = _build_creator_sync_remote_preview(
+        request_config,
+        targets,
+        source_channel=source_channel,
+        batch_name=batch_name,
+    )
+    task_record = DataSourceTask(
+        task_type='creator_account_sync',
+        source_platform=source_platform,
+        source_channel=source_channel,
+        mode=mode,
+        status='queued',
+        batch_name=batch_name,
+        keyword_limit=len(targets),
+        message='等待 Worker 执行报名人账号同步',
+        params_payload=json.dumps({
+            'targets': targets,
+            'batch_limit': batch_limit,
+            'source_platform': source_platform,
+            'source_channel': source_channel,
+            'mode': mode,
+            'batch_name': batch_name,
+            'registration_id': registration_id,
+            'creator_account_id': creator_account_id,
+            'creator_sync_api_url': request_config.get('creator_sync_api_url'),
+            'creator_sync_api_method': request_config.get('creator_sync_api_method'),
+            'creator_sync_api_headers_json': request_config.get('creator_sync_api_headers_json'),
+            'creator_sync_api_query_json': request_config.get('creator_sync_api_query_json'),
+            'creator_sync_api_body_json': request_config.get('creator_sync_api_body_json'),
+            'creator_sync_result_path': request_config.get('creator_sync_result_path'),
+            'creator_sync_timeout_seconds': request_config.get('creator_sync_timeout_seconds'),
+            'request_preview': remote_preview,
+        }, ensure_ascii=False),
+    )
+    db.session.add(task_record)
+    db.session.flush()
+    _append_data_source_log(task_record.id, '已创建报名人账号同步任务，等待 Worker 处理', detail={
+        'target_count': len(targets),
+        'source_platform': source_platform,
+        'source_channel': source_channel,
+        'batch_name': batch_name,
+        'registration_id': registration_id,
+        'creator_account_id': creator_account_id,
+        'request_preview': remote_preview,
+    })
+
+    from celery_app import sync_creator_accounts_job
+
+    async_task = sync_creator_accounts_job.delay(task_record.id)
+    task_record.celery_task_id = async_task.id
+    task_record.updated_at = datetime.now()
+    _log_operation('dispatch_job', 'data_source_task', target_id=task_record.id, message='触发报名人账号同步 Worker 任务', detail={
+        'task_id': async_task.id,
+        'job': 'jobs.creator_accounts.sync',
+        'source_platform': source_platform,
+        'batch_name': batch_name,
+        'target_count': len(targets),
+        'mode': mode,
+        'actor': actor,
+    })
+    db.session.commit()
+    return {
+        'task_record': task_record,
+        'task_id': async_task.id,
+        'target_count': len(targets),
     }
 
 
@@ -5624,6 +5688,11 @@ def _dispatch_automation_schedule(schedule, actor='system'):
         schedule.last_celery_task_id = dispatched['task_id']
         schedule.last_status = 'queued'
         schedule.last_message = f'已派发热点抓取任务 {dispatched["task_record"].id}'
+    elif schedule.task_type == 'creator_account_sync':
+        dispatched = _dispatch_creator_account_sync(params, actor=actor)
+        schedule.last_celery_task_id = dispatched['task_id']
+        schedule.last_status = 'queued'
+        schedule.last_message = f'已派发账号同步任务 {dispatched["task_record"].id}'
     elif schedule.task_type == 'topic_idea_generate':
         dispatched = _dispatch_topic_idea_generation(params, actor=actor)
         schedule.last_celery_task_id = dispatched['task_id']
@@ -5653,6 +5722,7 @@ register_automation_dashboard_routes(app, {
     'build_deployment_helper_payload': _build_deployment_helper_payload,
     'build_recent_failed_jobs_payload': _build_recent_failed_jobs_payload,
     'hotword_runtime_settings': _hotword_runtime_settings,
+    'creator_sync_runtime_settings': _creator_sync_runtime_settings,
     'image_provider_capabilities': _image_provider_capabilities,
     'build_asset_provider_request_preview': _build_asset_provider_request_preview,
     'build_asset_generation_prompt_from_context': _build_asset_generation_prompt_from_context,
@@ -5662,6 +5732,9 @@ register_automation_dashboard_routes(app, {
     'automation_keyword_seeds': _automation_keyword_seeds,
     'build_hotword_remote_preview': _build_hotword_remote_preview,
     'resolved_hotword_mode': _resolved_hotword_mode,
+    'build_creator_sync_remote_preview': _build_creator_sync_remote_preview,
+    'resolved_creator_sync_mode': _resolved_creator_sync_mode,
+    'tracked_creator_sync_targets': _tracked_creator_sync_targets,
     'log_operation': _log_operation,
     'serialize_data_source_task': _serialize_data_source_task,
     'latest_worker_ping_snapshot': _latest_worker_ping_snapshot,
@@ -5689,6 +5762,7 @@ register_automation_asset_routes(app, {
     'load_json_value': _load_json_value,
     'dispatch_asset_generation': _dispatch_asset_generation,
     'dispatch_hotword_sync': _dispatch_hotword_sync,
+    'dispatch_creator_account_sync': _dispatch_creator_account_sync,
     'dispatch_automation_schedule': _dispatch_automation_schedule,
     'log_operation': _log_operation,
     'db': db,
@@ -6253,13 +6327,14 @@ def creator_accounts():
         account.owner_phone = (data.get('owner_phone') or '').strip()
         account.account_handle = account_handle or display_name
         account.display_name = display_name or account.account_handle
-        account.profile_url = (data.get('profile_url') or '').strip()
+        account.profile_url = normalize_tracking_url(data.get('profile_url') or '')
         account.follower_count = _safe_int(data.get('follower_count'), account.follower_count or 0)
         account.source_channel = (data.get('source_channel') or account.source_channel or 'manual').strip()
         account.status = (data.get('status') or account.status or 'active').strip()
         account.notes = (data.get('notes') or '').strip()
         account.last_synced_at = datetime.now()
         db.session.flush()
+        sync_tracking_for_creator_account(account, refresh_snapshot=False)
         _log_operation('save', 'creator_account', target_id=account.id, message='保存账号信息', detail={
             'platform': account.platform,
             'owner_name': account.owner_name,
@@ -6528,8 +6603,17 @@ def creator_account_posts(account_id):
             return jsonify({'success': False, 'message': '笔记标题不能为空'})
 
         post.platform_post_id = (data.get('platform_post_id') or '').strip()
+        post.registration_id = _safe_int(data.get('registration_id'), post.registration_id)
+        post.topic_id = _safe_int(data.get('topic_id'), post.topic_id)
+        post.submission_id = _safe_int(data.get('submission_id'), post.submission_id)
         post.title = title
-        post.post_url = (data.get('post_url') or '').strip()
+        raw_post_url = (data.get('post_url') or '').strip()
+        if account.platform == 'xhs':
+            post.post_url = canonicalize_xhs_post_url(raw_post_url)
+            if post.post_url and not post.platform_post_id:
+                post.platform_post_id = post.post_url.rstrip('/').split('/')[-1]
+        else:
+            post.post_url = normalize_tracking_url(raw_post_url)
         post.publish_time = _parse_datetime(data.get('publish_time'))
         post.topic_title = (data.get('topic_title') or '').strip()
         post.views = _safe_int(data.get('views'))
@@ -6554,6 +6638,7 @@ def creator_account_posts(account_id):
         post.raw_payload = json.dumps(data, ensure_ascii=False)
         account.last_synced_at = datetime.now()
         db.session.flush()
+        sync_tracking_for_creator_account(account)
         _log_operation('save', 'creator_post', target_id=post.id, message='保存账号笔记表现', detail={
             'creator_account_id': account.id,
             'title': post.title,
@@ -7158,6 +7243,26 @@ def trigger_hotword_sync_job():
     })
 
 
+@app.route('/api/jobs/creator-accounts/run', methods=['POST'])
+def trigger_creator_account_sync_job():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    payload = request.json or {}
+    try:
+        dispatched = _dispatch_creator_account_sync(payload, actor=_current_actor())
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)})
+    return jsonify({
+        'success': True,
+        'message': f'已触发报名人账号同步任务，本轮目标 {dispatched["target_count"]} 个账号',
+        'task_id': dispatched['task_id'],
+        'job': 'jobs.creator_accounts.sync',
+        'data_source_task_id': dispatched['task_record'].id,
+    })
+
+
 @app.route('/api/jobs/assets/generate', methods=['POST'])
 def trigger_asset_generation_job():
     data = request.json or {}
@@ -7547,10 +7652,17 @@ def init_db():
                 'source_rank': 'INTEGER DEFAULT 0',
             },
             'submission': {
+                'xhs_profile_link': 'VARCHAR(500)',
                 'xhs_views': 'INTEGER DEFAULT 0',
                 'xhs_likes': 'INTEGER DEFAULT 0',
                 'xhs_favorites': 'INTEGER DEFAULT 0',
                 'xhs_comments': 'INTEGER DEFAULT 0',
+                'xhs_creator_account_id': 'INTEGER',
+                'xhs_primary_post_id': 'INTEGER',
+                'xhs_tracking_enabled': 'BOOLEAN DEFAULT 0',
+                'xhs_tracking_status': "VARCHAR(30) DEFAULT 'empty'",
+                'xhs_tracking_message': 'VARCHAR(300)',
+                'xhs_last_synced_at': timestamp_type,
                 'douyin_link': 'VARCHAR(500)',
                 'douyin_views': 'INTEGER DEFAULT 0',
                 'douyin_likes': 'INTEGER DEFAULT 0',
@@ -7576,6 +7688,11 @@ def init_db():
                 'reviewed_at': timestamp_type,
                 'published_at': timestamp_type,
                 'published_topic_id': 'INTEGER',
+            },
+            'creator_post': {
+                'registration_id': 'INTEGER',
+                'topic_id': 'INTEGER',
+                'submission_id': 'INTEGER',
             },
         }
 
@@ -7655,6 +7772,16 @@ def init_db():
         )
         TopicIdea.query.filter(or_(TopicIdea.status.is_(None), TopicIdea.status == '', TopicIdea.status == 'draft')).update(
             {'status': 'pending_review'},
+            synchronize_session=False
+        )
+        db.session.commit()
+
+        Submission.query.filter(Submission.xhs_tracking_status.is_(None)).update(
+            {'xhs_tracking_status': 'empty'},
+            synchronize_session=False
+        )
+        Submission.query.filter(Submission.xhs_tracking_enabled.is_(None)).update(
+            {'xhs_tracking_enabled': False},
             synchronize_session=False
         )
         db.session.commit()
@@ -7799,6 +7926,9 @@ def init_db():
                 db.session.add(topic)
             db.session.commit()
             print("数据库初始化完成")
+
+        backfill_submission_tracking()
+        db.session.commit()
 
 
 if __name__ == '__main__':

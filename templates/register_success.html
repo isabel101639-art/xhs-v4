@@ -225,12 +225,16 @@
 
                 <div class="border rounded p-3 mb-3">
                     <h6 class="text-danger">小红书</h6>
-                    <div class="mb-2"><input type="url" class="form-control" id="xhs_link" placeholder="小红书链接"></div>
+                    <div class="mb-2">
+                        <input type="url" class="form-control" id="xhs_profile_link" placeholder="小红书账号主页链接（只需填写一次）" value="{{ registration.submission.xhs_profile_link if registration.submission and registration.submission.xhs_profile_link else (tracking_summary.profile_url if tracking_summary else '') }}">
+                    </div>
+                    <div class="form-text mb-2">绑定账号主页后，后续同账号下抓取到的新笔记会自动归集到你的账号统计里。</div>
+                    <div class="mb-2"><input type="url" class="form-control" id="xhs_link" placeholder="本次提交的小红书笔记链接" value="{{ registration.submission.xhs_link if registration.submission and registration.submission.xhs_link else '' }}"></div>
                     <div class="row g-2 align-items-end">
-                        <div class="col-md-3"><label class="form-label small mb-1">传播量</label><input type="number" class="form-control" id="xhs_views" min="0" value="0" placeholder="传播量"></div>
-                        <div class="col-md-3"><label class="form-label small mb-1">点赞量</label><input type="number" class="form-control" id="xhs_likes" min="0" value="0" placeholder="点赞量"></div>
-                        <div class="col-md-3"><label class="form-label small mb-1">收藏量</label><input type="number" class="form-control" id="xhs_favorites" min="0" value="0" placeholder="收藏量"></div>
-                        <div class="col-md-3"><label class="form-label small mb-1">评论量</label><input type="number" class="form-control" id="xhs_comments" min="0" value="0" placeholder="评论量"></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">传播量</label><input type="number" class="form-control" id="xhs_views" min="0" value="{{ registration.submission.xhs_views if registration.submission and registration.submission.xhs_views is not none else 0 }}" placeholder="传播量"></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">点赞量</label><input type="number" class="form-control" id="xhs_likes" min="0" value="{{ registration.submission.xhs_likes if registration.submission and registration.submission.xhs_likes is not none else 0 }}" placeholder="点赞量"></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">收藏量</label><input type="number" class="form-control" id="xhs_favorites" min="0" value="{{ registration.submission.xhs_favorites if registration.submission and registration.submission.xhs_favorites is not none else 0 }}" placeholder="收藏量"></div>
+                        <div class="col-md-3"><label class="form-label small mb-1">评论量</label><input type="number" class="form-control" id="xhs_comments" min="0" value="{{ registration.submission.xhs_comments if registration.submission and registration.submission.xhs_comments is not none else 0 }}" placeholder="评论量"></div>
                     </div>
                 </div>
 
@@ -759,6 +763,7 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
                     registration_id: {{ registration.id }},
+                    xhs_profile_link: document.getElementById('xhs_profile_link').value,
                     xhs_link: document.getElementById('xhs_link').value,
                     xhs_views: parseInt(document.getElementById('xhs_views').value),
                     xhs_likes: parseInt(document.getElementById('xhs_likes').value),
@@ -786,7 +791,7 @@
             
             const data = await res.json();
             if (data.success) {
-                alert('提交成功！');
+                alert(data.message || '提交成功！');
                 location.href = '/my_registration';
             } else {
                 alert(data.message);
@@ -806,6 +811,7 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
                     registration_id: {{ registration.id }},
+                    xhs_profile_link: document.getElementById('xhs_profile_link').value,
                     xhs_link: document.getElementById('xhs_link').value,
                     xhs_views: parseInt(document.getElementById('xhs_views').value),
                     xhs_likes: parseInt(document.getElementById('xhs_likes').value),
@@ -833,7 +839,7 @@
             
             const data = await res.json();
             if (data.success) {
-                alert('数据更新成功！');
+                alert(data.message || '数据更新成功！');
             } else {
                 alert(data.message || '更新失败');
             }

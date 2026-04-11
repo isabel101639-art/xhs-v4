@@ -16,6 +16,7 @@ def register_automation_asset_routes(app, helpers):
     load_json_value = helpers['load_json_value']
     dispatch_asset_generation = helpers['dispatch_asset_generation']
     dispatch_hotword_sync = helpers['dispatch_hotword_sync']
+    dispatch_creator_account_sync = helpers['dispatch_creator_account_sync']
     dispatch_automation_schedule = helpers['dispatch_automation_schedule']
     log_operation = helpers['log_operation']
     db = helpers['db']
@@ -284,6 +285,14 @@ def register_automation_asset_routes(app, helpers):
         payload['source_channel'] = payload.get('source_channel') or task.source_channel or 'Worker骨架'
         payload['mode'] = payload.get('mode') or task.mode or 'skeleton'
         payload['batch_name'] = f"{task.batch_name or 'retry'}_retry_{datetime.now().strftime('%H%M%S')}"
+        if task.task_type == 'creator_account_sync':
+            dispatched = dispatch_creator_account_sync(payload, actor=current_actor())
+            return jsonify({
+                'success': True,
+                'message': '已重新派发报名人账号同步任务',
+                'task_id': dispatched['task_id'],
+                'data_source_task_id': dispatched['task_record'].id,
+            })
         dispatched = dispatch_hotword_sync(payload, actor=current_actor())
         return jsonify({
             'success': True,

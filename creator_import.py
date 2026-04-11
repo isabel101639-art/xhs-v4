@@ -2,6 +2,7 @@ import json
 from collections import Counter
 from datetime import datetime
 
+from creator_tracking import canonicalize_xhs_post_url, normalize_tracking_url, sync_tracking_for_creator_account
 from models import (
     db,
     CreatorAccount,
@@ -109,18 +110,21 @@ def parse_creator_import_bundle(raw_payload=''):
     }
 
 
-def _creator_account_identity_keys(platform='', account_handle='', display_name='', owner_phone=''):
+def _creator_account_identity_keys(platform='', account_handle='', display_name='', owner_phone='', profile_url=''):
     keys = []
     platform = normalize_creator_platform(platform)
     handle = (account_handle or '').strip().lower()
     name = (display_name or '').strip().lower()
     phone = (owner_phone or '').strip()
+    normalized_profile = normalize_tracking_url(profile_url)
     if handle:
         keys.append(f'{platform}:handle:{handle}')
     if name:
         keys.append(f'{platform}:name:{name}')
     if phone:
         keys.append(f'phone:{phone}')
+    if normalized_profile:
+        keys.append(f'{platform}:profile:{normalized_profile}')
     return keys
 
 
@@ -132,6 +136,7 @@ def _build_creator_account_cache():
             account.account_handle,
             account.display_name,
             account.owner_phone,
+            account.profile_url,
         )
         for key in keys:
             cache[key] = account
@@ -144,6 +149,7 @@ def _cache_creator_account(account, cache):
         account.account_handle,
         account.display_name,
         account.owner_phone,
+        account.profile_url,
     )
     for key in keys:
         cache[key] = account
@@ -162,6 +168,7 @@ def _find_creator_account_for_import(row, cache):
         row.get('account_handle') or row.get('creator_account_handle'),
         row.get('display_name') or row.get('creator_display_name'),
         row.get('owner_phone') or row.get('phone'),
+        row.get('profile_url') or row.get('xhs_profile_link'),
     )
     for key in keys:
         if key in cache:
@@ -183,6 +190,7 @@ def _upsert_creator_account_row(row, cache):
     display_name = (row.get('display_name') or row.get('creator_display_name') or '').strip()
     owner_name = (row.get('owner_name') or '').strip()
     owner_phone = (row.get('owner_phone') or row.get('phone') or '').strip()
+    profile_url = normalize_tracking_url(row.get('profile_url') or row.get('xhs_profile_link') or '')
     if not account_handle and not display_name:
         return None, 'skip'
 
@@ -191,7 +199,8 @@ def _upsert_creator_account_row(row, cache):
     account.owner_phone = owner_phone
     account.account_handle = account_handle or display_name
     account.display_name = display_name or account.account_handle
-    account.profile_url = (row.get('profile_url') or '').strip()
+    if profile_url:
+        account.profile_url = profile_url
     account.follower_count = _safe_int(row.get('follower_count'), account.follower_count or 0)
     account.source_channel = (row.get('source_channel') or account.source_channel or 'import').strip()
     account.status = (row.get('status') or account.status or 'active').strip()
@@ -276,6 +285,7 @@ def preview_creator_import_bundle(bundle):
             row.get('account_handle') or row.get('creator_account_handle'),
             row.get('display_name') or row.get('creator_display_name'),
             row.get('owner_phone') or row.get('phone'),
+            row.get('profile_url') or row.get('xhs_profile_link'),
         )
         for key in keys:
             imported_account_keys.add(key)
@@ -287,6 +297,7 @@ def preview_creator_import_bundle(bundle):
                 row.get('account_handle') or row.get('creator_account_handle'),
                 row.get('display_name') or row.get('creator_display_name'),
                 row.get('owner_phone') or row.get('phone'),
+                row.get('profile_url') or row.get('xhs_profile_link'),
             ))
         )
 
@@ -336,6 +347,7 @@ def preview_creator_import_bundle(bundle):
 def import_creator_bundle(bundle, log_operation):
     account_cache = _build_creator_account_cache()
     summary = Counter()
+    touched_account_ids = set()
 
     for row in bundle.get('accounts', []):
         account, action = _upsert_creator_account_row(row, account_cache)
@@ -343,6 +355,7 @@ def import_creator_bundle(bundle, log_operation):
             summary['accounts_skipped'] += 1
             continue
         summary[f'accounts_{action}'] += 1
+        touched_account_ids.add(account.id)
 
     for row in bundle.get('posts', []):
         title = (row.get('title') or '').strip()
@@ -360,8 +373,14 @@ def import_creator_bundle(bundle, log_operation):
             db.session.add(post)
 
         post.platform_post_id = (row.get('platform_post_id') or '').strip()
+        post.registration_id = _safe_int(row.get('registration_id'), post.registration_id)
+        post.topic_id = _safe_int(row.get('topic_id'), post.topic_id)
+        post.submission_id = _safe_int(row.get('submission_id'), post.submission_id)
         post.title = title
-        post.post_url = (row.get('post_url') or '').strip()
+        raw_post_url = (row.get('post_url') or '').strip()
+        post.post_url = canonicalize_xhs_post_url(raw_post_url) if account.platform == 'xhs' else normalize_tracking_url(raw_post_url)
+        if account.platform == 'xhs' and post.post_url and not post.platform_post_id:
+            post.platform_post_id = post.post_url.rstrip('/').split('/')[-1]
         post.publish_time = _parse_datetime(row.get('publish_time'))
         post.topic_title = (row.get('topic_title') or '').strip()
         post.views = _safe_int(row.get('views'))
@@ -387,6 +406,7 @@ def import_creator_bundle(bundle, log_operation):
         account.last_synced_at = datetime.now()
         db.session.flush()
         summary[f'posts_{action}'] += 1
+        touched_account_ids.add(account.id)
 
     for row in bundle.get('snapshots', []):
         snapshot_date = _parse_date(row.get('snapshot_date'))
@@ -418,6 +438,12 @@ def import_creator_bundle(bundle, log_operation):
         account.last_synced_at = datetime.now()
         db.session.flush()
         summary[f'snapshots_{action}'] += 1
+        touched_account_ids.add(account.id)
+
+    for account_id in touched_account_ids:
+        account = CreatorAccount.query.get(account_id)
+        if account:
+            sync_tracking_for_creator_account(account)
 
     log_operation('import', 'creator_bundle', message='批量导入账号看板数据', detail=dict(summary))
     db.session.commit()

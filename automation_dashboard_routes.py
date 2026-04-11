@@ -27,6 +27,7 @@ def register_automation_dashboard_routes(app, helpers):
     build_deployment_helper_payload = helpers['build_deployment_helper_payload']
     build_recent_failed_jobs_payload = helpers['build_recent_failed_jobs_payload']
     hotword_runtime_settings = helpers['hotword_runtime_settings']
+    creator_sync_runtime_settings = helpers['creator_sync_runtime_settings']
     image_provider_capabilities = helpers['image_provider_capabilities']
     image_provider_request_preview = helpers['build_asset_provider_request_preview']
     asset_prompt_from_context = helpers['build_asset_generation_prompt_from_context']
@@ -36,6 +37,9 @@ def register_automation_dashboard_routes(app, helpers):
     automation_keyword_seeds = helpers['automation_keyword_seeds']
     build_hotword_remote_preview = helpers['build_hotword_remote_preview']
     resolved_hotword_mode = helpers['resolved_hotword_mode']
+    build_creator_sync_remote_preview = helpers['build_creator_sync_remote_preview']
+    resolved_creator_sync_mode = helpers['resolved_creator_sync_mode']
+    tracked_creator_sync_targets = helpers['tracked_creator_sync_targets']
     log_operation = helpers['log_operation']
 
     @app.route('/automation_center')
@@ -128,6 +132,7 @@ def register_automation_dashboard_routes(app, helpers):
             return guard
 
         hotword_settings = hotword_runtime_settings()
+        creator_sync_settings = creator_sync_runtime_settings()
         last_worker_ping = helpers['latest_worker_ping_snapshot']()
         worker_health_status = 'unknown'
         worker_health_message = '尚未执行 Worker 联通检查'
@@ -172,6 +177,10 @@ def register_automation_dashboard_routes(app, helpers):
                 'hotword_api_url': hotword_settings.get('hotword_api_url') or '',
                 'hotword_api_method': hotword_settings.get('hotword_api_method') or 'GET',
                 'hotword_result_path': hotword_settings.get('hotword_result_path') or '',
+                'creator_sync_fetch_mode': resolved_creator_sync_mode(creator_sync_settings),
+                'creator_sync_api_url': creator_sync_settings.get('creator_sync_api_url') or '',
+                'creator_sync_api_method': creator_sync_settings.get('creator_sync_api_method') or 'POST',
+                'creator_sync_result_path': creator_sync_settings.get('creator_sync_result_path') or '',
             },
             'worker': {
                 'broker_ready': bool((helpers['os'].environ.get('CELERY_BROKER_URL') or '').strip()),
@@ -269,6 +278,16 @@ def register_automation_dashboard_routes(app, helpers):
             next_config['hotword_result_path'] = (data.get('hotword_result_path') or current.get('hotword_result_path') or '').strip()[:200]
             next_config['hotword_keyword_param'] = (data.get('hotword_keyword_param') or current.get('hotword_keyword_param') or 'keyword').strip()[:50]
             next_config['hotword_timeout_seconds'] = min(max(safe_int(data.get('hotword_timeout_seconds'), current.get('hotword_timeout_seconds') or 30), 5), 120)
+            next_config['creator_sync_source_channel'] = (data.get('creator_sync_source_channel') or current.get('creator_sync_source_channel') or 'Crawler服务').strip()[:50]
+            next_config['creator_sync_fetch_mode'] = (data.get('creator_sync_fetch_mode') or current.get('creator_sync_fetch_mode') or 'auto').strip()[:20]
+            next_config['creator_sync_api_url'] = (data.get('creator_sync_api_url') or current.get('creator_sync_api_url') or '').strip()[:500]
+            next_config['creator_sync_api_method'] = (data.get('creator_sync_api_method') or current.get('creator_sync_api_method') or 'POST').strip()[:10]
+            next_config['creator_sync_api_headers_json'] = (data.get('creator_sync_api_headers_json') or current.get('creator_sync_api_headers_json') or '').strip()[:4000]
+            next_config['creator_sync_api_query_json'] = (data.get('creator_sync_api_query_json') or current.get('creator_sync_api_query_json') or '').strip()[:4000]
+            next_config['creator_sync_api_body_json'] = (data.get('creator_sync_api_body_json') or current.get('creator_sync_api_body_json') or '').strip()[:4000]
+            next_config['creator_sync_result_path'] = (data.get('creator_sync_result_path') or current.get('creator_sync_result_path') or '').strip()[:200]
+            next_config['creator_sync_timeout_seconds'] = min(max(safe_int(data.get('creator_sync_timeout_seconds'), current.get('creator_sync_timeout_seconds') or 60), 5), 300)
+            next_config['creator_sync_batch_limit'] = min(max(safe_int(data.get('creator_sync_batch_limit'), current.get('creator_sync_batch_limit') or 20), 1), 200)
             next_config['image_provider'] = (data.get('image_provider') or current['image_provider']).strip()[:50]
             next_config['image_api_base'] = (data.get('image_api_base') or current['image_api_base']).strip()[:500]
             next_config['image_api_url'] = (data.get('image_api_url') or current['image_api_url']).strip()[:500]
@@ -289,6 +308,7 @@ def register_automation_dashboard_routes(app, helpers):
             db.session.commit()
 
         runtime_config = hotword_runtime_settings()
+        creator_runtime_config = creator_sync_runtime_settings()
         capabilities = image_provider_capabilities()
         return jsonify({
             'success': True,
@@ -311,6 +331,8 @@ def register_automation_dashboard_routes(app, helpers):
             return guard
 
         runtime_config = hotword_runtime_settings()
+        creator_runtime_config = creator_sync_runtime_settings()
+        runtime_config.update(creator_runtime_config)
         capabilities = image_provider_capabilities()
         hotword_preview = {
             'source_platform': runtime_config.get('hotword_source_platform'),
@@ -338,6 +360,32 @@ def register_automation_dashboard_routes(app, helpers):
                 )
             except Exception as exc:
                 hotword_preview_error = str(exc)
+        creator_sync_targets = tracked_creator_sync_targets(
+            limit=min(max(safe_int(creator_runtime_config.get('creator_sync_batch_limit'), 20), 1), 10)
+        )
+        creator_sync_preview = {
+            'source_channel': creator_runtime_config.get('creator_sync_source_channel') or 'Crawler服务',
+            'fetch_mode': resolved_creator_sync_mode(creator_runtime_config),
+            'api_url': creator_runtime_config.get('creator_sync_api_url') or '',
+            'api_method': creator_runtime_config.get('creator_sync_api_method') or 'POST',
+            'result_path': creator_runtime_config.get('creator_sync_result_path') or '',
+            'timeout_seconds': creator_runtime_config.get('creator_sync_timeout_seconds') or 60,
+            'batch_limit': creator_runtime_config.get('creator_sync_batch_limit') or 20,
+            'target_count': len(creator_sync_targets),
+            'sample_targets': creator_sync_targets[:3],
+        }
+        creator_sync_request_preview = {}
+        creator_sync_preview_error = ''
+        if creator_sync_preview['fetch_mode'] == 'remote':
+            try:
+                creator_sync_request_preview = build_creator_sync_remote_preview(
+                    creator_runtime_config,
+                    creator_sync_targets,
+                    source_channel=creator_sync_preview['source_channel'],
+                    batch_name='preview_creator_sync',
+                )
+            except Exception as exc:
+                creator_sync_preview_error = str(exc)
         image_prompt_preview = asset_prompt_from_context(
             topic_name='脂肪肝管理',
             topic_keywords='脂肪肝,瘦型脂肪肝,内脏脂肪',
@@ -359,6 +407,9 @@ def register_automation_dashboard_routes(app, helpers):
             'hotword_template': hotword_source_template_meta(runtime_config.get('hotword_source_template')),
             'hotword_request_preview': hotword_request_preview,
             'hotword_preview_error': hotword_preview_error,
+            'creator_sync_preview': creator_sync_preview,
+            'creator_sync_request_preview': creator_sync_request_preview,
+            'creator_sync_preview_error': creator_sync_preview_error,
             'image_request_preview': image_request_preview,
             'capabilities': capabilities,
             'style_meta': asset_style_meta(capabilities.get('image_default_style_type')),

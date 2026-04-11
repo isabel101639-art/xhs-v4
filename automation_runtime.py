@@ -17,6 +17,16 @@ AUTOMATION_RUNTIME_CONFIG_DEFAULTS = {
     'hotword_result_path': '',
     'hotword_keyword_param': 'keyword',
     'hotword_timeout_seconds': 30,
+    'creator_sync_source_channel': 'Crawler服务',
+    'creator_sync_fetch_mode': 'auto',
+    'creator_sync_api_url': '',
+    'creator_sync_api_method': 'POST',
+    'creator_sync_api_headers_json': '',
+    'creator_sync_api_query_json': '',
+    'creator_sync_api_body_json': '',
+    'creator_sync_result_path': '',
+    'creator_sync_timeout_seconds': 60,
+    'creator_sync_batch_limit': 20,
     'image_provider': 'svg_fallback',
     'image_api_url': '',
     'image_api_base': '',
@@ -238,6 +248,45 @@ def _resolved_hotword_mode(runtime_settings=None):
     if configured_mode == 'auto':
         return 'remote' if api_url else 'skeleton'
     return configured_mode if configured_mode in {'remote', 'skeleton'} else 'skeleton'
+
+
+def _creator_sync_runtime_settings():
+    config = dict(_automation_runtime_config())
+    env_overrides = {
+        'creator_sync_source_channel': (os.environ.get('CREATOR_SYNC_SOURCE_CHANNEL') or '').strip(),
+        'creator_sync_fetch_mode': (os.environ.get('CREATOR_SYNC_FETCH_MODE') or '').strip(),
+        'creator_sync_api_url': (os.environ.get('CREATOR_SYNC_API_URL') or '').strip(),
+        'creator_sync_api_method': (os.environ.get('CREATOR_SYNC_API_METHOD') or '').strip(),
+        'creator_sync_api_headers_json': (os.environ.get('CREATOR_SYNC_API_HEADERS_JSON') or '').strip(),
+        'creator_sync_api_query_json': (os.environ.get('CREATOR_SYNC_API_QUERY_JSON') or '').strip(),
+        'creator_sync_api_body_json': (os.environ.get('CREATOR_SYNC_API_BODY_JSON') or '').strip(),
+        'creator_sync_result_path': (os.environ.get('CREATOR_SYNC_RESULT_PATH') or '').strip(),
+    }
+    timeout_value = (os.environ.get('CREATOR_SYNC_TIMEOUT_SECONDS') or '').strip()
+    if timeout_value:
+        env_overrides['creator_sync_timeout_seconds'] = _safe_int(timeout_value, config.get('creator_sync_timeout_seconds', 60))
+    batch_limit_value = (os.environ.get('CREATOR_SYNC_BATCH_LIMIT') or '').strip()
+    if batch_limit_value:
+        env_overrides['creator_sync_batch_limit'] = _safe_int(batch_limit_value, config.get('creator_sync_batch_limit', 20))
+
+    for key, value in env_overrides.items():
+        if value not in [None, '']:
+            config[key] = value
+    config['creator_sync_source_channel'] = (config.get('creator_sync_source_channel') or 'Crawler服务').strip() or 'Crawler服务'
+    config['creator_sync_fetch_mode'] = (config.get('creator_sync_fetch_mode') or 'auto').strip().lower() or 'auto'
+    config['creator_sync_api_method'] = (config.get('creator_sync_api_method') or 'POST').strip().upper() or 'POST'
+    config['creator_sync_timeout_seconds'] = min(max(_safe_int(config.get('creator_sync_timeout_seconds'), 60), 5), 300)
+    config['creator_sync_batch_limit'] = min(max(_safe_int(config.get('creator_sync_batch_limit'), 20), 1), 200)
+    return config
+
+
+def _resolved_creator_sync_mode(runtime_settings=None):
+    runtime_settings = runtime_settings or _creator_sync_runtime_settings()
+    configured_mode = (runtime_settings.get('creator_sync_fetch_mode') or 'auto').strip().lower() or 'auto'
+    api_url = (runtime_settings.get('creator_sync_api_url') or '').strip()
+    if configured_mode == 'auto':
+        return 'remote' if api_url else 'disabled'
+    return configured_mode if configured_mode in {'remote', 'disabled'} else 'disabled'
 
 
 def _image_provider_options():

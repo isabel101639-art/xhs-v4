@@ -1,3 +1,4 @@
+import json
 import os
 
 from celery import Celery
@@ -262,6 +263,130 @@ def sync_hotwords_job(data_source_task_id):
             task_record.result_payload = json.dumps({'error': str(exc)}, ensure_ascii=False)
             db.session.flush()
             _append_data_source_log(task_record.id, '热点抓取骨架执行失败', level='error', detail={'error': str(exc)})
+            db.session.commit()
+        raise
+
+
+@celery.task(name='jobs.creator_accounts.sync')
+def sync_creator_accounts_job(data_source_task_id):
+    from app import (
+        _append_data_source_log,
+        _log_operation,
+        DataSourceTask,
+        db,
+        datetime,
+        fetch_remote_creator_bundle,
+        _load_json_value,
+    )
+    from creator_import import import_creator_bundle
+
+    task_record = DataSourceTask.query.get(data_source_task_id)
+    if not task_record:
+        return {
+            'success': False,
+            'message': '账号同步任务不存在',
+            'data_source_task_id': data_source_task_id,
+        }
+
+    try:
+        task_record.status = 'running'
+        task_record.started_at = datetime.now()
+        task_record.message = 'Worker 正在同步报名人账号数据'
+        db.session.flush()
+        _append_data_source_log(task_record.id, 'Worker 已接管报名人账号同步任务', detail={
+            'batch_name': task_record.batch_name,
+            'source_platform': task_record.source_platform,
+            'mode': task_record.mode,
+        })
+        db.session.commit()
+
+        params = _load_json_value(task_record.params_payload, {})
+        targets = params.get('targets') if isinstance(params.get('targets'), list) else []
+        remote_result = fetch_remote_creator_bundle(
+            {
+                'api_url': params.get('creator_sync_api_url'),
+                'api_method': params.get('creator_sync_api_method'),
+                'headers_json': params.get('creator_sync_api_headers_json'),
+                'query_json': params.get('creator_sync_api_query_json'),
+                'body_json': params.get('creator_sync_api_body_json'),
+                'result_path': params.get('creator_sync_result_path'),
+                'timeout_seconds': params.get('creator_sync_timeout_seconds'),
+            },
+            targets,
+            source_channel=task_record.source_channel or 'Crawler服务',
+            batch_name=task_record.batch_name or '',
+        )
+        bundle = remote_result.get('bundle') or {'accounts': [], 'posts': [], 'snapshots': []}
+        response_preview = remote_result.get('response_preview') or {}
+        if isinstance(response_preview, dict):
+            preview_copy = dict(response_preview)
+            for key in ['accounts', 'creator_accounts', 'posts', 'creator_posts', 'snapshots', 'creator_snapshots', 'items']:
+                if isinstance(preview_copy.get(key), list):
+                    preview_copy[key] = preview_copy[key][:5]
+            response_preview = preview_copy
+        elif isinstance(response_preview, list):
+            response_preview = response_preview[:5]
+        for section_key in ['accounts', 'posts', 'snapshots']:
+            normalized_rows = []
+            for row in bundle.get(section_key, []) or []:
+                if not isinstance(row, dict):
+                    continue
+                next_row = dict(row)
+                next_row['source_channel'] = (row.get('source_channel') or task_record.source_channel or 'creator_sync').strip()
+                normalized_rows.append(next_row)
+            bundle[section_key] = normalized_rows
+
+        import_result = import_creator_bundle(bundle, log_operation=_log_operation)
+        summary = import_result.get('summary') or {}
+        touched_count = (
+            (summary.get('posts_create', 0) or 0) +
+            (summary.get('posts_update', 0) or 0) +
+            (summary.get('accounts_create', 0) or 0) +
+            (summary.get('accounts_update', 0) or 0)
+        )
+
+        task_record = DataSourceTask.query.get(data_source_task_id)
+        task_record.status = 'success'
+        task_record.item_count = touched_count
+        task_record.finished_at = datetime.now()
+        task_record.message = (
+            f'报名人账号同步完成，账号新增 {summary.get("accounts_create", 0)} / 更新 {summary.get("accounts_update", 0)}，'
+            f'笔记新增 {summary.get("posts_create", 0)} / 更新 {summary.get("posts_update", 0)}'
+        )
+        task_record.result_payload = json.dumps({
+            'summary': summary,
+            'target_count': len(targets),
+            'request_preview': remote_result.get('request_preview') or {},
+            'response_preview': response_preview,
+        }, ensure_ascii=False)
+        db.session.flush()
+        _append_data_source_log(task_record.id, '报名人账号同步任务执行完成', detail={
+            'summary': summary,
+            'target_count': len(targets),
+        })
+        _log_operation('worker_sync', 'data_source_task', target_id=task_record.id, message='Worker 执行报名人账号同步任务', detail={
+            'summary': summary,
+            'target_count': len(targets),
+            'batch_name': task_record.batch_name,
+            'source_platform': task_record.source_platform,
+        })
+        db.session.commit()
+        return {
+            'success': True,
+            'data_source_task_id': task_record.id,
+            'summary': summary,
+            'target_count': len(targets),
+        }
+    except Exception as exc:
+        db.session.rollback()
+        task_record = DataSourceTask.query.get(data_source_task_id)
+        if task_record:
+            task_record.status = 'failed'
+            task_record.finished_at = datetime.now()
+            task_record.message = f'报名人账号同步失败：{exc}'
+            task_record.result_payload = json.dumps({'error': str(exc)}, ensure_ascii=False)
+            db.session.flush()
+            _append_data_source_log(task_record.id, '报名人账号同步执行失败', level='error', detail={'error': str(exc)})
             db.session.commit()
         raise
 
