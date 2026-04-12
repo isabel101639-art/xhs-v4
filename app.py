@@ -1282,6 +1282,9 @@ def _admin_permission_guard(permission_key):
 
 def _build_readiness_checks():
     inline_jobs = _env_flag('INLINE_AUTOMATION_JOBS', False)
+    hotword_settings = _hotword_runtime_settings()
+    hotword_mode = _resolved_hotword_mode(hotword_settings)
+    hotword_health = _hotword_healthcheck(timeout_seconds=2) if hotword_mode == 'remote' else None
     creator_sync_settings = _creator_sync_runtime_settings()
     creator_sync_mode = _resolved_creator_sync_mode(creator_sync_settings)
     creator_sync_health = _creator_sync_healthcheck(timeout_seconds=2) if creator_sync_mode == 'remote' else None
@@ -1311,6 +1314,9 @@ def _build_readiness_checks():
         {'key': 'image_provider', 'ok': True, 'message': f'图片 provider：{capability.get("image_provider_name")}'},
         {'key': 'image_provider_ready', 'ok': capability.get('image_provider_configured') or capability.get('fallback_mode'), 'message': '图片任务可运行'},
         {'key': 'beat_enabled', 'ok': _coerce_bool(os.environ.get('ENABLE_AUTOMATION_BEAT', 'true')), 'message': 'Beat 开关'},
+        {'key': 'hotword_mode', 'ok': hotword_mode in {'remote', 'skeleton'}, 'message': f'热点抓取模式：{hotword_mode}'},
+        {'key': 'hotword_api', 'ok': True if hotword_mode != 'remote' else bool((hotword_settings.get('hotword_api_url') or '').strip()), 'message': '热点 API URL 已配置' if hotword_mode == 'remote' else '热点接口当前未启用 remote'},
+        {'key': 'hotword_health', 'ok': True if hotword_health is None else bool(hotword_health.get('ok')), 'message': hotword_health.get('message') if hotword_health else '热点远端接口未启用'},
         {'key': 'creator_sync_mode', 'ok': creator_sync_mode in {'remote', 'disabled'}, 'message': f'账号同步模式：{creator_sync_mode}'},
         {'key': 'creator_sync_api', 'ok': True if creator_sync_mode == 'disabled' else bool((creator_sync_settings.get('creator_sync_api_url') or '').strip()), 'message': '账号同步 API URL 已配置' if creator_sync_mode != 'disabled' else '账号同步 API 当前未启用'},
         {'key': 'creator_sync_health', 'ok': True if creator_sync_health is None else bool(creator_sync_health.get('ok')), 'message': creator_sync_health.get('message') if creator_sync_health else '账号同步 crawler 服务未启用'},
@@ -5493,6 +5499,85 @@ def _build_creator_sync_remote_preview(payload=None, targets=None, source_channe
     )
 
 
+def _hotword_healthcheck(timeout_seconds=3, sample_keywords=None):
+    settings = _hotword_runtime_settings()
+    mode = _resolved_hotword_mode(settings)
+    api_url = (settings.get('hotword_api_url') or '').strip()
+    if mode != 'remote':
+        return {
+            'enabled': False,
+            'ok': False,
+            'message': '热点抓取模式未启用 remote',
+            'health_url': '',
+            'status_code': 0,
+            'response': None,
+        }
+    if not api_url:
+        return {
+            'enabled': True,
+            'ok': False,
+            'message': '未配置热点 API URL',
+            'health_url': '',
+            'status_code': 0,
+            'response': None,
+        }
+
+    keywords = sample_keywords or _automation_keyword_seeds()[:min(max(_safe_int(settings.get('hotword_keyword_limit'), 3), 1), 3)]
+    preview = _build_hotword_remote_preview(
+        settings,
+        keywords,
+        source_platform=settings.get('hotword_source_platform') or '小红书',
+        source_channel=settings.get('hotword_source_channel') or 'Worker骨架',
+        batch_name='healthcheck_hotword',
+    )
+    request_kwargs = {
+        'headers': preview.get('headers') or {},
+        'timeout': min(max(_safe_int(timeout_seconds, 3), 1), 15),
+    }
+    method = (preview.get('api_method') or 'GET').upper()
+    if method == 'GET':
+        request_kwargs['params'] = preview.get('query') or {}
+    else:
+        request_kwargs['params'] = preview.get('query') or {}
+        request_kwargs['json'] = preview.get('body') or {}
+
+    try:
+        response = requests.request(method, api_url, **request_kwargs)
+        payload = None
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = response.text[:300]
+        if isinstance(payload, list):
+            response_preview = payload[:5]
+        elif isinstance(payload, dict):
+            response_preview = dict(payload)
+            for key in ['items', 'data', 'results', 'list']:
+                if isinstance(response_preview.get(key), list):
+                    response_preview[key] = response_preview[key][:5]
+        else:
+            response_preview = payload
+        return {
+            'enabled': True,
+            'ok': response.ok,
+            'message': '热点源接口可用' if response.ok else f'热点源接口返回 {response.status_code}',
+            'health_url': api_url,
+            'status_code': response.status_code,
+            'response': response_preview,
+            'request_preview': preview,
+        }
+    except Exception as exc:
+        return {
+            'enabled': True,
+            'ok': False,
+            'message': f'热点源接口不可达：{exc}',
+            'health_url': api_url,
+            'status_code': 0,
+            'response': None,
+            'request_preview': preview,
+        }
+
+
 def _dispatch_hotword_sync(payload, actor='system'):
     runtime_config = _automation_runtime_config()
     request_config = _build_hotword_request_config(payload)
@@ -5824,6 +5909,7 @@ register_automation_dashboard_routes(app, {
     'automation_keyword_seeds': _automation_keyword_seeds,
     'build_hotword_remote_preview': _build_hotword_remote_preview,
     'resolved_hotword_mode': _resolved_hotword_mode,
+    'hotword_healthcheck': _hotword_healthcheck,
     'build_creator_sync_remote_preview': _build_creator_sync_remote_preview,
     'resolved_creator_sync_mode': _resolved_creator_sync_mode,
     'tracked_creator_sync_targets': _tracked_creator_sync_targets,
@@ -7333,6 +7419,21 @@ def trigger_hotword_sync_job():
         'task_id': dispatched['task_id'],
         'job': 'jobs.hotwords.sync',
         'data_source_task_id': dispatched['task_record'].id,
+    })
+
+
+@app.route('/api/jobs/hotwords/ping', methods=['POST'])
+def trigger_hotword_sync_ping():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    data = request.json or {}
+    timeout_seconds = min(max(_safe_int(data.get('wait_seconds'), 3), 1), 15)
+    result = _hotword_healthcheck(timeout_seconds=timeout_seconds)
+    return jsonify({
+        'success': bool(result.get('ok')),
+        **result,
     })
 
 

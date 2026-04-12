@@ -132,6 +132,7 @@ def register_automation_dashboard_routes(app, helpers):
             return guard
 
         hotword_settings = hotword_runtime_settings()
+        hotword_health = helpers['hotword_healthcheck'](timeout_seconds=2)
         creator_sync_settings = creator_sync_runtime_settings()
         creator_sync_health = helpers['creator_sync_healthcheck'](timeout_seconds=2)
         last_worker_ping = helpers['latest_worker_ping_snapshot']()
@@ -191,6 +192,7 @@ def register_automation_dashboard_routes(app, helpers):
                 'health_message': worker_health_message,
                 'last_ping': last_worker_ping,
             },
+            'hotword_health': hotword_health,
             'creator_sync_health': creator_sync_health,
             'capabilities': image_provider_capabilities(),
             'counts': {

@@ -594,6 +594,7 @@
                 </div>
                 <div class="col-md-12 d-flex gap-2 flex-wrap">
                     <button class="btn btn-accent" onclick="runHotwordSync()">异步抓取热点</button>
+                    <button class="btn btn-outline-primary" onclick="pingHotwordSync()">测试热点接口</button>
                     <button class="btn btn-outline-primary" onclick="loadDataSourceTasks()">刷新抓取任务</button>
                 </div>
             </div>
@@ -1543,6 +1544,7 @@
             }
             const runtime = data.runtime || {};
             const worker = data.worker || {};
+            const hotwordHealth = data.hotword_health || {};
             const creatorSyncHealth = data.creator_sync_health || {};
             const lastPing = worker.last_ping || {};
             const capabilities = data.capabilities || {};
@@ -1599,6 +1601,14 @@
                         <div class="subtle">默认名额：${runtime.default_topic_quota || 30}</div>
                         <div class="subtle">URL 方案：${runtime.preferred_url_scheme || 'https'}</div>
                         <div class="subtle">Session Secure：${runtime.session_cookie_secure ? 'true' : 'false'}</div>
+                    </div>
+                    <div class="col-lg-3">
+                        <strong>热点 API 健康</strong>
+                        <div class="subtle mt-2">启用：${hotwordHealth.enabled ? '是' : '否'}</div>
+                        <div class="subtle">状态：${hotwordHealth.ok ? '可用' : '未通过'}</div>
+                        <div class="subtle">Health URL：${escapeHtml(hotwordHealth.health_url || '-')}</div>
+                        <div class="subtle">HTTP：${hotwordHealth.status_code || '-'}</div>
+                        <div class="subtle">说明：${escapeHtml(hotwordHealth.message || '-')}</div>
                     </div>
                     <div class="col-lg-3">
                         <strong>账号同步 API 健康</strong>
@@ -2321,6 +2331,21 @@
                 loadDataSourceTasks();
                 loadJobHistory();
             }
+        }
+
+        async function pingHotwordSync() {
+            const res = await fetch('/api/jobs/hotwords/ping', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ wait_seconds: 3 })
+            });
+            const data = await res.json();
+            const meta = [
+                data.health_url ? `url=${data.health_url}` : '',
+                data.status_code ? `http=${data.status_code}` : '',
+            ].filter(Boolean).join(' ｜ ');
+            document.getElementById('hotwordJobMsg').textContent = `${data.message || '已处理'}${meta ? ` ｜ ${meta}` : ''}`;
+            loadDiagnostics();
         }
 
         async function runCreatorAccountSync() {
