@@ -133,6 +133,7 @@ def register_automation_dashboard_routes(app, helpers):
 
         hotword_settings = hotword_runtime_settings()
         creator_sync_settings = creator_sync_runtime_settings()
+        creator_sync_health = helpers['creator_sync_healthcheck'](timeout_seconds=2)
         last_worker_ping = helpers['latest_worker_ping_snapshot']()
         worker_health_status = 'unknown'
         worker_health_message = '尚未执行 Worker 联通检查'
@@ -171,6 +172,7 @@ def register_automation_dashboard_routes(app, helpers):
                 'deepseek_configured': bool((helpers['os'].environ.get('DEEPSEEK_API_KEY') or '').strip()),
                 'preferred_url_scheme': helpers['os'].environ.get('PREFERRED_URL_SCHEME', 'https'),
                 'session_cookie_secure': helpers['env_flag']('SESSION_COOKIE_SECURE', False),
+                'inline_automation_jobs': helpers['env_flag']('INLINE_AUTOMATION_JOBS', False),
                 'default_topic_quota': default_topic_quota(),
                 'beat_enabled': helpers['coerce_bool'](helpers['os'].environ.get('ENABLE_AUTOMATION_BEAT', 'true')),
                 'hotword_fetch_mode': resolved_hotword_mode(hotword_settings),
@@ -189,6 +191,7 @@ def register_automation_dashboard_routes(app, helpers):
                 'health_message': worker_health_message,
                 'last_ping': last_worker_ping,
             },
+            'creator_sync_health': creator_sync_health,
             'capabilities': image_provider_capabilities(),
             'counts': {
                 'activities': Activity.query.count(),
@@ -309,6 +312,7 @@ def register_automation_dashboard_routes(app, helpers):
 
         runtime_config = hotword_runtime_settings()
         creator_runtime_config = creator_sync_runtime_settings()
+        runtime_config.update(creator_runtime_config)
         capabilities = image_provider_capabilities()
         return jsonify({
             'success': True,

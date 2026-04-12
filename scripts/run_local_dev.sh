@@ -11,5 +11,6 @@ fi
 
 export FLASK_DEBUG=1
 export PORT="${PORT:-5000}"
+export INLINE_AUTOMATION_JOBS="${INLINE_AUTOMATION_JOBS:-true}"
 
 exec "$VENV_DIR/bin/python" "$ROOT_DIR/app.py"

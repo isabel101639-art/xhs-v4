@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 import random
 import re
 from collections import Counter, defaultdict
+from urllib.parse import urlparse, urlunparse
 
 from automation_hotwords import (
     build_hotword_skeleton_rows,
@@ -1280,15 +1281,20 @@ def _admin_permission_guard(permission_key):
 
 
 def _build_readiness_checks():
+    inline_jobs = _env_flag('INLINE_AUTOMATION_JOBS', False)
+    creator_sync_settings = _creator_sync_runtime_settings()
+    creator_sync_mode = _resolved_creator_sync_mode(creator_sync_settings)
+    creator_sync_health = _creator_sync_healthcheck(timeout_seconds=2) if creator_sync_mode == 'remote' else None
     env_checks = [
         {'key': 'DATABASE_URL', 'ok': bool((os.environ.get('DATABASE_URL') or '').strip()), 'message': '数据库连接'},
-        {'key': 'REDIS_URL', 'ok': bool((os.environ.get('REDIS_URL') or '').strip()), 'message': 'Redis 连接'},
-        {'key': 'CELERY_BROKER_URL', 'ok': bool((os.environ.get('CELERY_BROKER_URL') or '').strip()), 'message': 'Celery Broker'},
-        {'key': 'CELERY_RESULT_BACKEND', 'ok': bool((os.environ.get('CELERY_RESULT_BACKEND') or '').strip()), 'message': 'Celery Result Backend'},
+        {'key': 'REDIS_URL', 'ok': inline_jobs or bool((os.environ.get('REDIS_URL') or '').strip()), 'message': 'Redis 连接' if not inline_jobs else 'Redis 连接（本地内联模式可选）'},
+        {'key': 'CELERY_BROKER_URL', 'ok': inline_jobs or bool((os.environ.get('CELERY_BROKER_URL') or '').strip()), 'message': 'Celery Broker' if not inline_jobs else 'Celery Broker（本地内联模式可选）'},
+        {'key': 'CELERY_RESULT_BACKEND', 'ok': inline_jobs or bool((os.environ.get('CELERY_RESULT_BACKEND') or '').strip()), 'message': 'Celery Result Backend' if not inline_jobs else 'Celery Result Backend（本地内联模式可选）'},
         {'key': 'SECRET_KEY', 'ok': bool((os.environ.get('SECRET_KEY') or '').strip()), 'message': '会话密钥'},
         {'key': 'ADMIN_USERNAME', 'ok': bool((os.environ.get('ADMIN_USERNAME') or '').strip()), 'message': '管理员用户名'},
         {'key': 'ADMIN_PASSWORD', 'ok': bool((os.environ.get('ADMIN_PASSWORD') or '').strip()), 'message': '管理员密码'},
         {'key': 'DEEPSEEK_API_KEY', 'ok': bool((os.environ.get('DEEPSEEK_API_KEY') or '').strip()), 'message': '文案模型 Key'},
+        {'key': 'INLINE_AUTOMATION_JOBS', 'ok': True, 'message': f'自动化执行模式：{"inline 本地模式" if inline_jobs else "celery 异步模式"}'},
     ]
 
     data_checks = [
@@ -1305,6 +1311,9 @@ def _build_readiness_checks():
         {'key': 'image_provider', 'ok': True, 'message': f'图片 provider：{capability.get("image_provider_name")}'},
         {'key': 'image_provider_ready', 'ok': capability.get('image_provider_configured') or capability.get('fallback_mode'), 'message': '图片任务可运行'},
         {'key': 'beat_enabled', 'ok': _coerce_bool(os.environ.get('ENABLE_AUTOMATION_BEAT', 'true')), 'message': 'Beat 开关'},
+        {'key': 'creator_sync_mode', 'ok': creator_sync_mode in {'remote', 'disabled'}, 'message': f'账号同步模式：{creator_sync_mode}'},
+        {'key': 'creator_sync_api', 'ok': True if creator_sync_mode == 'disabled' else bool((creator_sync_settings.get('creator_sync_api_url') or '').strip()), 'message': '账号同步 API URL 已配置' if creator_sync_mode != 'disabled' else '账号同步 API 当前未启用'},
+        {'key': 'creator_sync_health', 'ok': True if creator_sync_health is None else bool(creator_sync_health.get('ok')), 'message': creator_sync_health.get('message') if creator_sync_health else '账号同步 crawler 服务未启用'},
     ]
 
     all_checks = env_checks + data_checks + service_checks
@@ -2236,6 +2245,7 @@ def _build_deployment_helper_payload():
         'REDIS_URL': 'redis://redis:6379/0',
         'CELERY_BROKER_URL': 'redis://redis:6379/0',
         'CELERY_RESULT_BACKEND': 'redis://redis:6379/1',
+        'INLINE_AUTOMATION_JOBS': os.environ.get('INLINE_AUTOMATION_JOBS', 'false') or 'false',
         'DEFAULT_TOPIC_QUOTA': str(_default_topic_quota()),
         'PREFERRED_URL_SCHEME': os.environ.get('PREFERRED_URL_SCHEME', 'https') or 'https',
         'SESSION_COOKIE_SECURE': os.environ.get('SESSION_COOKIE_SECURE', 'false') or 'false',
@@ -2437,6 +2447,61 @@ def _build_deployment_helper_payload():
     }
 
 
+def _creator_sync_healthcheck(timeout_seconds=3):
+    settings = _creator_sync_runtime_settings()
+    api_url = (settings.get('creator_sync_api_url') or '').strip()
+    mode = _resolved_creator_sync_mode(settings)
+    if mode != 'remote':
+        return {
+            'enabled': False,
+            'ok': False,
+            'message': '账号同步模式未启用 remote',
+            'health_url': '',
+            'status_code': 0,
+            'response': None,
+        }
+    if not api_url:
+        return {
+            'enabled': True,
+            'ok': False,
+            'message': '未配置账号同步 API URL',
+            'health_url': '',
+            'status_code': 0,
+            'response': None,
+        }
+
+    parsed = urlparse(api_url)
+    if parsed.scheme and parsed.netloc:
+        health_url = urlunparse((parsed.scheme, parsed.netloc, '/healthz', '', '', ''))
+    else:
+        health_url = api_url.rstrip('/') + '/healthz'
+
+    try:
+        response = requests.get(health_url, timeout=min(max(_safe_int(timeout_seconds, 3), 1), 15))
+        payload = None
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = response.text[:300]
+        return {
+            'enabled': True,
+            'ok': response.ok,
+            'message': '账号同步 crawler 服务可用' if response.ok else f'账号同步 crawler 服务返回 {response.status_code}',
+            'health_url': health_url,
+            'status_code': response.status_code,
+            'response': payload,
+        }
+    except Exception as exc:
+        return {
+            'enabled': True,
+            'ok': False,
+            'message': f'账号同步 crawler 服务不可达：{exc}',
+            'health_url': health_url,
+            'status_code': 0,
+            'response': None,
+        }
+
+
 def _build_recent_failed_jobs_payload(limit=10):
     safe_limit = min(max(_safe_int(limit, 10), 1), 50)
     items = []
@@ -2585,9 +2650,9 @@ def _run_worker_ping_check(timeout_seconds=3):
         return int(round((monotonic() - started_tick) * 1000))
 
     try:
-        task = ping.delay()
+        task = _enqueue_task(ping)
         task_id = task.id
-        async_result = AsyncResult(task_id, app=celery)
+        async_result = task if _env_flag('INLINE_AUTOMATION_JOBS', False) else AsyncResult(task_id, app=celery)
         _log_operation('dispatch_job', 'worker', message='触发 Worker 联通检查', detail={
             'task_id': task_id,
             'job': 'system.ping',
@@ -2690,6 +2755,12 @@ def _next_schedule_time(interval_minutes, base_time=None):
     base = base_time or datetime.now()
     minutes = max(_safe_int(interval_minutes, 60), 1)
     return base + timedelta(minutes=minutes)
+
+
+def _enqueue_task(task, *args, **kwargs):
+    if _env_flag('INLINE_AUTOMATION_JOBS', False):
+        return task.apply(args=args, kwargs=kwargs)
+    return task.delay(*args, **kwargs)
 
 
 def _apply_creator_post_range(query, args):
@@ -5488,7 +5559,14 @@ def _dispatch_hotword_sync(payload, actor='system'):
 
     from celery_app import sync_hotwords_job
 
-    async_task = sync_hotwords_job.delay(task_record.id)
+    inline_mode = _env_flag('INLINE_AUTOMATION_JOBS', False)
+    task_record_id = task_record.id
+    if inline_mode:
+        db.session.commit()
+        async_task = _enqueue_task(sync_hotwords_job, task_record_id)
+        task_record = DataSourceTask.query.get(task_record_id)
+    else:
+        async_task = _enqueue_task(sync_hotwords_job, task_record_id)
     task_record.celery_task_id = async_task.id
     task_record.updated_at = datetime.now()
     _log_operation('dispatch_job', 'data_source_task', target_id=task_record.id, message='触发热点抓取 Worker 任务', detail={
@@ -5577,7 +5655,14 @@ def _dispatch_creator_account_sync(payload, actor='system'):
 
     from celery_app import sync_creator_accounts_job
 
-    async_task = sync_creator_accounts_job.delay(task_record.id)
+    inline_mode = _env_flag('INLINE_AUTOMATION_JOBS', False)
+    task_record_id = task_record.id
+    if inline_mode:
+        db.session.commit()
+        async_task = _enqueue_task(sync_creator_accounts_job, task_record_id)
+        task_record = DataSourceTask.query.get(task_record_id)
+    else:
+        async_task = _enqueue_task(sync_creator_accounts_job, task_record_id)
     task_record.celery_task_id = async_task.id
     task_record.updated_at = datetime.now()
     _log_operation('dispatch_job', 'data_source_task', target_id=task_record.id, message='触发报名人账号同步 Worker 任务', detail={
@@ -5604,7 +5689,7 @@ def _dispatch_topic_idea_generation(payload, actor='system'):
 
     from celery_app import generate_topic_ideas_job
 
-    async_task = generate_topic_ideas_job.delay(count=count, activity_id=activity_id, quota=quota)
+    async_task = _enqueue_task(generate_topic_ideas_job, count=count, activity_id=activity_id, quota=quota)
     _log_operation('dispatch_job', 'topic_idea', message='触发异步生成候选话题', detail={
         'task_id': async_task.id,
         'count': count,
@@ -5668,7 +5753,14 @@ def _dispatch_asset_generation(payload, actor='system'):
 
     from celery_app import generate_asset_images_job
 
-    async_task = generate_asset_images_job.delay(task.id)
+    inline_mode = _env_flag('INLINE_AUTOMATION_JOBS', False)
+    task_id = task.id
+    if inline_mode:
+        db.session.commit()
+        async_task = _enqueue_task(generate_asset_images_job, task_id)
+        task = AssetGenerationTask.query.get(task_id)
+    else:
+        async_task = _enqueue_task(generate_asset_images_job, task_id)
     task.celery_task_id = async_task.id
     db.session.commit()
     return {
@@ -5735,6 +5827,7 @@ register_automation_dashboard_routes(app, {
     'build_creator_sync_remote_preview': _build_creator_sync_remote_preview,
     'resolved_creator_sync_mode': _resolved_creator_sync_mode,
     'tracked_creator_sync_targets': _tracked_creator_sync_targets,
+    'creator_sync_healthcheck': _creator_sync_healthcheck,
     'log_operation': _log_operation,
     'serialize_data_source_task': _serialize_data_source_task,
     'latest_worker_ping_snapshot': _latest_worker_ping_snapshot,
@@ -7260,6 +7353,21 @@ def trigger_creator_account_sync_job():
         'task_id': dispatched['task_id'],
         'job': 'jobs.creator_accounts.sync',
         'data_source_task_id': dispatched['task_record'].id,
+    })
+
+
+@app.route('/api/jobs/creator-accounts/ping', methods=['POST'])
+def trigger_creator_account_sync_ping():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    data = request.json or {}
+    timeout_seconds = min(max(_safe_int(data.get('wait_seconds'), 3), 1), 15)
+    result = _creator_sync_healthcheck(timeout_seconds=timeout_seconds)
+    return jsonify({
+        'success': bool(result.get('ok')),
+        **result,
     })
 
 

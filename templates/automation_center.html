@@ -671,6 +671,7 @@
                 </div>
                 <div class="col-md-12 d-flex gap-2 flex-wrap">
                     <button class="btn btn-accent" onclick="runCreatorAccountSync()">异步同步账号</button>
+                    <button class="btn btn-outline-primary" onclick="pingCreatorAccountSync()">测试 crawler 接口</button>
                     <button class="btn btn-outline-primary" onclick="loadAutomationConfigPreview()">刷新同步预览</button>
                 </div>
             </div>
@@ -1542,6 +1543,7 @@
             }
             const runtime = data.runtime || {};
             const worker = data.worker || {};
+            const creatorSyncHealth = data.creator_sync_health || {};
             const lastPing = worker.last_ping || {};
             const capabilities = data.capabilities || {};
             const schedules = data.schedules || [];
@@ -1559,6 +1561,7 @@
                         <div class="subtle">CELERY_RESULT_BACKEND：${runtime.celery_backend_configured ? '已配置' : '未配置'}</div>
                         <div class="subtle">SECRET_KEY：${runtime.secret_key_configured ? '已配置' : '未配置'}</div>
                         <div class="subtle">DEEPSEEK：${runtime.deepseek_configured ? '已配置' : '未配置'}</div>
+                        <div class="subtle">自动化模式：${runtime.inline_automation_jobs ? 'inline 本地模式' : 'celery 异步模式'}</div>
                         <div class="subtle">热点模式：${escapeHtml(runtime.hotword_fetch_mode || 'skeleton')}</div>
                         <div class="subtle">热点 API：${escapeHtml(runtime.hotword_api_url || '-')}</div>
                         <div class="subtle">账号同步模式：${escapeHtml(runtime.creator_sync_fetch_mode || 'disabled')}</div>
@@ -1596,6 +1599,14 @@
                         <div class="subtle">默认名额：${runtime.default_topic_quota || 30}</div>
                         <div class="subtle">URL 方案：${runtime.preferred_url_scheme || 'https'}</div>
                         <div class="subtle">Session Secure：${runtime.session_cookie_secure ? 'true' : 'false'}</div>
+                    </div>
+                    <div class="col-lg-3">
+                        <strong>账号同步 API 健康</strong>
+                        <div class="subtle mt-2">启用：${creatorSyncHealth.enabled ? '是' : '否'}</div>
+                        <div class="subtle">状态：${creatorSyncHealth.ok ? '可用' : '未通过'}</div>
+                        <div class="subtle">Health URL：${escapeHtml(creatorSyncHealth.health_url || '-')}</div>
+                        <div class="subtle">HTTP：${creatorSyncHealth.status_code || '-'}</div>
+                        <div class="subtle">说明：${escapeHtml(creatorSyncHealth.message || '-')}</div>
                     </div>
                     <div class="col-12">
                         <strong>最近调度</strong>
@@ -2336,6 +2347,21 @@
                 loadDataSourceTasks();
                 loadJobHistory();
             }
+        }
+
+        async function pingCreatorAccountSync() {
+            const res = await fetch('/api/jobs/creator-accounts/ping', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ wait_seconds: 3 })
+            });
+            const data = await res.json();
+            const meta = [
+                data.health_url ? `url=${data.health_url}` : '',
+                data.status_code ? `http=${data.status_code}` : '',
+            ].filter(Boolean).join(' ｜ ');
+            document.getElementById('creatorSyncJobMsg').textContent = `${data.message || '已处理'}${meta ? ` ｜ ${meta}` : ''}`;
+            loadDiagnostics();
         }
 
         async function retryDataSourceTask(taskId) {

@@ -12,5 +12,11 @@ fi
 
 export CRAWLER_PROVIDER="${CRAWLER_PROVIDER:-mock}"
 export CRAWLER_PORT="${CRAWLER_PORT:-8081}"
+export CRAWLER_RELOAD="${CRAWLER_RELOAD:-false}"
+export CRAWLER_HOST="${CRAWLER_HOST:-127.0.0.1}"
 
-exec "$VENV_DIR/bin/python" -m uvicorn crawler_service.main:app --host 0.0.0.0 --port "$CRAWLER_PORT" --reload --app-dir "$ROOT_DIR"
+if [ "$CRAWLER_RELOAD" = "true" ]; then
+  exec "$VENV_DIR/bin/python" -m uvicorn crawler_service.main:app --host "$CRAWLER_HOST" --port "$CRAWLER_PORT" --reload --reload-dir "$CRAWLER_DIR" --app-dir "$ROOT_DIR"
+fi
+
+exec "$VENV_DIR/bin/python" -m uvicorn crawler_service.main:app --host "$CRAWLER_HOST" --port "$CRAWLER_PORT" --app-dir "$ROOT_DIR"
