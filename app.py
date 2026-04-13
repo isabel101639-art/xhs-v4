@@ -8047,7 +8047,7 @@ def init_db():
                 'xhs_comments': 'INTEGER DEFAULT 0',
                 'xhs_creator_account_id': 'INTEGER',
                 'xhs_primary_post_id': 'INTEGER',
-                'xhs_tracking_enabled': 'BOOLEAN DEFAULT 0',
+                'xhs_tracking_enabled': 'BOOLEAN DEFAULT FALSE',
                 'xhs_tracking_status': "VARCHAR(30) DEFAULT 'empty'",
                 'xhs_tracking_message': 'VARCHAR(300)',
                 'xhs_last_synced_at': timestamp_type,
