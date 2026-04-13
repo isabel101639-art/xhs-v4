@@ -261,6 +261,13 @@
                         <option value="remote">remote</option>
                     </select>
                 </div>
+                <div class="col-lg-6">
+                    <label class="form-label subtle">热点接口预设</label>
+                    <div class="d-flex gap-2">
+                        <select id="configHotwordRemotePreset" class="form-select"></select>
+                        <button class="btn btn-outline-primary" type="button" onclick="applyHotwordRemotePreset()">套用预设</button>
+                    </div>
+                </div>
                 <div class="col-lg-4">
                     <label class="form-label subtle">热点 API URL</label>
                     <input id="configHotwordApiUrl" class="form-control" placeholder="如 https://api.example.com/hotwords">
@@ -295,6 +302,30 @@
                 <div class="col-lg-6">
                     <label class="form-label subtle">热点 Body JSON</label>
                     <textarea id="configHotwordBodyJson" rows="2" class="form-control" placeholder='如 {"keywords":"{{keywords_list}}"}'></textarea>
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label subtle">抓完热点后自动生成候选话题</label>
+                    <select id="configHotwordAutoGenerateIdeas" class="form-select">
+                        <option value="false">关闭</option>
+                        <option value="true">开启</option>
+                    </select>
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label subtle">自动生成话题数</label>
+                    <input id="configHotwordAutoIdeaCount" type="number" min="1" max="120" class="form-control">
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label subtle">自动生成挂到活动</label>
+                    <select id="configHotwordAutoIdeaActivityId" class="form-select">
+                        <option value="0">自动选择当前活动</option>
+                        {% for activity in activities %}
+                        <option value="{{ activity.id }}">{{ activity.name }} - {{ activity.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label subtle">自动生成默认名额</label>
+                    <input id="configHotwordAutoIdeaQuota" type="number" min="1" max="300" class="form-control">
                 </div>
                 <div class="col-12"><hr class="my-1"></div>
                 <div class="col-lg-3">
@@ -457,6 +488,50 @@
 
             <div class="col-lg-6">
                 <div class="panel p-4 h-100">
+                    <div class="section-title">热点响应解析沙盒</div>
+                    <div class="subtle mb-3">把第三方接口返回的原始 JSON 粘进来，按当前模板和结果路径直接预览标准化结果，不会入库。</div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label subtle">来源平台</label>
+                            <input id="trendSandboxSourcePlatform" class="form-control" value="小红书">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label subtle">解析模板</label>
+                            <select id="trendSandboxTemplateKey" class="form-select">
+                                <option value="generic_json">通用 JSON</option>
+                                <option value="douyin_hotwords">抖音热点词接口</option>
+                                <option value="qiangua_notes">千瓜笔记导出</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label subtle">来源渠道</label>
+                            <input id="trendSandboxSourceChannel" class="form-control" value="接口响应沙盒">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label subtle">批次名</label>
+                            <input id="trendSandboxBatchName" class="form-control" placeholder="例如：remote_api_preview">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label subtle">结果路径</label>
+                            <input id="trendSandboxResultPath" class="form-control" placeholder="例如：data.items">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label subtle">粘贴接口返回 JSON</label>
+                        <textarea id="trendSandboxPayload" rows="10" class="form-control" placeholder='{"items":[{"keyword":"脂肪肝","title":"..."}]}'></textarea>
+                    </div>
+
+                    <button class="btn btn-outline-primary me-2" onclick="previewRemoteTrendParse()">解析预览</button>
+                    <button class="btn btn-outline-secondary" onclick="syncSandboxFromHotwordConfig()">从热点配置带入</button>
+                    <div id="trendSandboxMsg" class="subtle mt-2"></div>
+                    <div id="trendSandboxPreviewWrap" class="detail-card mt-3 text-muted">解析后会展示标准化后的热点样例。</div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="panel p-4 h-100">
                     <div class="section-title">语料库新增</div>
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
@@ -595,11 +670,28 @@
                 <div class="col-md-12 d-flex gap-2 flex-wrap">
                     <button class="btn btn-accent" onclick="runHotwordSync()">异步抓取热点</button>
                     <button class="btn btn-outline-primary" onclick="pingHotwordSync()">测试热点接口</button>
+                    <div class="d-flex gap-2 align-items-center">
+                        <input id="hotwordScheduleInterval" type="number" min="1" max="10080" value="360" class="form-control" style="max-width: 120px;" placeholder="分钟">
+                        <label class="form-check-label subtle d-flex align-items-center gap-2">
+                            <input id="hotwordScheduleEnabled" class="form-check-input" type="checkbox">
+                            启用调度
+                        </label>
+                        <button class="btn btn-outline-dark" onclick="saveHotwordScheduleFromCurrentConfig()">保存为默认热点调度</button>
+                    </div>
                     <button class="btn btn-outline-primary" onclick="loadDataSourceTasks()">刷新抓取任务</button>
                 </div>
             </div>
             <div id="hotwordJobMsg" class="subtle mb-3"></div>
+            <div id="hotwordPingPreview" class="detail-card mb-3 text-muted">测试热点接口后，这里会显示请求预览和归一化样例。</div>
             <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label subtle">任务类型</label>
+                    <select id="dataSourceTaskTypeFilter" class="form-select" onchange="loadDataSourceTasks()">
+                        <option value="">全部</option>
+                        <option value="hotword_sync">热点抓取</option>
+                        <option value="creator_account_sync">账号同步</option>
+                    </select>
+                </div>
                 <div class="col-md-3">
                     <label class="form-label subtle">状态筛选</label>
                     <select id="dataSourceStatusFilter" class="form-select" onchange="loadDataSourceTasks()">
@@ -1074,6 +1166,7 @@
     <script>
         let jobHistoryTimer = null;
         let automationConfigCache = null;
+        let hotwordRemotePresets = [];
         let dataSourceTaskCache = {};
         let assetTaskCache = {};
         let assetLibraryCache = {};
@@ -1091,6 +1184,72 @@
             if (current) {
                 select.value = current;
             }
+        }
+
+        function renderHotwordRemotePresetOptions(items) {
+            const select = document.getElementById('configHotwordRemotePreset');
+            if (!select) return;
+            hotwordRemotePresets = items || [];
+            select.innerHTML = (items || []).map((item) => `
+                <option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}${item.description ? `｜${escapeHtml(item.description)}` : ''}</option>
+            `).join('');
+        }
+
+        function applyHotwordRemotePreset() {
+            const select = document.getElementById('configHotwordRemotePreset');
+            const current = (hotwordRemotePresets || []).find((item) => item.key === select?.value);
+            if (!current) {
+                document.getElementById('automationConfigNote').textContent = '未找到可用的热点接口预设';
+                return;
+            }
+            const config = current.config || {};
+            document.getElementById('configHotwordPlatform').value = current.source_platform || document.getElementById('configHotwordPlatform').value;
+            document.getElementById('configHotwordTemplate').value = current.template_key || document.getElementById('configHotwordTemplate').value;
+            document.getElementById('configHotwordFetchMode').value = config.hotword_fetch_mode || 'remote';
+            document.getElementById('configHotwordApiMethod').value = config.hotword_api_method || 'GET';
+            document.getElementById('configHotwordQueryJson').value = config.hotword_api_query_json || '';
+            document.getElementById('configHotwordBodyJson').value = config.hotword_api_body_json || '';
+            document.getElementById('configHotwordResultPath').value = config.hotword_result_path || '';
+            document.getElementById('configHotwordKeywordParam').value = config.hotword_keyword_param || 'keyword';
+            document.getElementById('automationConfigNote').textContent = `已套用热点接口预设：${current.label}`;
+            loadAutomationConfigPreview();
+        }
+
+        function collectHotwordRuntimeConfigPayload() {
+            return {
+                hotword_source_platform: document.getElementById('configHotwordPlatform').value,
+                hotword_source_template: document.getElementById('configHotwordTemplate').value,
+                hotword_source_channel: document.getElementById('configHotwordChannel').value.trim(),
+                hotword_keyword_limit: parseInt(document.getElementById('configHotwordKeywordLimit').value || '10', 10),
+                hotword_fetch_mode: document.getElementById('configHotwordFetchMode').value,
+                hotword_api_url: document.getElementById('configHotwordApiUrl').value.trim(),
+                hotword_api_method: document.getElementById('configHotwordApiMethod').value,
+                hotword_api_headers_json: document.getElementById('configHotwordHeadersJson').value.trim(),
+                hotword_api_query_json: document.getElementById('configHotwordQueryJson').value.trim(),
+                hotword_api_body_json: document.getElementById('configHotwordBodyJson').value.trim(),
+                hotword_result_path: document.getElementById('configHotwordResultPath').value.trim(),
+                hotword_keyword_param: document.getElementById('configHotwordKeywordParam').value.trim(),
+                hotword_timeout_seconds: parseInt(document.getElementById('configHotwordTimeout').value || '30', 10),
+                hotword_auto_generate_topic_ideas: document.getElementById('configHotwordAutoGenerateIdeas').value === 'true',
+                hotword_auto_generate_topic_count: parseInt(document.getElementById('configHotwordAutoIdeaCount').value || '20', 10),
+                hotword_auto_generate_topic_activity_id: parseInt(document.getElementById('configHotwordAutoIdeaActivityId').value || '0', 10),
+                hotword_auto_generate_topic_quota: parseInt(document.getElementById('configHotwordAutoIdeaQuota').value || '30', 10),
+            };
+        }
+
+        function collectCreatorSyncRuntimeConfigPayload() {
+            return {
+                creator_sync_source_channel: document.getElementById('configCreatorSyncChannel').value.trim(),
+                creator_sync_fetch_mode: document.getElementById('configCreatorSyncFetchMode').value,
+                creator_sync_api_url: document.getElementById('configCreatorSyncApiUrl').value.trim(),
+                creator_sync_api_method: document.getElementById('configCreatorSyncApiMethod').value,
+                creator_sync_api_headers_json: document.getElementById('configCreatorSyncHeadersJson').value.trim(),
+                creator_sync_api_query_json: document.getElementById('configCreatorSyncQueryJson').value.trim(),
+                creator_sync_api_body_json: document.getElementById('configCreatorSyncBodyJson').value.trim(),
+                creator_sync_result_path: document.getElementById('configCreatorSyncResultPath').value.trim(),
+                creator_sync_timeout_seconds: parseInt(document.getElementById('configCreatorSyncTimeout').value || '60', 10),
+                creator_sync_batch_limit: parseInt(document.getElementById('configCreatorSyncBatchLimit').value || '20', 10),
+            };
         }
 
         function escapeHtml(text) {
@@ -1154,6 +1313,14 @@
             return map[status] || 'bg-light text-dark';
         }
 
+        function dataSourceTaskTypeLabel(taskType) {
+            const map = {
+                hotword_sync: '热点抓取',
+                creator_account_sync: '账号同步'
+            };
+            return map[taskType] || taskType || '-';
+        }
+
         function renderStyleTypeOptions(targetId, items, selectedValue) {
             const select = document.getElementById(targetId);
             if (!select) return;
@@ -1211,10 +1378,11 @@
             }
         }
 
-        function fillAutomationConfig(config, notes, styleTypes, modelOptions, hotwordTemplates) {
+        function fillAutomationConfig(config, notes, styleTypes, modelOptions, hotwordTemplates, hotwordRemotePresetItems) {
             automationConfigCache = config || {};
             document.getElementById('configHotwordPlatform').value = config.hotword_source_platform || '小红书';
             renderHotwordTemplateOptions(hotwordTemplates || [], config.hotword_source_template || 'generic_lines');
+            renderHotwordRemotePresetOptions(hotwordRemotePresetItems || []);
             document.getElementById('configHotwordChannel').value = config.hotword_source_channel || 'Worker骨架';
             document.getElementById('configHotwordKeywordLimit').value = config.hotword_keyword_limit || 10;
             document.getElementById('configHotwordFetchMode').value = config.hotword_fetch_mode || 'auto';
@@ -1226,6 +1394,10 @@
             document.getElementById('configHotwordHeadersJson').value = config.hotword_api_headers_json || '';
             document.getElementById('configHotwordQueryJson').value = config.hotword_api_query_json || '';
             document.getElementById('configHotwordBodyJson').value = config.hotword_api_body_json || '';
+            document.getElementById('configHotwordAutoGenerateIdeas').value = String(Boolean(config.hotword_auto_generate_topic_ideas));
+            document.getElementById('configHotwordAutoIdeaCount').value = config.hotword_auto_generate_topic_count || 20;
+            document.getElementById('configHotwordAutoIdeaActivityId').value = config.hotword_auto_generate_topic_activity_id || 0;
+            document.getElementById('configHotwordAutoIdeaQuota').value = config.hotword_auto_generate_topic_quota || 30;
             document.getElementById('configCreatorSyncChannel').value = config.creator_sync_source_channel || 'Crawler服务';
             document.getElementById('configCreatorSyncFetchMode').value = config.creator_sync_fetch_mode || 'auto';
             document.getElementById('configCreatorSyncApiUrl').value = config.creator_sync_api_url || '';
@@ -1272,7 +1444,7 @@
                 document.getElementById('automationConfigNote').textContent = data.message || '加载自动化配置失败';
                 return;
             }
-            fillAutomationConfig(data.config || {}, data.notes || {}, data.style_types || [], data.model_options || [], data.hotword_templates || []);
+            fillAutomationConfig(data.config || {}, data.notes || {}, data.style_types || [], data.model_options || [], data.hotword_templates || [], data.hotword_remote_presets || []);
             loadAutomationConfigPreview();
         }
 
@@ -1297,6 +1469,10 @@
                         <div class="subtle">API URL：${escapeHtml(data.hotword_preview?.api_url || '-')}</div>
                         <div class="subtle">Method：${escapeHtml(data.hotword_preview?.api_method || '-')}</div>
                         <div class="subtle">结果路径：${escapeHtml(data.hotword_preview?.result_path || '-')}</div>
+                        <div class="subtle">自动生成候选话题：${data.hotword_preview?.auto_generate_topic_ideas ? '开启' : '关闭'}</div>
+                        <div class="subtle">自动生成数量：${data.hotword_preview?.auto_generate_topic_count || 0}</div>
+                        <div class="subtle">目标活动ID：${data.hotword_preview?.auto_generate_topic_activity_resolved_id || data.hotword_preview?.auto_generate_topic_activity_id || 0}</div>
+                        <div class="subtle">默认名额：${data.hotword_preview?.auto_generate_topic_quota || 0}</div>
                         ${data.hotword_preview_error ? `<div class="subtle text-danger mt-2">预览错误：${escapeHtml(data.hotword_preview_error)}</div>` : ''}
                     </div>
                     <div class="col-lg-3">
@@ -1354,29 +1530,8 @@
                 }
             }
             const payload = {
-                hotword_source_platform: document.getElementById('configHotwordPlatform').value,
-                hotword_source_template: document.getElementById('configHotwordTemplate').value,
-                hotword_source_channel: document.getElementById('configHotwordChannel').value.trim(),
-                hotword_keyword_limit: parseInt(document.getElementById('configHotwordKeywordLimit').value || '10', 10),
-                hotword_fetch_mode: document.getElementById('configHotwordFetchMode').value,
-                hotword_api_url: document.getElementById('configHotwordApiUrl').value.trim(),
-                hotword_api_method: document.getElementById('configHotwordApiMethod').value,
-                hotword_api_headers_json: document.getElementById('configHotwordHeadersJson').value.trim(),
-                hotword_api_query_json: document.getElementById('configHotwordQueryJson').value.trim(),
-                hotword_api_body_json: document.getElementById('configHotwordBodyJson').value.trim(),
-                hotword_result_path: document.getElementById('configHotwordResultPath').value.trim(),
-                hotword_keyword_param: document.getElementById('configHotwordKeywordParam').value.trim(),
-                hotword_timeout_seconds: parseInt(document.getElementById('configHotwordTimeout').value || '30', 10),
-                creator_sync_source_channel: document.getElementById('configCreatorSyncChannel').value.trim(),
-                creator_sync_fetch_mode: document.getElementById('configCreatorSyncFetchMode').value,
-                creator_sync_api_url: document.getElementById('configCreatorSyncApiUrl').value.trim(),
-                creator_sync_api_method: document.getElementById('configCreatorSyncApiMethod').value,
-                creator_sync_api_headers_json: document.getElementById('configCreatorSyncHeadersJson').value.trim(),
-                creator_sync_api_query_json: document.getElementById('configCreatorSyncQueryJson').value.trim(),
-                creator_sync_api_body_json: document.getElementById('configCreatorSyncBodyJson').value.trim(),
-                creator_sync_result_path: document.getElementById('configCreatorSyncResultPath').value.trim(),
-                creator_sync_timeout_seconds: parseInt(document.getElementById('configCreatorSyncTimeout').value || '60', 10),
-                creator_sync_batch_limit: parseInt(document.getElementById('configCreatorSyncBatchLimit').value || '20', 10),
+                ...collectHotwordRuntimeConfigPayload(),
+                ...collectCreatorSyncRuntimeConfigPayload(),
                 image_provider: document.getElementById('configImageProvider').value,
                 image_api_base: document.getElementById('configImageApiBase').value.trim(),
                 image_api_url: document.getElementById('configImageApiUrl').value.trim(),
@@ -1566,6 +1721,7 @@
                         <div class="subtle">自动化模式：${runtime.inline_automation_jobs ? 'inline 本地模式' : 'celery 异步模式'}</div>
                         <div class="subtle">热点模式：${escapeHtml(runtime.hotword_fetch_mode || 'skeleton')}</div>
                         <div class="subtle">热点 API：${escapeHtml(runtime.hotword_api_url || '-')}</div>
+                        <div class="subtle">抓完热点后自动生成话题：${runtime.hotword_auto_generate_topic_ideas ? `开启（${runtime.hotword_auto_generate_topic_count || 0}个）` : '关闭'}</div>
                         <div class="subtle">账号同步模式：${escapeHtml(runtime.creator_sync_fetch_mode || 'disabled')}</div>
                         <div class="subtle">账号同步 API：${escapeHtml(runtime.creator_sync_api_url || '-')}</div>
                     </div>
@@ -1724,9 +1880,11 @@
 
         async function loadDataSourceTasks() {
             const params = new URLSearchParams();
+            const taskType = document.getElementById('dataSourceTaskTypeFilter')?.value;
             const status = document.getElementById('dataSourceStatusFilter')?.value;
             const sourcePlatform = document.getElementById('dataSourcePlatformFilter')?.value;
             const limit = document.getElementById('dataSourceLimitFilter')?.value || '20';
+            if (taskType) params.set('task_type', taskType);
             if (status) params.set('status', status);
             if (sourcePlatform) params.set('source_platform', sourcePlatform);
             if (limit) params.set('limit', limit);
@@ -1738,7 +1896,7 @@
                 <tr>
                     <td>${item.created_at || '-'}</td>
                     <td>
-                        <strong>${escapeHtml(item.task_type || '-')}</strong>
+                        <strong>${escapeHtml(dataSourceTaskTypeLabel(item.task_type))}</strong>
                         <div class="subtle">模式：${escapeHtml(item.mode || 'skeleton')}</div>
                     </td>
                     <td>
@@ -1751,6 +1909,7 @@
                     </td>
                     <td>
                         <div>${item.item_count || 0} 条</div>
+                        ${item.result_payload_json?.topic_generation ? `<div class="subtle">自动生成候选话题 ${item.result_payload_json.topic_generation.count || 0} 个</div>` : ''}
                         <div class="subtle">${escapeHtml(item.message || '-')}</div>
                     </td>
                     <td>
@@ -1777,11 +1936,12 @@
                 detailWrap.innerHTML = `
                     <div class="row g-3">
                         <div class="col-lg-4">
-                            <strong>${escapeHtml(cached.task_type || '-')}</strong>
+                            <strong>${escapeHtml(dataSourceTaskTypeLabel(cached.task_type))}</strong>
                             <div class="subtle mt-2">平台：${escapeHtml(cached.source_platform || '-')}</div>
                             <div class="subtle">状态：${escapeHtml(cached.status || '-')}</div>
                             <div class="subtle">批次：${escapeHtml(cached.batch_name || '-')}</div>
                             <div class="subtle">结果条数：${cached.item_count || 0}</div>
+                            ${cached.result_payload_json?.topic_generation ? `<div class="subtle">自动生成候选话题：${cached.result_payload_json.topic_generation.count || 0} 个</div>` : ''}
                         </div>
                         <div class="col-lg-4">
                             <strong>请求参数</strong>
@@ -1903,6 +2063,11 @@
             const res = await fetch('/api/admin/schedules');
             const data = await res.json();
             const body = document.getElementById('scheduleTableBody');
+            const hotwordSchedule = (data.items || []).find((item) => item.job_key === 'hotword_sync_daily');
+            if (hotwordSchedule) {
+                document.getElementById('hotwordScheduleInterval').value = hotwordSchedule.interval_minutes || 360;
+                document.getElementById('hotwordScheduleEnabled').checked = Boolean(hotwordSchedule.enabled);
+            }
             body.innerHTML = (data.items || []).map((item) => `
                 <tr>
                     <td>
@@ -2124,6 +2289,66 @@
             `;
         }
 
+        function syncSandboxFromHotwordConfig() {
+            document.getElementById('trendSandboxSourcePlatform').value = document.getElementById('configHotwordPlatform').value;
+            document.getElementById('trendSandboxTemplateKey').value = document.getElementById('configHotwordTemplate').value || 'generic_json';
+            document.getElementById('trendSandboxSourceChannel').value = document.getElementById('configHotwordChannel').value || '接口响应沙盒';
+            document.getElementById('trendSandboxResultPath').value = document.getElementById('configHotwordResultPath').value || '';
+            document.getElementById('trendSandboxBatchName').value = document.getElementById('hotwordBatchName').value || document.getElementById('trendBatchName').value || '';
+            document.getElementById('trendSandboxMsg').textContent = '已从热点配置同步解析参数';
+        }
+
+        async function previewRemoteTrendParse() {
+            const payload = {
+                template_key: document.getElementById('trendSandboxTemplateKey').value,
+                source_platform: document.getElementById('trendSandboxSourcePlatform').value,
+                source_channel: document.getElementById('trendSandboxSourceChannel').value,
+                batch_name: document.getElementById('trendSandboxBatchName').value,
+                result_path: document.getElementById('trendSandboxResultPath').value,
+                response_payload: document.getElementById('trendSandboxPayload').value
+            };
+            const res = await fetch('/api/trends/parse_remote_preview', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            const wrap = document.getElementById('trendSandboxPreviewWrap');
+            document.getElementById('trendSandboxMsg').textContent = data.message || '已处理';
+            if (!data.success) {
+                wrap.textContent = data.message || '解析失败';
+                return;
+            }
+            wrap.innerHTML = `
+                <div><strong>模板：</strong>${escapeHtml(data.template?.label || '-')}</div>
+                <div class="subtle mb-3">原始 ${data.raw_count || 0} 条，标准化 ${data.normalized_count || 0} 条</div>
+                <div class="table-wrap">
+                    <table class="table data-table align-middle">
+                        <thead>
+                            <tr>
+                                <th>关键词</th>
+                                <th>标题</th>
+                                <th>互动</th>
+                                <th>传播量</th>
+                                <th>评分</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${(data.items || []).map((item) => `
+                                <tr>
+                                    <td>${escapeHtml(item.keyword || '-')}</td>
+                                    <td>${escapeHtml(item.title || '-')}</td>
+                                    <td>${item.interactions || 0}</td>
+                                    <td>${item.views || 0}</td>
+                                    <td>${item.hot_score || 0}</td>
+                                </tr>
+                            `).join('') || '<tr><td colspan="5" class="text-center text-muted">暂无解析结果</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
         async function saveCorpus() {
             const payload = {
                 title: document.getElementById('corpusTitle').value,
@@ -2309,6 +2534,7 @@
 
         async function runHotwordSync() {
             const payload = {
+                ...collectHotwordRuntimeConfigPayload(),
                 source_platform: document.getElementById('hotwordSourcePlatform').value,
                 source_channel: document.getElementById('hotwordSourceChannel').value,
                 batch_name: document.getElementById('hotwordBatchName').value.trim(),
@@ -2334,10 +2560,27 @@
         }
 
         async function pingHotwordSync() {
+            const payload = {
+                wait_seconds: 3,
+                hotword_source_platform: document.getElementById('configHotwordPlatform').value,
+                hotword_source_template: document.getElementById('configHotwordTemplate').value,
+                hotword_source_channel: document.getElementById('configHotwordChannel').value.trim(),
+                hotword_keyword_limit: parseInt(document.getElementById('configHotwordKeywordLimit').value || '10', 10),
+                hotword_fetch_mode: document.getElementById('configHotwordFetchMode').value,
+                hotword_api_url: document.getElementById('configHotwordApiUrl').value.trim(),
+                hotword_api_method: document.getElementById('configHotwordApiMethod').value,
+                hotword_api_headers_json: document.getElementById('configHotwordHeadersJson').value.trim(),
+                hotword_api_query_json: document.getElementById('configHotwordQueryJson').value.trim(),
+                hotword_api_body_json: document.getElementById('configHotwordBodyJson').value.trim(),
+                hotword_result_path: document.getElementById('configHotwordResultPath').value.trim(),
+                hotword_keyword_param: document.getElementById('configHotwordKeywordParam').value.trim(),
+                hotword_timeout_seconds: parseInt(document.getElementById('configHotwordTimeout').value || '30', 10),
+                keywords: document.getElementById('hotwordKeywordInput').value.trim()
+            };
             const res = await fetch('/api/jobs/hotwords/ping', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ wait_seconds: 3 })
+                body: JSON.stringify(payload)
             });
             const data = await res.json();
             const meta = [
@@ -2345,11 +2588,59 @@
                 data.status_code ? `http=${data.status_code}` : '',
             ].filter(Boolean).join(' ｜ ');
             document.getElementById('hotwordJobMsg').textContent = `${data.message || '已处理'}${meta ? ` ｜ ${meta}` : ''}`;
+            const previewWrap = document.getElementById('hotwordPingPreview');
+            if (previewWrap) {
+                previewWrap.innerHTML = `
+                    <div class="row g-3">
+                        <div class="col-lg-4">
+                            <strong>接口状态</strong>
+                            <div class="subtle mt-2">模式：${escapeHtml(data.enabled ? 'remote' : 'disabled')}</div>
+                            <div class="subtle">URL：${escapeHtml(data.health_url || '-')}</div>
+                            <div class="subtle">HTTP：${data.status_code || '-'}</div>
+                            <div class="subtle">说明：${escapeHtml(data.message || '-')}</div>
+                        </div>
+                        <div class="col-lg-4">
+                            <strong>请求预览</strong>
+                            <div class="json-box mt-2">${escapeHtml(JSON.stringify(data.request_preview || {}, null, 2))}</div>
+                        </div>
+                        <div class="col-lg-4">
+                            <strong>归一化样例</strong>
+                            <div class="json-box mt-2">${escapeHtml(JSON.stringify(data.normalized_preview || [], null, 2))}</div>
+                        </div>
+                    </div>
+                `;
+            }
             loadDiagnostics();
+        }
+
+        async function saveHotwordScheduleFromCurrentConfig() {
+            const payload = {
+                name: '热点抓取骨架巡检',
+                enabled: document.getElementById('hotwordScheduleEnabled').checked,
+                interval_minutes: parseInt(document.getElementById('hotwordScheduleInterval').value || '360', 10),
+                params_payload: {
+                    ...collectHotwordRuntimeConfigPayload(),
+                    source_platform: document.getElementById('hotwordSourcePlatform').value,
+                    source_channel: document.getElementById('hotwordSourceChannel').value,
+                    keyword_limit: parseInt(document.getElementById('hotwordKeywordLimit').value || '10', 10),
+                    keywords: document.getElementById('hotwordKeywordInput').value.trim()
+                }
+            };
+            const res = await fetch('/api/admin/schedules/hotword-sync/upsert', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            document.getElementById('scheduleMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadSchedules();
+            }
         }
 
         async function runCreatorAccountSync() {
             const payload = {
+                ...collectCreatorSyncRuntimeConfigPayload(),
                 source_channel: document.getElementById('creatorSyncSourceChannel').value.trim(),
                 batch_name: document.getElementById('creatorSyncBatchName').value.trim(),
                 batch_limit: parseInt(document.getElementById('creatorSyncBatchLimit').value || '20', 10),
@@ -2375,10 +2666,14 @@
         }
 
         async function pingCreatorAccountSync() {
+            const payload = {
+                ...collectCreatorSyncRuntimeConfigPayload(),
+                wait_seconds: 3,
+            };
             const res = await fetch('/api/jobs/creator-accounts/ping', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ wait_seconds: 3 })
+                body: JSON.stringify(payload)
             });
             const data = await res.json();
             const meta = [

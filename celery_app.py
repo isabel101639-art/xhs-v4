@@ -150,6 +150,7 @@ def sync_hotwords_job(data_source_task_id):
         _load_json_value,
         _log_operation,
         _resolve_hotword_rows,
+        _safe_int,
         DataSourceTask,
         TrendNote,
         db,
@@ -188,6 +189,10 @@ def sync_hotwords_job(data_source_task_id):
         template_key = resolved.get('template_key') or params.get('template_key') or 'generic_lines'
         request_preview = resolved.get('request_preview') or {}
         response_preview = resolved.get('response_preview') or {}
+        auto_generate_topic_ideas = bool(params.get('hotword_auto_generate_topic_ideas'))
+        auto_generate_topic_count = min(max(_safe_int(params.get('hotword_auto_generate_topic_count'), 20), 1), 120)
+        auto_generate_topic_activity_id = _safe_int(params.get('hotword_auto_generate_topic_activity_id'), 0) or None
+        auto_generate_topic_quota = min(max(_safe_int(params.get('hotword_auto_generate_topic_quota'), 30), 1), 300)
 
         inserted_count = 0
         for row in rows:
@@ -246,12 +251,43 @@ def sync_hotwords_job(data_source_task_id):
             'template_key': template_key,
         })
         db.session.commit()
+
+        topic_generation_result = None
+        if auto_generate_topic_ideas and inserted_count > 0:
+            topic_generation_result = generate_topic_ideas_job(
+                count=auto_generate_topic_count,
+                activity_id=auto_generate_topic_activity_id,
+                quota=auto_generate_topic_quota,
+            )
+            task_record = DataSourceTask.query.get(data_source_task_id)
+            if task_record:
+                task_record.message = (
+                    f'{task_record.message}，并自动生成 {topic_generation_result.get("count", 0)} 个候选话题'
+                )[:300]
+                task_record.result_payload = json.dumps({
+                    'inserted_count': inserted_count,
+                    'batch_name': task_record.batch_name,
+                    'keywords': keywords,
+                    'mode': mode,
+                    'template_key': template_key,
+                    'request_preview': request_preview,
+                    'response_preview': response_preview,
+                    'topic_generation': topic_generation_result,
+                }, ensure_ascii=False)
+                db.session.flush()
+                _append_data_source_log(task_record.id, '热点抓取后已自动生成候选话题', detail={
+                    'generated_count': topic_generation_result.get('count', 0),
+                    'activity_id': auto_generate_topic_activity_id,
+                    'quota': auto_generate_topic_quota,
+                })
+                db.session.commit()
         return {
             'success': True,
             'data_source_task_id': task_record.id,
             'inserted_count': inserted_count,
             'batch_name': task_record.batch_name,
             'mode': mode,
+            'topic_generation': topic_generation_result,
         }
     except Exception as exc:
         db.session.rollback()

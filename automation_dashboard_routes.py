@@ -34,6 +34,7 @@ def register_automation_dashboard_routes(app, helpers):
     asset_style_meta = helpers['asset_style_meta']
     hotword_source_template_meta = helpers['hotword_source_template_meta']
     hotword_source_template_options = helpers['hotword_source_template_options']
+    hotword_remote_source_presets = helpers['hotword_remote_source_presets']
     automation_keyword_seeds = helpers['automation_keyword_seeds']
     build_hotword_remote_preview = helpers['build_hotword_remote_preview']
     resolved_hotword_mode = helpers['resolved_hotword_mode']
@@ -180,6 +181,8 @@ def register_automation_dashboard_routes(app, helpers):
                 'hotword_api_url': hotword_settings.get('hotword_api_url') or '',
                 'hotword_api_method': hotword_settings.get('hotword_api_method') or 'GET',
                 'hotword_result_path': hotword_settings.get('hotword_result_path') or '',
+                'hotword_auto_generate_topic_ideas': bool(hotword_settings.get('hotword_auto_generate_topic_ideas')),
+                'hotword_auto_generate_topic_count': hotword_settings.get('hotword_auto_generate_topic_count') or 20,
                 'creator_sync_fetch_mode': resolved_creator_sync_mode(creator_sync_settings),
                 'creator_sync_api_url': creator_sync_settings.get('creator_sync_api_url') or '',
                 'creator_sync_api_method': creator_sync_settings.get('creator_sync_api_method') or 'POST',
@@ -283,6 +286,10 @@ def register_automation_dashboard_routes(app, helpers):
             next_config['hotword_result_path'] = (data.get('hotword_result_path') or current.get('hotword_result_path') or '').strip()[:200]
             next_config['hotword_keyword_param'] = (data.get('hotword_keyword_param') or current.get('hotword_keyword_param') or 'keyword').strip()[:50]
             next_config['hotword_timeout_seconds'] = min(max(safe_int(data.get('hotword_timeout_seconds'), current.get('hotword_timeout_seconds') or 30), 5), 120)
+            next_config['hotword_auto_generate_topic_ideas'] = helpers['coerce_bool'](data.get('hotword_auto_generate_topic_ideas'))
+            next_config['hotword_auto_generate_topic_count'] = min(max(safe_int(data.get('hotword_auto_generate_topic_count'), current.get('hotword_auto_generate_topic_count') or 20), 1), 120)
+            next_config['hotword_auto_generate_topic_activity_id'] = max(safe_int(data.get('hotword_auto_generate_topic_activity_id'), current.get('hotword_auto_generate_topic_activity_id') or 0), 0)
+            next_config['hotword_auto_generate_topic_quota'] = min(max(safe_int(data.get('hotword_auto_generate_topic_quota'), current.get('hotword_auto_generate_topic_quota') or default_topic_quota()), 1), 300)
             next_config['creator_sync_source_channel'] = (data.get('creator_sync_source_channel') or current.get('creator_sync_source_channel') or 'Crawler服务').strip()[:50]
             next_config['creator_sync_fetch_mode'] = (data.get('creator_sync_fetch_mode') or current.get('creator_sync_fetch_mode') or 'auto').strip()[:20]
             next_config['creator_sync_api_url'] = (data.get('creator_sync_api_url') or current.get('creator_sync_api_url') or '').strip()[:500]
@@ -324,6 +331,7 @@ def register_automation_dashboard_routes(app, helpers):
             'style_types': asset_style_type_options(),
             'model_options': image_model_options(runtime_config.get('image_provider')),
             'hotword_templates': hotword_source_template_options(),
+            'hotword_remote_presets': hotword_remote_source_presets(),
             'notes': {
                 'api_key_managed_by_env': True,
                 'api_key_configured': capabilities.get('api_key_configured', False),
@@ -352,6 +360,11 @@ def register_automation_dashboard_routes(app, helpers):
             'result_path': runtime_config.get('hotword_result_path') or '',
             'keyword_param': runtime_config.get('hotword_keyword_param') or 'keyword',
             'timeout_seconds': runtime_config.get('hotword_timeout_seconds') or 30,
+            'auto_generate_topic_ideas': bool(runtime_config.get('hotword_auto_generate_topic_ideas')),
+            'auto_generate_topic_count': runtime_config.get('hotword_auto_generate_topic_count') or 20,
+            'auto_generate_topic_activity_id': runtime_config.get('hotword_auto_generate_topic_activity_id') or 0,
+            'auto_generate_topic_activity_resolved_id': helpers['default_activity_id_for_automation']() if bool(runtime_config.get('hotword_auto_generate_topic_ideas')) and not (runtime_config.get('hotword_auto_generate_topic_activity_id') or 0) else (runtime_config.get('hotword_auto_generate_topic_activity_id') or 0),
+            'auto_generate_topic_quota': runtime_config.get('hotword_auto_generate_topic_quota') or default_topic_quota(),
         }
         hotword_request_preview = {}
         hotword_preview_error = ''

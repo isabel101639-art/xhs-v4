@@ -313,6 +313,52 @@ def register_automation_asset_routes(app, helpers):
             'items': [serialize_automation_schedule(item) for item in items]
         })
 
+    @app.route('/api/admin/schedules/hotword-sync/upsert', methods=['POST'])
+    def upsert_hotword_schedule():
+        guard = admin_json_guard()
+        if guard:
+            return guard
+
+        data = request.json or {}
+        schedule = AutomationSchedule.query.filter_by(job_key='hotword_sync_daily').first()
+        if not schedule:
+            schedule = AutomationSchedule(
+                job_key='hotword_sync_daily',
+                name='热点抓取骨架巡检',
+                task_type='hotword_sync',
+            )
+            db.session.add(schedule)
+
+        schedule.name = (data.get('name') or schedule.name or '热点抓取骨架巡检').strip()[:120] or '热点抓取骨架巡检'
+        schedule.task_type = 'hotword_sync'
+        previous_enabled = bool(schedule.enabled)
+        schedule.enabled = helpers['coerce_bool'](data.get('enabled'))
+        schedule.interval_minutes = min(max(safe_int(data.get('interval_minutes'), schedule.interval_minutes or 360), 1), 10080)
+        params_payload = data.get('params_payload')
+        if isinstance(params_payload, dict):
+            clean_payload = dict(params_payload)
+            clean_payload.pop('batch_name', None)
+            schedule.params_payload = json.dumps(clean_payload, ensure_ascii=False)
+        if schedule.enabled and (not previous_enabled or not schedule.next_run_at):
+            schedule.next_run_at = helpers['next_schedule_time'](schedule.interval_minutes)
+            schedule.last_status = 'queued'
+            schedule.last_message = '已根据当前热点配置启用默认热点调度'
+        if not schedule.enabled:
+            schedule.last_status = 'paused'
+            schedule.last_message = '已暂停默认热点调度'
+        log_operation('save_schedule', 'automation_schedule', target_id=schedule.id, message='按当前热点配置更新默认调度', detail={
+            'job_key': schedule.job_key,
+            'enabled': bool(schedule.enabled),
+            'interval_minutes': schedule.interval_minutes,
+            'name': schedule.name,
+        })
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': '默认热点调度已按当前配置更新',
+            'item': serialize_automation_schedule(schedule),
+        })
+
     @app.route('/api/admin/schedules/<int:schedule_id>', methods=['POST'])
     def save_automation_schedule(schedule_id):
         guard = admin_json_guard()

@@ -32,9 +32,84 @@ HOTWORD_SOURCE_TEMPLATE_OPTIONS = [
     },
 ]
 
+HOTWORD_REMOTE_SOURCE_PRESETS = [
+    {
+        'key': 'generic_get_items',
+        'label': '通用 GET JSON',
+        'description': '适合 GET 接口，默认把关键词拼到 query，返回结构优先取 items/data/results/list。',
+        'source_platform': '其他平台',
+        'template_key': 'generic_json',
+        'config': {
+            'hotword_fetch_mode': 'remote',
+            'hotword_api_method': 'GET',
+            'hotword_api_query_json': '{"keyword":"{{keywords}}"}',
+            'hotword_api_body_json': '',
+            'hotword_result_path': '',
+            'hotword_keyword_param': 'keyword',
+        },
+    },
+    {
+        'key': 'generic_post_items',
+        'label': '通用 POST JSON',
+        'description': '适合 POST 接口，请求体直接带 keywords 数组，返回结构优先取 items/data/results/list。',
+        'source_platform': '其他平台',
+        'template_key': 'generic_json',
+        'config': {
+            'hotword_fetch_mode': 'remote',
+            'hotword_api_method': 'POST',
+            'hotword_api_query_json': '',
+            'hotword_api_body_json': '{"keywords":"{{keywords_list}}","batch_name":"{{batch_name}}"}',
+            'hotword_result_path': '',
+            'hotword_keyword_param': 'keywords',
+        },
+    },
+    {
+        'key': 'douyin_board_proxy',
+        'label': '抖音热榜代理接口',
+        'description': '适合热榜/热点词代理接口，默认按抖音热榜字段做归一化，常见结果路径是 data.word_list 或 data.items。',
+        'source_platform': '抖音',
+        'template_key': 'douyin_hotwords',
+        'config': {
+            'hotword_fetch_mode': 'remote',
+            'hotword_api_method': 'GET',
+            'hotword_api_query_json': '{"keyword":"{{first_keyword}}"}',
+            'hotword_api_body_json': '',
+            'hotword_result_path': 'data.word_list',
+            'hotword_keyword_param': 'keyword',
+        },
+    },
+    {
+        'key': 'qiangua_notes_api',
+        'label': '千瓜笔记接口',
+        'description': '适合千瓜或第三方笔记接口，默认使用千瓜字段映射，常见结果路径是 data.items。',
+        'source_platform': '千瓜数据',
+        'template_key': 'qiangua_notes',
+        'config': {
+            'hotword_fetch_mode': 'remote',
+            'hotword_api_method': 'POST',
+            'hotword_api_query_json': '',
+            'hotword_api_body_json': '{"keywords":"{{keywords_list}}","page_size":20}',
+            'hotword_result_path': 'data.items',
+            'hotword_keyword_param': 'keywords',
+        },
+    },
+]
+
 
 def hotword_source_template_options():
     return [dict(item) for item in HOTWORD_SOURCE_TEMPLATE_OPTIONS]
+
+
+def hotword_remote_source_presets():
+    return [dict(item) for item in HOTWORD_REMOTE_SOURCE_PRESETS]
+
+
+def hotword_remote_source_preset_meta(preset_key=''):
+    raw = (preset_key or '').strip()
+    for item in HOTWORD_REMOTE_SOURCE_PRESETS:
+        if raw == item['key']:
+            return dict(item)
+    return dict(HOTWORD_REMOTE_SOURCE_PRESETS[0])
 
 
 def hotword_source_template_meta(template_key=''):
