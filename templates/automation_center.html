@@ -591,6 +591,14 @@
                 <div class="col-md-4 d-flex gap-2">
                     <button class="btn btn-accent" onclick="generateIdeas()">生成话题</button>
                     <button class="btn btn-outline-primary" onclick="generateIdeasAsync()">异步生成</button>
+                    <div class="d-flex gap-2 align-items-center">
+                        <input id="ideaScheduleInterval" type="number" min="1" max="10080" value="1440" class="form-control" style="max-width: 120px;" placeholder="分钟">
+                        <label class="form-check-label subtle d-flex align-items-center gap-2">
+                            <input id="ideaScheduleEnabled" class="form-check-input" type="checkbox">
+                            启用调度
+                        </label>
+                        <button class="btn btn-outline-dark" onclick="saveIdeaScheduleFromCurrentConfig()">保存为默认候选话题调度</button>
+                    </div>
                     <button class="btn btn-outline-danger" onclick="loadIdeas()">刷新话题池</button>
                 </div>
             </div>
@@ -765,6 +773,14 @@
                 <div class="col-md-12 d-flex gap-2 flex-wrap">
                     <button class="btn btn-accent" onclick="runCreatorAccountSync()">异步同步账号</button>
                     <button class="btn btn-outline-primary" onclick="pingCreatorAccountSync()">测试 crawler 接口</button>
+                    <div class="d-flex gap-2 align-items-center">
+                        <input id="creatorSyncScheduleInterval" type="number" min="1" max="10080" value="30" class="form-control" style="max-width: 120px;" placeholder="分钟">
+                        <label class="form-check-label subtle d-flex align-items-center gap-2">
+                            <input id="creatorSyncScheduleEnabled" class="form-check-input" type="checkbox">
+                            启用调度
+                        </label>
+                        <button class="btn btn-outline-dark" onclick="saveCreatorSyncScheduleFromCurrentConfig()">保存为默认账号同步调度</button>
+                    </div>
                     <button class="btn btn-outline-primary" onclick="loadAutomationConfigPreview()">刷新同步预览</button>
                 </div>
             </div>
@@ -2068,6 +2084,16 @@
                 document.getElementById('hotwordScheduleInterval').value = hotwordSchedule.interval_minutes || 360;
                 document.getElementById('hotwordScheduleEnabled').checked = Boolean(hotwordSchedule.enabled);
             }
+            const creatorSyncSchedule = (data.items || []).find((item) => item.job_key === 'creator_accounts_sync_half_hourly');
+            if (creatorSyncSchedule) {
+                document.getElementById('creatorSyncScheduleInterval').value = creatorSyncSchedule.interval_minutes || 30;
+                document.getElementById('creatorSyncScheduleEnabled').checked = Boolean(creatorSyncSchedule.enabled);
+            }
+            const ideaSchedule = (data.items || []).find((item) => item.job_key === 'topic_ideas_daily');
+            if (ideaSchedule) {
+                document.getElementById('ideaScheduleInterval').value = ideaSchedule.interval_minutes || 1440;
+                document.getElementById('ideaScheduleEnabled').checked = Boolean(ideaSchedule.enabled);
+            }
             body.innerHTML = (data.items || []).map((item) => `
                 <tr>
                     <td>
@@ -2411,6 +2437,29 @@
             }
         }
 
+        async function saveIdeaScheduleFromCurrentConfig() {
+            const payload = {
+                name: '候选话题自动生成',
+                enabled: document.getElementById('ideaScheduleEnabled').checked,
+                interval_minutes: parseInt(document.getElementById('ideaScheduleInterval').value || '1440', 10),
+                params_payload: {
+                    activity_id: parseInt(document.getElementById('ideaActivityId').value || '0', 10),
+                    count: parseInt(document.getElementById('ideaCount').value || '80', 10),
+                    quota: parseInt(document.getElementById('ideaQuota').value || '30', 10)
+                }
+            };
+            const res = await fetch('/api/admin/schedules/topic-ideas/upsert', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            document.getElementById('scheduleMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadSchedules();
+            }
+        }
+
         async function publishIdea(id) {
             const payload = {
                 activity_id: parseInt(document.getElementById('ideaActivityId').value, 10),
@@ -2627,6 +2676,30 @@
                 }
             };
             const res = await fetch('/api/admin/schedules/hotword-sync/upsert', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            document.getElementById('scheduleMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadSchedules();
+            }
+        }
+
+        async function saveCreatorSyncScheduleFromCurrentConfig() {
+            const payload = {
+                name: '报名人账号持续同步',
+                enabled: document.getElementById('creatorSyncScheduleEnabled').checked,
+                interval_minutes: parseInt(document.getElementById('creatorSyncScheduleInterval').value || '30', 10),
+                params_payload: {
+                    ...collectCreatorSyncRuntimeConfigPayload(),
+                    source_platform: '小红书',
+                    source_channel: document.getElementById('creatorSyncSourceChannel').value.trim(),
+                    batch_limit: parseInt(document.getElementById('creatorSyncBatchLimit').value || '20', 10)
+                }
+            };
+            const res = await fetch('/api/admin/schedules/creator-sync/upsert', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(payload)
