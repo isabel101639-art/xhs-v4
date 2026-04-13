@@ -2302,6 +2302,28 @@ def _build_deployment_helper_payload():
         'CREATOR_SYNC_RESULT_PATH': (creator_sync_settings.get('creator_sync_result_path') or ''),
         'CREATOR_SYNC_TIMEOUT_SECONDS': str(creator_sync_settings.get('creator_sync_timeout_seconds') or 60),
         'CREATOR_SYNC_BATCH_LIMIT': str(creator_sync_settings.get('creator_sync_batch_limit') or 20),
+        'CRAWLER_PROVIDER': os.environ.get('CRAWLER_PROVIDER', 'mock') or 'mock',
+        'CRAWLER_PORT': os.environ.get('CRAWLER_PORT', '8081') or '8081',
+        'CRAWLER_REQUEST_TIMEOUT_SECONDS': os.environ.get('CRAWLER_REQUEST_TIMEOUT_SECONDS', '60') or '60',
+        'XHS_PROFILE_URL_TEMPLATE': os.environ.get('XHS_PROFILE_URL_TEMPLATE', 'https://www.xiaohongshu.com/user/profile/{account_handle}') or 'https://www.xiaohongshu.com/user/profile/{account_handle}',
+        'PLAYWRIGHT_HEADLESS': os.environ.get('PLAYWRIGHT_HEADLESS', 'true') or 'true',
+        'PLAYWRIGHT_NAVIGATION_TIMEOUT_MS': os.environ.get('PLAYWRIGHT_NAVIGATION_TIMEOUT_MS', '30000') or '30000',
+        'PLAYWRIGHT_STORAGE_STATE_PATH': os.environ.get('PLAYWRIGHT_STORAGE_STATE_PATH', '') or '',
+        'PLAYWRIGHT_BROWSER_CHANNEL': os.environ.get('PLAYWRIGHT_BROWSER_CHANNEL', '') or '',
+        'XHS_WAIT_AFTER_LOGIN_SECONDS': os.environ.get('XHS_WAIT_AFTER_LOGIN_SECONDS', '90') or '90',
+        'XHS_DEBUG_OUTPUT_DIR': os.environ.get('XHS_DEBUG_OUTPUT_DIR', '/tmp/xhs_crawler_debug') or '/tmp/xhs_crawler_debug',
+        'XHS_PROFILE_NAME_SELECTOR': os.environ.get('XHS_PROFILE_NAME_SELECTOR', '') or '',
+        'XHS_FOLLOWER_COUNT_SELECTOR': os.environ.get('XHS_FOLLOWER_COUNT_SELECTOR', '') or '',
+        'XHS_POST_CARD_SELECTOR': os.environ.get('XHS_POST_CARD_SELECTOR', '') or '',
+        'XHS_POST_LINK_SELECTOR': os.environ.get('XHS_POST_LINK_SELECTOR', '') or '',
+        'XHS_POST_TITLE_SELECTOR': os.environ.get('XHS_POST_TITLE_SELECTOR', '') or '',
+        'XHS_POST_LIKES_SELECTOR': os.environ.get('XHS_POST_LIKES_SELECTOR', '') or '',
+        'XHS_POST_COMMENTS_SELECTOR': os.environ.get('XHS_POST_COMMENTS_SELECTOR', '') or '',
+        'XHS_POST_FAVORITES_SELECTOR': os.environ.get('XHS_POST_FAVORITES_SELECTOR', '') or '',
+        'XHS_POST_VIEWS_SELECTOR': os.environ.get('XHS_POST_VIEWS_SELECTOR', '') or '',
+        'XHS_POST_TIME_SELECTOR': os.environ.get('XHS_POST_TIME_SELECTOR', '') or '',
+        'XHS_MAX_POSTS_PER_ACCOUNT': os.environ.get('XHS_MAX_POSTS_PER_ACCOUNT', '20') or '20',
+        'MOCK_POSTS_PER_ACCOUNT': os.environ.get('MOCK_POSTS_PER_ACCOUNT', '2') or '2',
         'ASSET_IMAGE_PROVIDER': capabilities.get('image_provider_name') or 'svg_fallback',
         'ASSET_IMAGE_API_BASE': capabilities.get('image_provider_api_base') or '',
         'ASSET_IMAGE_API_URL': capabilities.get('image_provider_api_url') or '',
@@ -2419,6 +2441,39 @@ def _build_deployment_helper_payload():
                 env_item('DEFAULT_TOPIC_QUOTA', required=False),
             ],
         },
+        {
+            'key': 'crawler',
+            'name': 'Crawler',
+            'service_name': 'xhs-v4-crawler',
+            'start_command': 'python -m uvicorn crawler_service.main:app --host 0.0.0.0 --port 8081',
+            'summary': '负责报名人账号同步接口与小红书页面抓取，可先用 mock，再切 playwright_xhs。',
+            'required_envs': [
+                env_item('CRAWLER_PROVIDER'),
+                env_item('CRAWLER_PORT'),
+            ],
+            'optional_envs': [
+                env_item('CRAWLER_REQUEST_TIMEOUT_SECONDS', required=False),
+                env_item('XHS_PROFILE_URL_TEMPLATE', required=False),
+                env_item('PLAYWRIGHT_HEADLESS', required=False),
+                env_item('PLAYWRIGHT_NAVIGATION_TIMEOUT_MS', required=False),
+                env_item('PLAYWRIGHT_STORAGE_STATE_PATH', required=False),
+                env_item('PLAYWRIGHT_BROWSER_CHANNEL', required=False),
+                env_item('XHS_WAIT_AFTER_LOGIN_SECONDS', required=False),
+                env_item('XHS_DEBUG_OUTPUT_DIR', required=False),
+                env_item('XHS_PROFILE_NAME_SELECTOR', required=False),
+                env_item('XHS_FOLLOWER_COUNT_SELECTOR', required=False),
+                env_item('XHS_POST_CARD_SELECTOR', required=False),
+                env_item('XHS_POST_LINK_SELECTOR', required=False),
+                env_item('XHS_POST_TITLE_SELECTOR', required=False),
+                env_item('XHS_POST_LIKES_SELECTOR', required=False),
+                env_item('XHS_POST_COMMENTS_SELECTOR', required=False),
+                env_item('XHS_POST_FAVORITES_SELECTOR', required=False),
+                env_item('XHS_POST_VIEWS_SELECTOR', required=False),
+                env_item('XHS_POST_TIME_SELECTOR', required=False),
+                env_item('XHS_MAX_POSTS_PER_ACCOUNT', required=False),
+                env_item('MOCK_POSTS_PER_ACCOUNT', required=False),
+            ],
+        },
     ]
 
     for service in services:
@@ -2452,6 +2507,7 @@ def _build_deployment_helper_payload():
                 'docker compose logs -f web',
                 'docker compose logs -f worker',
                 'docker compose logs -f beat',
+                'docker compose logs -f crawler',
             ],
             'healthchecks': [
                 '/healthz',
@@ -2465,7 +2521,8 @@ def _build_deployment_helper_payload():
                 '确认 /healthz 可访问',
                 '再新增 worker',
                 '再新增 beat',
-                '最后在自动化中心执行检测 Worker 与运行诊断',
+                '如启用账号同步，再新增 crawler',
+                '最后在自动化中心执行检测 Worker、热点接口与 crawler 健康检查',
             ],
             'services': [{
                 'name': item['service_name'],
@@ -2787,6 +2844,33 @@ def _next_schedule_time(interval_minutes, base_time=None):
     base = base_time or datetime.now()
     minutes = max(_safe_int(interval_minutes, 60), 1)
     return base + timedelta(minutes=minutes)
+
+
+def _render_schema_column_sql(column_spec):
+    if isinstance(column_spec, str):
+        return column_spec
+    if not isinstance(column_spec, dict):
+        raise ValueError(f'unsupported schema column spec: {column_spec!r}')
+
+    base_type = (column_spec.get('type') or '').strip()
+    if not base_type:
+        raise ValueError(f'missing column type in schema spec: {column_spec!r}')
+
+    parts = [base_type]
+    if 'default' in column_spec:
+        default_value = column_spec.get('default')
+        if isinstance(default_value, bool):
+            parts.append(f"DEFAULT {'TRUE' if default_value else 'FALSE'}")
+        elif isinstance(default_value, (int, float)):
+            parts.append(f'DEFAULT {default_value}')
+        elif default_value is None:
+            parts.append('DEFAULT NULL')
+        else:
+            escaped = str(default_value).replace("'", "''")
+            parts.append(f"DEFAULT '{escaped}'")
+    if column_spec.get('nullable') is False:
+        parts.append('NOT NULL')
+    return ' '.join(parts)
 
 
 def _enqueue_task(task, *args, **kwargs):
@@ -8019,59 +8103,59 @@ def init_db():
         schema_required_columns = {
             'activity': {
                 'archived_at': timestamp_type,
-                'source_type': "VARCHAR(30) DEFAULT 'manual'",
+                'source_type': {'type': 'VARCHAR(30)', 'default': 'manual'},
                 'source_activity_id': 'INTEGER',
                 'source_snapshot_id': 'INTEGER',
             },
             'topic': {
-                'pool_status': "VARCHAR(20) DEFAULT 'formal'",
-                'source_type': "VARCHAR(30) DEFAULT 'manual'",
+                'pool_status': {'type': 'VARCHAR(20)', 'default': 'formal'},
+                'source_type': {'type': 'VARCHAR(30)', 'default': 'manual'},
                 'source_ref_id': 'INTEGER',
                 'source_snapshot_id': 'INTEGER',
                 'published_at': timestamp_type,
             },
             'corpus_entry': {
-                'pool_status': "VARCHAR(20) DEFAULT 'reserve'",
+                'pool_status': {'type': 'VARCHAR(20)', 'default': 'reserve'},
             },
             'trend_note': {
-                'pool_status': "VARCHAR(20) DEFAULT 'reserve'",
-                'source_template_key': "VARCHAR(50) DEFAULT 'generic_lines'",
-                'hot_score': 'INTEGER DEFAULT 0',
-                'source_rank': 'INTEGER DEFAULT 0',
+                'pool_status': {'type': 'VARCHAR(20)', 'default': 'reserve'},
+                'source_template_key': {'type': 'VARCHAR(50)', 'default': 'generic_lines'},
+                'hot_score': {'type': 'INTEGER', 'default': 0},
+                'source_rank': {'type': 'INTEGER', 'default': 0},
             },
             'submission': {
                 'xhs_profile_link': 'VARCHAR(500)',
-                'xhs_views': 'INTEGER DEFAULT 0',
-                'xhs_likes': 'INTEGER DEFAULT 0',
-                'xhs_favorites': 'INTEGER DEFAULT 0',
-                'xhs_comments': 'INTEGER DEFAULT 0',
+                'xhs_views': {'type': 'INTEGER', 'default': 0},
+                'xhs_likes': {'type': 'INTEGER', 'default': 0},
+                'xhs_favorites': {'type': 'INTEGER', 'default': 0},
+                'xhs_comments': {'type': 'INTEGER', 'default': 0},
                 'xhs_creator_account_id': 'INTEGER',
                 'xhs_primary_post_id': 'INTEGER',
-                'xhs_tracking_enabled': 'BOOLEAN DEFAULT FALSE',
-                'xhs_tracking_status': "VARCHAR(30) DEFAULT 'empty'",
+                'xhs_tracking_enabled': {'type': 'BOOLEAN', 'default': False},
+                'xhs_tracking_status': {'type': 'VARCHAR(30)', 'default': 'empty'},
                 'xhs_tracking_message': 'VARCHAR(300)',
                 'xhs_last_synced_at': timestamp_type,
                 'douyin_link': 'VARCHAR(500)',
-                'douyin_views': 'INTEGER DEFAULT 0',
-                'douyin_likes': 'INTEGER DEFAULT 0',
-                'douyin_favorites': 'INTEGER DEFAULT 0',
-                'douyin_comments': 'INTEGER DEFAULT 0',
+                'douyin_views': {'type': 'INTEGER', 'default': 0},
+                'douyin_likes': {'type': 'INTEGER', 'default': 0},
+                'douyin_favorites': {'type': 'INTEGER', 'default': 0},
+                'douyin_comments': {'type': 'INTEGER', 'default': 0},
                 'video_link': 'VARCHAR(500)',
-                'video_views': 'INTEGER DEFAULT 0',
-                'video_likes': 'INTEGER DEFAULT 0',
-                'video_favorites': 'INTEGER DEFAULT 0',
-                'video_comments': 'INTEGER DEFAULT 0',
+                'video_views': {'type': 'INTEGER', 'default': 0},
+                'video_likes': {'type': 'INTEGER', 'default': 0},
+                'video_favorites': {'type': 'INTEGER', 'default': 0},
+                'video_comments': {'type': 'INTEGER', 'default': 0},
                 'weibo_link': 'VARCHAR(500)',
-                'weibo_views': 'INTEGER DEFAULT 0',
-                'weibo_likes': 'INTEGER DEFAULT 0',
-                'weibo_favorites': 'INTEGER DEFAULT 0',
-                'weibo_comments': 'INTEGER DEFAULT 0',
-                'content_type': "VARCHAR(30) DEFAULT '未识别'",
+                'weibo_views': {'type': 'INTEGER', 'default': 0},
+                'weibo_likes': {'type': 'INTEGER', 'default': 0},
+                'weibo_favorites': {'type': 'INTEGER', 'default': 0},
+                'weibo_comments': {'type': 'INTEGER', 'default': 0},
+                'content_type': {'type': 'VARCHAR(30)', 'default': '未识别'},
                 'note_title': 'VARCHAR(300)',
                 'note_content': 'TEXT',
             },
             'topic_idea': {
-                'quota': 'INTEGER DEFAULT 30',
+                'quota': {'type': 'INTEGER', 'default': 30},
                 'review_note': 'TEXT',
                 'reviewed_at': timestamp_type,
                 'published_at': timestamp_type,
@@ -8092,7 +8176,13 @@ def init_db():
             for column_name, column_type in required_columns.items():
                 if column_name in existing:
                     continue
-                conn.execute(text(f'ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}'))
+                rendered_column_sql = _render_schema_column_sql(column_type)
+                try:
+                    conn.execute(text(f'ALTER TABLE {table_name} ADD COLUMN {column_name} {rendered_column_sql}'))
+                except Exception as exc:
+                    raise RuntimeError(
+                        f'auto schema migration failed for {table_name}.{column_name}: {rendered_column_sql}'
+                    ) from exc
                 existing.add(column_name)
             return existing
 

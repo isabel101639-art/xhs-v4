@@ -1569,7 +1569,7 @@
                 document.getElementById('automationConfigNote').textContent = data.message || '保存自动化配置失败';
                 return;
             }
-            fillAutomationConfig(data.config || {}, data.notes || {}, data.style_types || [], data.model_options || [], data.hotword_templates || []);
+            fillAutomationConfig(data.config || {}, data.notes || {}, data.style_types || [], data.model_options || [], data.hotword_templates || [], data.hotword_remote_presets || []);
             document.getElementById('automationConfigNote').textContent = '自动化运维配置已保存';
             loadOverview();
             loadDiagnostics();
