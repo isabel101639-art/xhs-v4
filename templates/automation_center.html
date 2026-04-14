@@ -402,6 +402,13 @@
                     </select>
                 </div>
                 <div class="col-lg-5">
+                    <label class="form-label subtle">图片接口预设</label>
+                    <div class="d-flex gap-2">
+                        <select id="configImageProviderPreset" class="form-select"></select>
+                        <button class="btn btn-outline-primary" type="button" onclick="applyImageProviderPreset()">套用预设</button>
+                    </div>
+                </div>
+                <div class="col-lg-5">
                     <label class="form-label subtle">图片 API Base</label>
                     <input id="configImageApiBase" class="form-control" placeholder="如 https://ark.cn-beijing.volces.com/api/v3">
                 </div>
@@ -455,6 +462,23 @@
                 </div>
             </div>
             <div id="automationConfigPreview" class="detail-card mt-3 text-muted">加载后展示热点任务、账号同步任务与图片任务的请求预览。</div>
+            <div class="detail-card mt-3">
+                <div class="section-title mb-2">图片调试沙盒</div>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label subtle">测试标题</label>
+                        <input id="imagePingTitleHint" class="form-control" value="测试图片接口" placeholder="如 脂肪肝知识卡片">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label subtle">测试张数</label>
+                        <input id="imagePingCount" type="number" min="1" max="4" value="1" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label subtle">测试提示词</label>
+                        <textarea id="imagePingPromptText" rows="2" class="form-control" placeholder="例如：生成一张适合小红书医疗科普封面的知识卡片，整体干净、信息层级明确。">生成一张适合小红书医疗科普封面的测试图片，画面简洁，标题区留白。</textarea>
+                    </div>
+                </div>
+            </div>
             <div id="imagePingPreview" class="detail-card mt-3 text-muted">测试图片接口后，这里会显示请求预览和返回结果摘要。</div>
         </div>
 
@@ -645,6 +669,15 @@
                 <div id="deploymentHelperMsg" class="subtle d-flex align-items-center"></div>
             </div>
             <div id="deploymentHelperWrap" class="mini-note">点击“刷新部署助手”查看 Web / Worker / Beat / Crawler 的启动命令、缺失环境变量和建议部署顺序。</div>
+        </div>
+
+        <div class="panel p-4 mb-4">
+            <div class="section-title">API 联调准备清单</div>
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                <button class="btn btn-outline-primary" onclick="loadIntegrationChecklist()">刷新联调清单</button>
+                <div id="integrationChecklistMsg" class="subtle d-flex align-items-center"></div>
+            </div>
+            <div id="integrationChecklistWrap" class="mini-note">这里会告诉你：热点源、账号同步 crawler、图片接口分别还缺哪些参数。你买会员或 API 前先看这里就行。</div>
         </div>
 
         <div class="panel p-4 mb-4">
@@ -1202,6 +1235,7 @@
         let jobHistoryTimer = null;
         let automationConfigCache = null;
         let hotwordRemotePresets = [];
+        let imageProviderPresets = [];
         let dataSourceTaskCache = {};
         let assetTaskCache = {};
         let assetLibraryCache = {};
@@ -1247,6 +1281,32 @@
             document.getElementById('configHotwordResultPath').value = config.hotword_result_path || '';
             document.getElementById('configHotwordKeywordParam').value = config.hotword_keyword_param || 'keyword';
             document.getElementById('automationConfigNote').textContent = `已套用热点接口预设：${current.label}`;
+            loadAutomationConfigPreview();
+        }
+
+        function renderImageProviderPresetOptions(items) {
+            const select = document.getElementById('configImageProviderPreset');
+            if (!select) return;
+            imageProviderPresets = items || [];
+            select.innerHTML = (items || []).map((item) => `
+                <option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}${item.description ? `｜${escapeHtml(item.description)}` : ''}</option>
+            `).join('');
+        }
+
+        function applyImageProviderPreset() {
+            const select = document.getElementById('configImageProviderPreset');
+            const current = (imageProviderPresets || []).find((item) => item.key === select?.value);
+            if (!current) {
+                document.getElementById('automationConfigNote').textContent = '未找到可用的图片接口预设';
+                return;
+            }
+            const config = current.config || {};
+            if (config.image_provider) document.getElementById('configImageProvider').value = config.image_provider;
+            if ('image_api_base' in config) document.getElementById('configImageApiBase').value = config.image_api_base || '';
+            if ('image_api_url' in config) document.getElementById('configImageApiUrl').value = config.image_api_url || '';
+            if ('image_model' in config) document.getElementById('configImageModel').value = config.image_model || '';
+            if ('image_size' in config) document.getElementById('configImageSize').value = config.image_size || '1024x1536';
+            document.getElementById('automationConfigNote').textContent = `已套用图片接口预设：${current.label}`;
             loadAutomationConfigPreview();
         }
 
@@ -1371,7 +1431,7 @@
             return map[taskType] || taskType || '-';
         }
 
-        function renderSystemAlert(serviceMatrix, runtime) {
+        function renderSystemAlert(serviceMatrix, runtime, deploymentBlockers) {
             const wrap = document.getElementById('systemAlertWrap');
             if (!wrap) return;
             const missing = (serviceMatrix || []).filter((item) => !item.ok);
@@ -1403,11 +1463,13 @@
             if (focusKeys.has('beat')) {
                 actionButtons.push(`<button class="btn btn-sm btn-outline-dark" onclick="loadDeploymentHelper()">打开部署助手</button>`);
             }
+            const blockerLines = (deploymentBlockers || []).map((item) => `${item.service_name} 缺少：${(item.missing_required || []).join(', ')}`);
             wrap.className = 'status-alert mb-4';
             wrap.innerHTML = `
                 <strong>当前最需要补齐的项</strong>
                 <div class="subtle mt-2">${focus.map((item) => `${item.label}：${item.message || '未就绪'}`).join(' ｜ ')}</div>
                 <div class="subtle mt-2">自动化模式：${runtime?.inline_automation_jobs ? 'inline 本地模式' : 'celery 异步模式'}${runtime?.inline_automation_jobs ? '，本地联调时 Worker / Beat 可暂不单独部署。' : '，生产环境建议补齐 Worker / Beat / 远端接口。'}</div>
+                ${blockerLines.length ? `<div class="subtle mt-2">环境变量缺口：${blockerLines.join(' ｜ ')}</div>` : ''}
                 ${actionButtons.length ? `<div class="d-flex gap-2 flex-wrap mt-3">${actionButtons.join('')}</div>` : ''}
             `;
         }
@@ -1469,11 +1531,12 @@
             }
         }
 
-        function fillAutomationConfig(config, notes, styleTypes, modelOptions, hotwordTemplates, hotwordRemotePresetItems) {
+        function fillAutomationConfig(config, notes, styleTypes, modelOptions, hotwordTemplates, hotwordRemotePresetItems, imageProviderPresetItems) {
             automationConfigCache = config || {};
             document.getElementById('configHotwordPlatform').value = config.hotword_source_platform || '小红书';
             renderHotwordTemplateOptions(hotwordTemplates || [], config.hotword_source_template || 'generic_lines');
             renderHotwordRemotePresetOptions(hotwordRemotePresetItems || []);
+            renderImageProviderPresetOptions(imageProviderPresetItems || []);
             document.getElementById('configHotwordChannel').value = config.hotword_source_channel || 'Worker骨架';
             document.getElementById('configHotwordKeywordLimit').value = config.hotword_keyword_limit || 10;
             document.getElementById('configHotwordFetchMode').value = config.hotword_fetch_mode || 'auto';
@@ -1535,7 +1598,7 @@
                 document.getElementById('automationConfigNote').textContent = data.message || '加载自动化配置失败';
                 return;
             }
-            fillAutomationConfig(data.config || {}, data.notes || {}, data.style_types || [], data.model_options || [], data.hotword_templates || [], data.hotword_remote_presets || []);
+            fillAutomationConfig(data.config || {}, data.notes || {}, data.style_types || [], data.model_options || [], data.hotword_templates || [], data.hotword_remote_presets || [], data.provider_presets || []);
             loadAutomationConfigPreview();
         }
 
@@ -1635,7 +1698,7 @@
                 document.getElementById('automationConfigNote').textContent = data.message || '保存自动化配置失败';
                 return;
             }
-            fillAutomationConfig(data.config || {}, data.notes || {}, data.style_types || [], data.model_options || [], data.hotword_templates || [], data.hotword_remote_presets || []);
+            fillAutomationConfig(data.config || {}, data.notes || {}, data.style_types || [], data.model_options || [], data.hotword_templates || [], data.hotword_remote_presets || [], data.provider_presets || []);
             document.getElementById('automationConfigNote').textContent = '自动化运维配置已保存';
             loadOverview();
             loadDiagnostics();
@@ -1785,13 +1848,14 @@
             const creatorSyncHealth = data.creator_sync_health || {};
             const imageHealth = data.image_health || {};
             const serviceMatrix = data.service_matrix || [];
+            const deploymentBlockers = data.deployment_blockers || [];
             const lastPing = worker.last_ping || {};
             const capabilities = data.capabilities || {};
             const schedules = data.schedules || [];
             const workerSummary = worker.health_status === 'healthy'
                 ? '最近成功'
                 : (worker.health_status === 'degraded' ? '最近失败' : '未检查');
-            renderSystemAlert(serviceMatrix, runtime);
+            renderSystemAlert(serviceMatrix, runtime, deploymentBlockers);
             document.getElementById('diagnosticMsg').textContent = `数据库：${runtime.database_backend || '-'} ｜ Worker：${workerSummary} ｜ Beat：${runtime.beat_enabled ? '启用' : '未启用'} ｜ 图片提供方：${capabilities.image_provider_name || '-'}`;
             wrap.innerHTML = `
                 <div class="row g-3">
@@ -1938,6 +2002,41 @@
                             <div class="subtle mt-3">相关文档：${escapeHtml((data.docs || []).join(' ｜ '))}</div>
                         </div>
                     </div>
+                </div>
+            `;
+        }
+
+        async function loadIntegrationChecklist() {
+            const res = await fetch('/api/admin/integration-checklist');
+            const data = await res.json();
+            const wrap = document.getElementById('integrationChecklistWrap');
+            if (!data.success) {
+                document.getElementById('integrationChecklistMsg').textContent = data.message || '联调清单加载失败';
+                return;
+            }
+            const sections = data.items || [];
+            const configuredCount = sections.reduce((acc, section) => acc + (section.items || []).filter((item) => item.configured).length, 0);
+            const totalCount = sections.reduce((acc, section) => acc + (section.items || []).length, 0);
+            document.getElementById('integrationChecklistMsg').textContent = `已配置 ${configuredCount}/${totalCount}`;
+            wrap.innerHTML = `
+                <div class="row g-3">
+                    ${sections.map((section) => `
+                        <div class="col-lg-4">
+                            <div class="detail-card h-100">
+                                <strong>${escapeHtml(section.label || '-')}</strong>
+                                <div class="subtle mt-2">${escapeHtml(section.description || '-')}</div>
+                                <div class="mt-3">
+                                    ${(section.items || []).map((item) => `
+                                        <div class="subtle mb-2">
+                                            <span class="badge ${item.configured ? 'bg-success' : 'bg-warning text-dark'}">${item.configured ? '已就绪' : '待提供'}</span>
+                                            <span class="ms-2">${escapeHtml(item.label || item.key || '-')}</span>
+                                            ${item.configured && item.value ? `<div class="mt-1 text-muted">${escapeHtml(String(item.value))}</div>` : ''}
+                                        </div>
+                                    `).join('') || '<div class="text-muted">暂无</div>'}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
                 </div>
             `;
         }
@@ -2853,7 +2952,9 @@
             const payload = {
                 ...collectImageRuntimeConfigPayload(),
                 wait_seconds: 15,
-                prompt_text: '生成一张适合小红书医疗科普封面的测试图片，画面简洁，标题区留白。',
+                title_hint: document.getElementById('imagePingTitleHint').value.trim(),
+                image_count: parseInt(document.getElementById('imagePingCount').value || '1', 10),
+                prompt_text: document.getElementById('imagePingPromptText').value.trim(),
             };
             const res = await fetch('/api/jobs/assets/ping', {
                 method: 'POST',
@@ -3151,6 +3252,7 @@
         loadAssetLibrary();
         loadSchedules();
         loadDeploymentHelper();
+        loadIntegrationChecklist();
         loadDiagnostics();
         loadReadinessCheck();
         document.getElementById('autoRefreshJobs')?.addEventListener('change', syncJobAutoRefresh);

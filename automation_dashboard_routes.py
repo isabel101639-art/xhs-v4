@@ -18,6 +18,7 @@ def register_automation_dashboard_routes(app, helpers):
     default_topic_quota = helpers['default_topic_quota']
     asset_style_type_options = helpers['asset_style_type_options']
     image_provider_options = helpers['image_provider_options']
+    image_provider_presets = helpers['image_provider_presets']
     image_model_options = helpers['image_model_options']
     safe_int = helpers['safe_int']
     build_readiness_checks = helpers['build_readiness_checks']
@@ -25,6 +26,8 @@ def register_automation_dashboard_routes(app, helpers):
     bootstrap_demo_operational_data = helpers['bootstrap_demo_operational_data']
     clear_demo_operational_data = helpers['clear_demo_operational_data']
     build_deployment_helper_payload = helpers['build_deployment_helper_payload']
+    build_deployment_blockers_payload = helpers['build_deployment_blockers_payload']
+    build_integration_checklist_payload = helpers['build_integration_checklist_payload']
     build_recent_failed_jobs_payload = helpers['build_recent_failed_jobs_payload']
     build_service_matrix_payload = helpers['build_service_matrix_payload']
     hotword_runtime_settings = helpers['hotword_runtime_settings']
@@ -202,6 +205,7 @@ def register_automation_dashboard_routes(app, helpers):
             'creator_sync_health': creator_sync_health,
             'image_health': image_health,
             'service_matrix': build_service_matrix_payload(),
+            'deployment_blockers': build_deployment_blockers_payload(),
             'capabilities': image_provider_capabilities(),
             'counts': {
                 'activities': Activity.query.count(),
@@ -259,6 +263,16 @@ def register_automation_dashboard_routes(app, helpers):
         if guard:
             return guard
         return jsonify(build_deployment_helper_payload())
+
+    @app.route('/api/admin/integration-checklist')
+    def integration_checklist():
+        guard = admin_json_guard()
+        if guard:
+            return guard
+        return jsonify({
+            'success': True,
+            'items': build_integration_checklist_payload(),
+        })
 
     @app.route('/api/admin/failed-jobs')
     def failed_jobs():
@@ -333,6 +347,7 @@ def register_automation_dashboard_routes(app, helpers):
             'config': runtime_config,
             'capabilities': capabilities,
             'provider_options': image_provider_options(),
+            'provider_presets': image_provider_presets(),
             'style_types': asset_style_type_options(),
             'model_options': image_model_options(runtime_config.get('image_provider')),
             'hotword_templates': hotword_source_template_options(),

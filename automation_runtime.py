@@ -52,6 +52,69 @@ IMAGE_PROVIDER_OPTIONS = [
     {'key': 'generic_json', 'label': '通用JSON接口'},
 ]
 
+IMAGE_PROVIDER_PRESETS = [
+    {
+        'key': 'svg_fallback_default',
+        'label': 'SVG 兜底',
+        'description': '不依赖外部图片接口，适合无 API 时演示联调。',
+        'config': {
+            'image_provider': 'svg_fallback',
+            'image_api_base': '',
+            'image_api_url': '',
+            'image_model': '',
+            'image_size': '1024x1536',
+        },
+    },
+    {
+        'key': 'volcengine_ark_default',
+        'label': '火山方舟默认',
+        'description': '适合火山方舟兼容 OpenAI 图片接口，默认 API Base 与模型占位已带上。',
+        'config': {
+            'image_provider': 'volcengine_ark',
+            'image_api_base': 'https://ark.cn-beijing.volces.com/api/v3',
+            'image_api_url': '',
+            'image_model': 'doubao-seededit-3-0-i2i-250628',
+            'image_size': '1024x1536',
+        },
+    },
+    {
+        'key': 'volcengine_las_default',
+        'label': '火山 LAS 默认',
+        'description': '适合火山 LAS 图片生成接口，默认 API Base 与 seedream 模型占位已带上。',
+        'config': {
+            'image_provider': 'volcengine_las',
+            'image_api_base': 'https://operator.las.cn-beijing.volces.com/api/v1',
+            'image_api_url': '',
+            'image_model': 'doubao-seedream-5-0-lite-260128',
+            'image_size': '1024x1536',
+        },
+    },
+    {
+        'key': 'openai_compatible_default',
+        'label': 'OpenAI 兼容默认',
+        'description': '适合任何兼容 OpenAI image generation 的网关或第三方接口。',
+        'config': {
+            'image_provider': 'openai_compatible',
+            'image_api_base': '',
+            'image_api_url': '',
+            'image_model': 'gpt-image-1',
+            'image_size': '1024x1536',
+        },
+    },
+    {
+        'key': 'generic_json_default',
+        'label': '通用 JSON 默认',
+        'description': '适合自定义图片接口，只要返回 data/images/results 结构即可。',
+        'config': {
+            'image_provider': 'generic_json',
+            'image_api_base': '',
+            'image_api_url': '',
+            'image_model': 'image-default',
+            'image_size': '1024x1536',
+        },
+    },
+]
+
 ASSET_STYLE_TYPE_DEFINITIONS = [
     {
         'key': 'medical_science',
@@ -309,6 +372,10 @@ def _resolved_creator_sync_mode(runtime_settings=None):
 
 def _image_provider_options():
     return [dict(item) for item in IMAGE_PROVIDER_OPTIONS]
+
+
+def _image_provider_presets():
+    return [dict(item) for item in IMAGE_PROVIDER_PRESETS]
 
 
 def _asset_style_type_options():

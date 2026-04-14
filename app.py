@@ -54,6 +54,7 @@ from automation_runtime import (
     _creator_sync_runtime_settings,
     _resolved_creator_sync_mode,
     _image_provider_options,
+    _image_provider_presets,
     _asset_style_type_options,
     _asset_style_meta,
     _image_model_options,
@@ -2538,6 +2539,76 @@ def _build_deployment_helper_payload():
     }
 
 
+def _build_deployment_blockers_payload():
+    helper = _build_deployment_helper_payload()
+    services = helper.get('services') or []
+    blockers = []
+    for service in services:
+        missing = service.get('missing_required') or []
+        if not missing:
+            continue
+        blockers.append({
+            'service_key': service.get('key'),
+            'service_name': service.get('name') or service.get('service_name') or service.get('key'),
+            'missing_required': missing,
+            'start_command': service.get('start_command') or '',
+        })
+    return blockers
+
+
+def _build_integration_checklist_payload():
+    hotword_settings = _hotword_runtime_settings()
+    creator_sync_settings = _creator_sync_runtime_settings()
+    image_capabilities = _image_provider_capabilities()
+
+    def checklist_item(key, label, configured=False, value=''):
+        return {
+            'key': key,
+            'label': label,
+            'configured': bool(configured),
+            'value': value if configured else '',
+        }
+
+    return [
+        {
+            'key': 'hotword_api',
+            'label': '热点源接口',
+            'description': '用于把第三方热点数据接入热点池和自动生题流程。',
+            'items': [
+                checklist_item('hotword_api_url', '接口 URL', bool(hotword_settings.get('hotword_api_url')), hotword_settings.get('hotword_api_url') or ''),
+                checklist_item('hotword_api_method', '请求方法', bool(hotword_settings.get('hotword_api_method')), hotword_settings.get('hotword_api_method') or ''),
+                checklist_item('hotword_result_path', '结果路径', bool(hotword_settings.get('hotword_result_path')), hotword_settings.get('hotword_result_path') or ''),
+                checklist_item('hotword_api_headers_json', '鉴权请求头', bool(hotword_settings.get('hotword_api_headers_json')), hotword_settings.get('hotword_api_headers_json') or ''),
+                checklist_item('sample_response', '样例响应 JSON', False, ''),
+            ],
+        },
+        {
+            'key': 'creator_sync',
+            'label': '账号同步 / crawler',
+            'description': '用于持续抓取报名人账号的新笔记和互动数据。',
+            'items': [
+                checklist_item('creator_sync_api_url', 'crawler 接口 URL', bool(creator_sync_settings.get('creator_sync_api_url')), creator_sync_settings.get('creator_sync_api_url') or ''),
+                checklist_item('creator_sync_api_method', '请求方法', bool(creator_sync_settings.get('creator_sync_api_method')), creator_sync_settings.get('creator_sync_api_method') or ''),
+                checklist_item('creator_sync_result_path', '结果路径', bool(creator_sync_settings.get('creator_sync_result_path')), creator_sync_settings.get('creator_sync_result_path') or ''),
+                checklist_item('playwright_storage_state', '登录态 / 会员凭据', bool((os.environ.get('PLAYWRIGHT_STORAGE_STATE_PATH') or '').strip()), os.environ.get('PLAYWRIGHT_STORAGE_STATE_PATH') or ''),
+                checklist_item('sample_profile', '测试账号主页链接', False, ''),
+            ],
+        },
+        {
+            'key': 'image_provider',
+            'label': '图片接口',
+            'description': '用于把图片中心从 SVG fallback 升级到真实图片生成。',
+            'items': [
+                checklist_item('image_provider', '图片 provider', bool(image_capabilities.get('image_provider_name')), image_capabilities.get('image_provider_name') or ''),
+                checklist_item('image_api_url', '图片接口 URL', bool(image_capabilities.get('image_provider_api_url')), image_capabilities.get('image_provider_api_url') or ''),
+                checklist_item('image_model', '模型名', bool(image_capabilities.get('image_provider_model')), image_capabilities.get('image_provider_model') or ''),
+                checklist_item('image_api_key', 'API Key', bool(image_capabilities.get('api_key_configured')), '<configured>' if image_capabilities.get('api_key_configured') else ''),
+                checklist_item('image_prompt_case', '测试提示词案例', True, '生成一张小红书医疗科普封面测试图'),
+            ],
+        },
+    ]
+
+
 def _creator_sync_healthcheck(timeout_seconds=3):
     settings = _creator_sync_runtime_settings()
     api_url = (settings.get('creator_sync_api_url') or '').strip()
@@ -4062,13 +4133,21 @@ def _normalize_asset_provider_results(payload, provider='svg_fallback', image_pr
 def _image_provider_healthcheck(payload=None, timeout_seconds=15):
     capabilities = _resolve_image_provider_capabilities(payload)
     provider = (capabilities.get('image_provider_name') or 'svg_fallback').strip() or 'svg_fallback'
+    payload = payload or {}
     if provider == 'svg_fallback':
         return {
             'enabled': False,
             'ok': False,
             'message': '当前图片模式为 SVG 兜底，未启用远端图片接口',
             'provider': provider,
-            'request_preview': _build_asset_provider_request_preview(provider, '', '', capabilities.get('image_provider_size') or '1024x1536'),
+            'request_preview': _build_asset_provider_request_preview(
+                provider,
+                '',
+                (payload.get('prompt_text') or '').strip(),
+                capabilities.get('image_provider_size') or '1024x1536',
+                capabilities.get('image_default_style_type') or 'medical_science',
+                image_count=min(max(_safe_int(payload.get('image_count'), 1), 1), 4),
+            ),
             'response': None,
             'normalized_preview': [],
         }
@@ -4102,16 +4181,18 @@ def _image_provider_healthcheck(payload=None, timeout_seconds=15):
         }
 
     prompt_text = (
-        (payload or {}).get('prompt_text')
+        payload.get('prompt_text')
         or '生成一张适合小红书医疗科普封面的测试图片，画面简洁，标题区留白。'
     ).strip()
+    title_hint = (payload.get('title_hint') or '测试图片接口').strip()[:200] or '测试图片接口'
+    image_count = min(max(_safe_int(payload.get('image_count'), 1), 1), 4)
     request_preview = _build_asset_provider_request_preview(
         provider,
         capabilities.get('image_provider_model'),
         prompt_text,
         capabilities.get('image_provider_size'),
         capabilities.get('image_default_style_type') or 'medical_science',
-        image_count=1,
+        image_count=image_count,
     )
     try:
         response = requests.post(
@@ -4130,7 +4211,7 @@ def _image_provider_healthcheck(payload=None, timeout_seconds=15):
             for key in ['data', 'images', 'output', 'results']:
                 if isinstance(response_preview.get(key), list):
                     response_preview[key] = response_preview[key][:3]
-        normalized_preview = _normalize_asset_provider_results(payload_json, provider=provider, image_prompt=prompt_text)[:3]
+        normalized_preview = _normalize_asset_provider_results(payload_json, provider=provider, image_prompt=prompt_text, title_hint=title_hint)[:3]
         return {
             'enabled': True,
             'ok': True,
@@ -6397,6 +6478,7 @@ register_automation_dashboard_routes(app, {
     'default_topic_quota': _default_topic_quota,
     'asset_style_type_options': _asset_style_type_options,
     'image_provider_options': _image_provider_options,
+    'image_provider_presets': _image_provider_presets,
     'image_model_options': _image_model_options,
     'safe_int': _safe_int,
     'build_readiness_checks': _build_readiness_checks,
@@ -6405,6 +6487,8 @@ register_automation_dashboard_routes(app, {
     'bootstrap_demo_operational_data': _bootstrap_demo_operational_data,
     'clear_demo_operational_data': _clear_demo_operational_data,
     'build_deployment_helper_payload': _build_deployment_helper_payload,
+    'build_deployment_blockers_payload': _build_deployment_blockers_payload,
+    'build_integration_checklist_payload': _build_integration_checklist_payload,
     'build_recent_failed_jobs_payload': _build_recent_failed_jobs_payload,
     'build_service_matrix_payload': _build_service_matrix_payload,
     'hotword_runtime_settings': _hotword_runtime_settings,
