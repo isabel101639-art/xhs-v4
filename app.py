@@ -1306,6 +1306,7 @@ def _build_readiness_checks():
     creator_sync_settings = _creator_sync_runtime_settings()
     creator_sync_mode = _resolved_creator_sync_mode(creator_sync_settings)
     creator_sync_health = _creator_sync_healthcheck(timeout_seconds=2) if creator_sync_mode == 'remote' else None
+    image_health = _image_provider_healthcheck(timeout_seconds=5)
     env_checks = [
         {'key': 'DATABASE_URL', 'ok': bool((os.environ.get('DATABASE_URL') or '').strip()), 'message': '数据库连接'},
         {'key': 'REDIS_URL', 'ok': inline_jobs or bool((os.environ.get('REDIS_URL') or '').strip()), 'message': 'Redis 连接' if not inline_jobs else 'Redis 连接（本地内联模式可选）'},
@@ -1332,6 +1333,7 @@ def _build_readiness_checks():
         {'key': 'image_provider', 'ok': True, 'message': f'图片 provider：{capability.get("image_provider_name")}'},
         {'key': 'image_provider_ready', 'ok': capability.get('image_provider_configured') or capability.get('fallback_mode'), 'message': '图片任务可运行'},
         {'key': 'beat_enabled', 'ok': _coerce_bool(os.environ.get('ENABLE_AUTOMATION_BEAT', 'true')), 'message': 'Beat 开关'},
+        {'key': 'image_remote_health', 'ok': (not image_health.get('enabled')) or bool(image_health.get('ok')), 'message': image_health.get('message') or '图片远端接口未检测'},
         {'key': 'hotword_mode', 'ok': hotword_mode in {'remote', 'skeleton'}, 'message': f'热点抓取模式：{hotword_mode}'},
         {'key': 'hotword_api', 'ok': True if hotword_mode != 'remote' else bool((hotword_settings.get('hotword_api_url') or '').strip()), 'message': '热点 API URL 已配置' if hotword_mode == 'remote' else '热点接口当前未启用 remote'},
         {'key': 'hotword_health', 'ok': True if hotword_health is None else bool(hotword_health.get('ok')), 'message': hotword_health.get('message') if hotword_health else '热点远端接口未启用'},
@@ -2723,6 +2725,85 @@ def _build_recent_failed_jobs_payload(limit=10):
     }
 
 
+def _build_service_matrix_payload():
+    inline_jobs = _env_flag('INLINE_AUTOMATION_JOBS', False)
+    beat_enabled = _coerce_bool(os.environ.get('ENABLE_AUTOMATION_BEAT', 'true'))
+    last_worker_ping = _latest_worker_ping_snapshot()
+    worker_ok = inline_jobs or last_worker_ping.get('status') == 'success'
+    worker_message = (
+        '本地 inline 模式已启用，Worker 可选'
+        if inline_jobs else
+        (last_worker_ping.get('message') or ('最近一次 Worker 联通检查成功' if worker_ok else '尚未检测到可用 Worker'))
+    )
+
+    hotword_settings = _hotword_runtime_settings()
+    hotword_mode = _resolved_hotword_mode(hotword_settings)
+    hotword_health = _hotword_healthcheck(timeout_seconds=2) if hotword_mode == 'remote' else None
+
+    creator_sync_settings = _creator_sync_runtime_settings()
+    creator_sync_mode = _resolved_creator_sync_mode(creator_sync_settings)
+    creator_sync_health = _creator_sync_healthcheck(timeout_seconds=2) if creator_sync_mode == 'remote' else None
+
+    image_health = _image_provider_healthcheck(timeout_seconds=5)
+
+    return [
+        {
+            'key': 'web',
+            'label': 'Web',
+            'ok': True,
+            'status': 'ready',
+            'message': '当前服务已启动并提供页面与 API',
+        },
+        {
+            'key': 'worker',
+            'label': 'Worker',
+            'ok': worker_ok,
+            'status': 'ready' if worker_ok else 'missing',
+            'message': worker_message,
+        },
+        {
+            'key': 'beat',
+            'label': 'Beat',
+            'ok': (not beat_enabled) or inline_jobs or bool((os.environ.get('CELERY_BROKER_URL') or '').strip()),
+            'status': 'ready' if ((not beat_enabled) or inline_jobs or bool((os.environ.get('CELERY_BROKER_URL') or '').strip())) else 'missing',
+            'message': (
+                '当前未启用 Beat'
+                if not beat_enabled else
+                ('本地 inline 模式下无需 Beat' if inline_jobs else '需单独部署 beat 服务来执行定时调度')
+            ),
+        },
+        {
+            'key': 'crawler',
+            'label': 'Crawler',
+            'ok': creator_sync_mode == 'disabled' or bool(creator_sync_health and creator_sync_health.get('ok')),
+            'status': 'ready' if (creator_sync_mode == 'disabled' or bool(creator_sync_health and creator_sync_health.get('ok'))) else 'missing',
+            'message': (
+                '账号同步未启用'
+                if creator_sync_mode == 'disabled' else
+                (creator_sync_health.get('message') if creator_sync_health else '账号同步 crawler 服务未检测')
+            ),
+        },
+        {
+            'key': 'image_remote',
+            'label': '图片远端接口',
+            'ok': provider_ok if (provider_ok := (not image_health.get('enabled') or bool(image_health.get('ok')))) else False,
+            'status': 'ready' if provider_ok else 'missing',
+            'message': image_health.get('message') or '图片远端接口未检测',
+        },
+        {
+            'key': 'hotword_remote',
+            'label': '热点远端源',
+            'ok': hotword_mode != 'remote' or bool(hotword_health and hotword_health.get('ok')),
+            'status': 'ready' if (hotword_mode != 'remote' or bool(hotword_health and hotword_health.get('ok'))) else 'missing',
+            'message': (
+                '当前使用 skeleton 模式'
+                if hotword_mode != 'remote' else
+                (hotword_health.get('message') if hotword_health else '热点远端接口未检测')
+            ),
+        },
+    ]
+
+
 def _run_worker_ping_check(timeout_seconds=3):
     from time import monotonic
     from celery.result import AsyncResult
@@ -3860,6 +3941,215 @@ def _build_asset_provider_request_preview(provider, model_name, prompt_text, ima
         'style': safe_style,
         'size': safe_size,
     }
+
+
+def _resolve_image_provider_capabilities(payload=None):
+    runtime_config = _automation_runtime_config()
+    merged = dict(runtime_config)
+    payload = payload or {}
+    override_keys = [
+        'image_provider',
+        'image_api_base',
+        'image_api_url',
+        'image_model',
+        'image_size',
+        'image_timeout_seconds',
+        'image_style_preset',
+        'image_default_style_type',
+        'image_optimize_prompt_mode',
+        'image_prompt_suffix',
+    ]
+    for key in override_keys:
+        if payload.get(key) not in [None, '']:
+            merged[key] = payload.get(key)
+
+    provider = (os.environ.get('ASSET_IMAGE_PROVIDER') or str(merged.get('image_provider') or 'svg_fallback')).strip() or 'svg_fallback'
+    api_base = (os.environ.get('ASSET_IMAGE_API_BASE') or str(merged.get('image_api_base') or '')).strip()
+    if provider == 'volcengine_ark' and not api_base:
+        api_base = 'https://ark.cn-beijing.volces.com/api/v3'
+    if provider == 'volcengine_las' and not api_base:
+        api_base = 'https://operator.las.cn-beijing.volces.com/api/v1'
+    api_url = (os.environ.get('ASSET_IMAGE_API_URL') or str(merged.get('image_api_url') or '')).strip()
+    if not api_url and api_base:
+        api_url = api_base.rstrip('/') + '/images/generations'
+    api_key = (
+        os.environ.get('ASSET_IMAGE_API_KEY')
+        or os.environ.get('ARK_API_KEY')
+        or os.environ.get('LAS_API_KEY')
+        or ''
+    ).strip()
+    model_name = (os.environ.get('ASSET_IMAGE_MODEL') or str(merged.get('image_model') or '')).strip()
+    if not model_name and provider in {'volcengine_ark', 'volcengine_las'}:
+        model_name = 'doubao-seedream-5-0-lite-260128'
+    image_size = (os.environ.get('ASSET_IMAGE_SIZE') or str(merged.get('image_size') or '1024x1536')).strip()
+    timeout_seconds = min(max(_safe_int(merged.get('image_timeout_seconds'), 90), 10), 300)
+    configured = bool(api_url and api_key)
+    return {
+        'image_provider_configured': configured,
+        'image_provider_name': provider,
+        'image_provider_api_base': api_base,
+        'image_provider_api_url': api_url,
+        'image_provider_model': model_name,
+        'image_provider_size': image_size,
+        'image_timeout_seconds': timeout_seconds,
+        'image_style_preset': str(merged.get('image_style_preset') or '小红书图文'),
+        'image_default_style_type': str(merged.get('image_default_style_type') or 'medical_science'),
+        'image_optimize_prompt_mode': str(merged.get('image_optimize_prompt_mode') or 'standard'),
+        'image_prompt_suffix': str(merged.get('image_prompt_suffix') or ''),
+        'api_key_configured': bool(api_key),
+        'fallback_mode': not configured or provider == 'svg_fallback',
+        'provider_options': _image_provider_options(),
+        'model_options': _image_model_options(provider),
+        'style_type_options': _asset_style_type_options(),
+    }
+
+
+def _normalize_asset_provider_results(payload, provider='svg_fallback', image_prompt='', title_hint='测试图片接口'):
+    candidates = []
+    if isinstance(payload, dict):
+        for key in ['data', 'images', 'output', 'results']:
+            value = payload.get(key)
+            if isinstance(value, list):
+                candidates = value
+                break
+    elif isinstance(payload, list):
+        candidates = payload
+
+    normalized = []
+    for index, item in enumerate(candidates, start=1):
+        if isinstance(item, str):
+            normalized.append({
+                'index': index,
+                'title': title_hint,
+                'image_prompt': image_prompt,
+                'preview_url': item,
+                'provider': provider,
+                'format': 'url',
+            })
+            continue
+        if not isinstance(item, dict):
+            continue
+        if item.get('b64_json'):
+            normalized.append({
+                'index': index,
+                'title': title_hint,
+                'image_prompt': image_prompt,
+                'preview_url': f"data:image/png;base64,{item.get('b64_json')}",
+                'provider': provider,
+                'format': 'png',
+            })
+        elif item.get('image_base64'):
+            normalized.append({
+                'index': index,
+                'title': title_hint,
+                'image_prompt': image_prompt,
+                'preview_url': f"data:image/png;base64,{item.get('image_base64')}",
+                'provider': provider,
+                'format': 'png',
+            })
+        elif item.get('url') or item.get('image_url'):
+            normalized.append({
+                'index': index,
+                'title': title_hint,
+                'image_prompt': image_prompt,
+                'preview_url': item.get('url') or item.get('image_url'),
+                'provider': provider,
+                'format': 'url',
+            })
+    return normalized
+
+
+def _image_provider_healthcheck(payload=None, timeout_seconds=15):
+    capabilities = _resolve_image_provider_capabilities(payload)
+    provider = (capabilities.get('image_provider_name') or 'svg_fallback').strip() or 'svg_fallback'
+    if provider == 'svg_fallback':
+        return {
+            'enabled': False,
+            'ok': False,
+            'message': '当前图片模式为 SVG 兜底，未启用远端图片接口',
+            'provider': provider,
+            'request_preview': _build_asset_provider_request_preview(provider, '', '', capabilities.get('image_provider_size') or '1024x1536'),
+            'response': None,
+            'normalized_preview': [],
+        }
+
+    api_url = (capabilities.get('image_provider_api_url') or '').strip()
+    api_key = (
+        os.environ.get('ASSET_IMAGE_API_KEY')
+        or os.environ.get('ARK_API_KEY')
+        or os.environ.get('LAS_API_KEY')
+        or ''
+    ).strip()
+    if not api_url:
+        return {
+            'enabled': True,
+            'ok': False,
+            'message': '未配置图片 API URL',
+            'provider': provider,
+            'request_preview': {},
+            'response': None,
+            'normalized_preview': [],
+        }
+    if not api_key:
+        return {
+            'enabled': True,
+            'ok': False,
+            'message': '未配置图片 API Key',
+            'provider': provider,
+            'request_preview': {},
+            'response': None,
+            'normalized_preview': [],
+        }
+
+    prompt_text = (
+        (payload or {}).get('prompt_text')
+        or '生成一张适合小红书医疗科普封面的测试图片，画面简洁，标题区留白。'
+    ).strip()
+    request_preview = _build_asset_provider_request_preview(
+        provider,
+        capabilities.get('image_provider_model'),
+        prompt_text,
+        capabilities.get('image_provider_size'),
+        capabilities.get('image_default_style_type') or 'medical_science',
+        image_count=1,
+    )
+    try:
+        response = requests.post(
+            api_url,
+            json=request_preview,
+            headers={
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json',
+            },
+            timeout=min(max(_safe_int(timeout_seconds, 15), 5), 60),
+        )
+        response.raise_for_status()
+        payload_json = response.json()
+        response_preview = payload_json if not isinstance(payload_json, dict) else dict(payload_json)
+        if isinstance(response_preview, dict):
+            for key in ['data', 'images', 'output', 'results']:
+                if isinstance(response_preview.get(key), list):
+                    response_preview[key] = response_preview[key][:3]
+        normalized_preview = _normalize_asset_provider_results(payload_json, provider=provider, image_prompt=prompt_text)[:3]
+        return {
+            'enabled': True,
+            'ok': True,
+            'message': f'图片接口可用，provider={provider}',
+            'provider': provider,
+            'request_preview': request_preview,
+            'response': response_preview,
+            'normalized_preview': normalized_preview,
+        }
+    except Exception as exc:
+        return {
+            'enabled': True,
+            'ok': False,
+            'message': f'图片接口不可用：{exc}',
+            'provider': provider,
+            'request_preview': request_preview,
+            'response': None,
+            'normalized_preview': [],
+        }
 
 
 def _build_dashboard_stats(activity_id, args):
@@ -6116,6 +6406,7 @@ register_automation_dashboard_routes(app, {
     'clear_demo_operational_data': _clear_demo_operational_data,
     'build_deployment_helper_payload': _build_deployment_helper_payload,
     'build_recent_failed_jobs_payload': _build_recent_failed_jobs_payload,
+    'build_service_matrix_payload': _build_service_matrix_payload,
     'hotword_runtime_settings': _hotword_runtime_settings,
     'creator_sync_runtime_settings': _creator_sync_runtime_settings,
     'image_provider_capabilities': _image_provider_capabilities,
@@ -6129,6 +6420,7 @@ register_automation_dashboard_routes(app, {
     'build_hotword_remote_preview': _build_hotword_remote_preview,
     'resolved_hotword_mode': _resolved_hotword_mode,
     'hotword_healthcheck': _hotword_healthcheck,
+    'image_provider_healthcheck': _image_provider_healthcheck,
     'build_creator_sync_remote_preview': _build_creator_sync_remote_preview,
     'resolved_creator_sync_mode': _resolved_creator_sync_mode,
     'tracked_creator_sync_targets': _tracked_creator_sync_targets,
@@ -7729,6 +8021,21 @@ def trigger_creator_account_sync_ping():
     data = request.json or {}
     timeout_seconds = min(max(_safe_int(data.get('wait_seconds'), 3), 1), 15)
     result = _creator_sync_healthcheck(timeout_seconds=timeout_seconds)
+    return jsonify({
+        'success': bool(result.get('ok')),
+        **result,
+    })
+
+
+@app.route('/api/jobs/assets/ping', methods=['POST'])
+def trigger_asset_provider_ping():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    data = request.json or {}
+    timeout_seconds = min(max(_safe_int(data.get('wait_seconds'), 10), 1), 60)
+    result = _image_provider_healthcheck(payload=data, timeout_seconds=timeout_seconds)
     return jsonify({
         'success': bool(result.get('ok')),
         **result,

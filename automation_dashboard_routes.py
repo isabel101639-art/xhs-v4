@@ -26,9 +26,11 @@ def register_automation_dashboard_routes(app, helpers):
     clear_demo_operational_data = helpers['clear_demo_operational_data']
     build_deployment_helper_payload = helpers['build_deployment_helper_payload']
     build_recent_failed_jobs_payload = helpers['build_recent_failed_jobs_payload']
+    build_service_matrix_payload = helpers['build_service_matrix_payload']
     hotword_runtime_settings = helpers['hotword_runtime_settings']
     creator_sync_runtime_settings = helpers['creator_sync_runtime_settings']
     image_provider_capabilities = helpers['image_provider_capabilities']
+    image_provider_healthcheck = helpers['image_provider_healthcheck']
     image_provider_request_preview = helpers['build_asset_provider_request_preview']
     asset_prompt_from_context = helpers['build_asset_generation_prompt_from_context']
     asset_style_meta = helpers['asset_style_meta']
@@ -136,6 +138,7 @@ def register_automation_dashboard_routes(app, helpers):
         hotword_health = helpers['hotword_healthcheck'](timeout_seconds=2)
         creator_sync_settings = creator_sync_runtime_settings()
         creator_sync_health = helpers['creator_sync_healthcheck'](timeout_seconds=2)
+        image_health = image_provider_healthcheck(timeout_seconds=5)
         last_worker_ping = helpers['latest_worker_ping_snapshot']()
         worker_health_status = 'unknown'
         worker_health_message = '尚未执行 Worker 联通检查'
@@ -197,6 +200,8 @@ def register_automation_dashboard_routes(app, helpers):
             },
             'hotword_health': hotword_health,
             'creator_sync_health': creator_sync_health,
+            'image_health': image_health,
+            'service_matrix': build_service_matrix_payload(),
             'capabilities': image_provider_capabilities(),
             'counts': {
                 'activities': Activity.query.count(),

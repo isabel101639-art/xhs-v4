@@ -88,6 +88,18 @@
             padding: 16px;
         }
 
+        .status-alert {
+            border-radius: 18px;
+            border: 1px solid rgba(239, 78, 69, 0.18);
+            background: linear-gradient(180deg, #fff5f1 0%, #fffdfb 100%);
+            padding: 16px 18px;
+        }
+
+        .status-alert-ok {
+            border-color: rgba(28, 124, 60, 0.18);
+            background: linear-gradient(180deg, #f0fbf4 0%, #fffdfb 100%);
+        }
+
         .json-box {
             white-space: pre-wrap;
             word-break: break-word;
@@ -182,6 +194,11 @@
                 </div>
                 <div class="subtle">建议流程：导入热点 → 积累语料 → 生成80话题 → 发布到活动</div>
             </div>
+        </div>
+
+        <div id="systemAlertWrap" class="status-alert mb-4">
+            <strong>系统提示</strong>
+            <div class="subtle mt-2">刷新运行诊断后，这里会提示当前最需要补齐的服务或配置。</div>
         </div>
 
         <div class="row g-3 mb-4" id="metricWrap">
@@ -431,12 +448,14 @@
                 </div>
                 <div class="col-12 d-flex gap-2 flex-wrap">
                     <button class="btn btn-accent" onclick="saveAutomationConfig()">保存运维配置</button>
+                    <button class="btn btn-outline-primary" onclick="pingImageProvider()">测试图片接口</button>
                     <button class="btn btn-outline-primary" onclick="loadAutomationConfig()">刷新运维配置</button>
                     <button class="btn btn-outline-secondary" onclick="loadAutomationConfigPreview()">刷新请求预览</button>
                     <div id="automationConfigNote" class="subtle d-flex align-items-center"></div>
                 </div>
             </div>
             <div id="automationConfigPreview" class="detail-card mt-3 text-muted">加载后展示热点任务、账号同步任务与图片任务的请求预览。</div>
+            <div id="imagePingPreview" class="detail-card mt-3 text-muted">测试图片接口后，这里会显示请求预览和返回结果摘要。</div>
         </div>
 
         <div class="row g-4">
@@ -625,7 +644,7 @@
                 <button class="btn btn-outline-primary" onclick="loadDeploymentHelper()">刷新部署助手</button>
                 <div id="deploymentHelperMsg" class="subtle d-flex align-items-center"></div>
             </div>
-            <div id="deploymentHelperWrap" class="mini-note">点击“刷新部署助手”查看 Web / Worker / Beat 的启动命令、缺失环境变量和建议部署顺序。</div>
+            <div id="deploymentHelperWrap" class="mini-note">点击“刷新部署助手”查看 Web / Worker / Beat / Crawler 的启动命令、缺失环境变量和建议部署顺序。</div>
         </div>
 
         <div class="panel p-4 mb-4">
@@ -1268,6 +1287,21 @@
             };
         }
 
+        function collectImageRuntimeConfigPayload() {
+            return {
+                image_provider: document.getElementById('configImageProvider').value,
+                image_api_base: document.getElementById('configImageApiBase').value.trim(),
+                image_api_url: document.getElementById('configImageApiUrl').value.trim(),
+                image_model: document.getElementById('configImageModel').value.trim(),
+                image_size: document.getElementById('configImageSize').value.trim(),
+                image_timeout_seconds: parseInt(document.getElementById('configImageTimeout').value || '90', 10),
+                image_style_preset: document.getElementById('configImageStylePreset').value.trim(),
+                image_default_style_type: document.getElementById('configImageDefaultStyleType').value,
+                image_optimize_prompt_mode: document.getElementById('configImageOptimizePromptMode').value,
+                image_prompt_suffix: document.getElementById('configImagePromptSuffix').value.trim(),
+            };
+        }
+
         function escapeHtml(text) {
             return (text || '').replace(/[&<>"']/g, (char) => ({
                 '&': '&amp;',
@@ -1335,6 +1369,47 @@
                 creator_account_sync: '账号同步'
             };
             return map[taskType] || taskType || '-';
+        }
+
+        function renderSystemAlert(serviceMatrix, runtime) {
+            const wrap = document.getElementById('systemAlertWrap');
+            if (!wrap) return;
+            const missing = (serviceMatrix || []).filter((item) => !item.ok);
+            if (!missing.length) {
+                wrap.className = 'status-alert status-alert-ok mb-4';
+                wrap.innerHTML = `
+                    <strong>系统状态良好</strong>
+                    <div class="subtle mt-2">当前核心链路未发现缺失项，可以继续验证热点抓取、候选话题生成和账号同步。</div>
+                `;
+                return;
+            }
+
+            const critical = missing.filter((item) => ['worker', 'beat', 'crawler', 'hotword_remote'].includes(item.key));
+            const focus = critical.length ? critical : missing;
+            const actionButtons = [];
+            const focusKeys = new Set(focus.map((item) => item.key));
+            if (focusKeys.has('worker')) {
+                actionButtons.push(`<button class="btn btn-sm btn-outline-primary" onclick="runWorkerPing()">检测 Worker</button>`);
+            }
+            if (focusKeys.has('hotword_remote')) {
+                actionButtons.push(`<button class="btn btn-sm btn-outline-primary" onclick="pingHotwordSync()">测试热点接口</button>`);
+            }
+            if (focusKeys.has('crawler')) {
+                actionButtons.push(`<button class="btn btn-sm btn-outline-primary" onclick="pingCreatorAccountSync()">测试 crawler 接口</button>`);
+            }
+            if (focusKeys.has('image_remote')) {
+                actionButtons.push(`<button class="btn btn-sm btn-outline-primary" onclick="pingImageProvider()">测试图片接口</button>`);
+            }
+            if (focusKeys.has('beat')) {
+                actionButtons.push(`<button class="btn btn-sm btn-outline-dark" onclick="loadDeploymentHelper()">打开部署助手</button>`);
+            }
+            wrap.className = 'status-alert mb-4';
+            wrap.innerHTML = `
+                <strong>当前最需要补齐的项</strong>
+                <div class="subtle mt-2">${focus.map((item) => `${item.label}：${item.message || '未就绪'}`).join(' ｜ ')}</div>
+                <div class="subtle mt-2">自动化模式：${runtime?.inline_automation_jobs ? 'inline 本地模式' : 'celery 异步模式'}${runtime?.inline_automation_jobs ? '，本地联调时 Worker / Beat 可暂不单独部署。' : '，生产环境建议补齐 Worker / Beat / 远端接口。'}</div>
+                ${actionButtons.length ? `<div class="d-flex gap-2 flex-wrap mt-3">${actionButtons.join('')}</div>` : ''}
+            `;
         }
 
         function renderStyleTypeOptions(targetId, items, selectedValue) {
@@ -1548,16 +1623,7 @@
             const payload = {
                 ...collectHotwordRuntimeConfigPayload(),
                 ...collectCreatorSyncRuntimeConfigPayload(),
-                image_provider: document.getElementById('configImageProvider').value,
-                image_api_base: document.getElementById('configImageApiBase').value.trim(),
-                image_api_url: document.getElementById('configImageApiUrl').value.trim(),
-                image_model: document.getElementById('configImageModel').value.trim(),
-                image_size: document.getElementById('configImageSize').value.trim(),
-                image_timeout_seconds: parseInt(document.getElementById('configImageTimeout').value || '90', 10),
-                image_style_preset: document.getElementById('configImageStylePreset').value.trim(),
-                image_default_style_type: document.getElementById('configImageDefaultStyleType').value,
-                image_optimize_prompt_mode: document.getElementById('configImageOptimizePromptMode').value,
-                image_prompt_suffix: document.getElementById('configImagePromptSuffix').value.trim()
+                ...collectImageRuntimeConfigPayload()
             };
             const res = await fetch('/api/admin/automation-config', {
                 method: 'POST',
@@ -1717,12 +1783,15 @@
             const worker = data.worker || {};
             const hotwordHealth = data.hotword_health || {};
             const creatorSyncHealth = data.creator_sync_health || {};
+            const imageHealth = data.image_health || {};
+            const serviceMatrix = data.service_matrix || [];
             const lastPing = worker.last_ping || {};
             const capabilities = data.capabilities || {};
             const schedules = data.schedules || [];
             const workerSummary = worker.health_status === 'healthy'
                 ? '最近成功'
                 : (worker.health_status === 'degraded' ? '最近失败' : '未检查');
+            renderSystemAlert(serviceMatrix, runtime);
             document.getElementById('diagnosticMsg').textContent = `数据库：${runtime.database_backend || '-'} ｜ Worker：${workerSummary} ｜ Beat：${runtime.beat_enabled ? '启用' : '未启用'} ｜ 图片提供方：${capabilities.image_provider_name || '-'}`;
             wrap.innerHTML = `
                 <div class="row g-3">
@@ -1789,6 +1858,29 @@
                         <div class="subtle">Health URL：${escapeHtml(creatorSyncHealth.health_url || '-')}</div>
                         <div class="subtle">HTTP：${creatorSyncHealth.status_code || '-'}</div>
                         <div class="subtle">说明：${escapeHtml(creatorSyncHealth.message || '-')}</div>
+                    </div>
+                    <div class="col-lg-3">
+                        <strong>图片接口健康</strong>
+                        <div class="subtle mt-2">启用：${imageHealth.enabled ? '是' : '否'}</div>
+                        <div class="subtle">状态：${imageHealth.ok ? '可用' : '未通过'}</div>
+                        <div class="subtle">Provider：${escapeHtml(imageHealth.provider || '-')}</div>
+                        <div class="subtle">说明：${escapeHtml(imageHealth.message || '-')}</div>
+                    </div>
+                    <div class="col-12">
+                        <strong>服务矩阵</strong>
+                        <div class="row g-2 mt-2">
+                            ${serviceMatrix.map((item) => `
+                                <div class="col-md-4 col-lg-2">
+                                    <div class="detail-card h-100">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <strong>${escapeHtml(item.label || item.key || '-')}</strong>
+                                            <span class="badge ${item.ok ? 'bg-success' : 'bg-danger'}">${item.ok ? '可用' : '缺失'}</span>
+                                        </div>
+                                        <div class="subtle">${escapeHtml(item.message || '-')}</div>
+                                    </div>
+                                </div>
+                            `).join('') || '<div class="text-muted">暂无服务矩阵</div>'}
+                        </div>
                     </div>
                     <div class="col-12">
                         <strong>最近调度</strong>
@@ -2754,6 +2846,43 @@
                 data.status_code ? `http=${data.status_code}` : '',
             ].filter(Boolean).join(' ｜ ');
             document.getElementById('creatorSyncJobMsg').textContent = `${data.message || '已处理'}${meta ? ` ｜ ${meta}` : ''}`;
+            loadDiagnostics();
+        }
+
+        async function pingImageProvider() {
+            const payload = {
+                ...collectImageRuntimeConfigPayload(),
+                wait_seconds: 15,
+                prompt_text: '生成一张适合小红书医疗科普封面的测试图片，画面简洁，标题区留白。',
+            };
+            const res = await fetch('/api/jobs/assets/ping', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            document.getElementById('automationConfigNote').textContent = data.message || '已处理';
+            const wrap = document.getElementById('imagePingPreview');
+            if (wrap) {
+                wrap.innerHTML = `
+                    <div class="row g-3">
+                        <div class="col-lg-4">
+                            <strong>接口状态</strong>
+                            <div class="subtle mt-2">启用：${data.enabled ? '是' : '否'}</div>
+                            <div class="subtle">Provider：${escapeHtml(data.provider || '-')}</div>
+                            <div class="subtle">说明：${escapeHtml(data.message || '-')}</div>
+                        </div>
+                        <div class="col-lg-4">
+                            <strong>请求预览</strong>
+                            <div class="json-box mt-2">${escapeHtml(JSON.stringify(data.request_preview || {}, null, 2))}</div>
+                        </div>
+                        <div class="col-lg-4">
+                            <strong>返回样例</strong>
+                            <div class="json-box mt-2">${escapeHtml(JSON.stringify((data.normalized_preview && data.normalized_preview.length ? data.normalized_preview : data.response) || {}, null, 2))}</div>
+                        </div>
+                    </div>
+                `;
+            }
             loadDiagnostics();
         }
 
