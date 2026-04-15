@@ -29,6 +29,11 @@ def register_automation_dashboard_routes(app, helpers):
     build_deployment_blockers_payload = helpers['build_deployment_blockers_payload']
     build_launch_milestones_payload = helpers['build_launch_milestones_payload']
     build_integration_checklist_payload = helpers['build_integration_checklist_payload']
+    build_integration_ping_history_payload = helpers['build_integration_ping_history_payload']
+    build_first_run_playbooks_payload = helpers['build_first_run_playbooks_payload']
+    build_integration_contract_payload = helpers['build_integration_contract_payload']
+    build_integration_acceptance_payload = helpers['build_integration_acceptance_payload']
+    build_trial_readiness_payload = helpers['build_trial_readiness_payload']
     build_capacity_readiness_payload = helpers['build_capacity_readiness_payload']
     build_recent_failed_jobs_payload = helpers['build_recent_failed_jobs_payload']
     build_service_matrix_payload = helpers['build_service_matrix_payload']
@@ -281,6 +286,42 @@ def register_automation_dashboard_routes(app, helpers):
             'success': True,
             'items': build_integration_checklist_payload(),
         })
+
+    @app.route('/api/admin/integration-pings')
+    def integration_pings():
+        guard = admin_json_guard()
+        if guard:
+            return guard
+        limit = request.args.get('limit')
+        return jsonify(build_integration_ping_history_payload(limit=limit))
+
+    @app.route('/api/admin/first-run-playbooks')
+    def first_run_playbooks():
+        guard = admin_json_guard()
+        if guard:
+            return guard
+        return jsonify(build_first_run_playbooks_payload())
+
+    @app.route('/api/admin/integration-contracts')
+    def integration_contracts():
+        guard = admin_json_guard()
+        if guard:
+            return guard
+        return jsonify(build_integration_contract_payload())
+
+    @app.route('/api/admin/integration-acceptance')
+    def integration_acceptance():
+        guard = admin_json_guard()
+        if guard:
+            return guard
+        return jsonify(build_integration_acceptance_payload())
+
+    @app.route('/api/admin/trial-readiness')
+    def trial_readiness():
+        guard = admin_json_guard()
+        if guard:
+            return guard
+        return jsonify(build_trial_readiness_payload())
 
     @app.route('/api/admin/failed-jobs')
     def failed_jobs():

@@ -875,6 +875,799 @@ def _deserialize_operation_detail(detail):
         return {'raw': detail}
 
 
+INTEGRATION_PING_META = {
+    'hotword': {
+        'label': '热点接口',
+        'success_action': 'hotword_ping_check',
+        'failed_action': 'hotword_ping_check_failed',
+    },
+    'creator_sync': {
+        'label': '账号同步 crawler',
+        'success_action': 'creator_sync_ping_check',
+        'failed_action': 'creator_sync_ping_check_failed',
+    },
+    'image_provider': {
+        'label': '图片接口',
+        'success_action': 'image_provider_ping_check',
+        'failed_action': 'image_provider_ping_check_failed',
+    },
+}
+
+
+def _compact_preview_payload(value, max_items=3, max_chars=600):
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        items = list(value.items())[:max_items]
+        return {key: _compact_preview_payload(item, max_items=max_items, max_chars=max_chars) for key, item in items}
+    if isinstance(value, list):
+        return [_compact_preview_payload(item, max_items=max_items, max_chars=max_chars) for item in value[:max_items]]
+    if isinstance(value, str):
+        return value[:max_chars]
+    return value
+
+
+def _log_integration_ping_result(integration_key, result, request_payload=None):
+    meta = INTEGRATION_PING_META.get(integration_key, {})
+    ok = bool(result.get('ok'))
+    action = meta.get('success_action') if ok else meta.get('failed_action')
+    if not action:
+        return
+    response_preview = result.get('normalized_preview')
+    if not response_preview:
+        response_preview = result.get('response')
+    detail = {
+        'integration_key': integration_key,
+        'label': meta.get('label') or integration_key,
+        'status': 'success' if ok else 'failed',
+        'checked_at': _format_datetime(datetime.now()),
+        'ok': ok,
+        'message': result.get('message') or '',
+        'status_code': result.get('status_code') or 0,
+        'health_url': result.get('health_url') or '',
+        'provider': result.get('provider') or '',
+        'request_preview': _compact_preview_payload(result.get('request_preview') or request_payload or {}),
+        'response_preview': _compact_preview_payload(response_preview),
+    }
+    _log_operation(
+        action,
+        'integration_ping',
+        message=f'{meta.get("label") or integration_key}联调{"成功" if ok else "失败"}',
+        detail=detail,
+    )
+
+
+def _build_integration_ping_history_payload(limit=12):
+    safe_limit = min(max(_safe_int(limit, 12), 1), 50)
+    action_names = []
+    for meta in INTEGRATION_PING_META.values():
+        action_names.extend([meta['success_action'], meta['failed_action']])
+    logs = OperationLog.query.filter(
+        OperationLog.action.in_(action_names)
+    ).order_by(OperationLog.created_at.desc(), OperationLog.id.desc()).limit(safe_limit).all()
+
+    items = []
+    latest_by_key = {}
+    for log in logs:
+        detail = _deserialize_operation_detail(log.detail)
+        integration_key = detail.get('integration_key') or ''
+        status = (detail.get('status') or ('success' if log.action.endswith('_check') else 'failed')).strip() or 'failed'
+        item = {
+            'id': log.id,
+            'integration_key': integration_key,
+            'label': detail.get('label') or integration_key or log.target_type,
+            'status': status,
+            'status_label': '成功' if status == 'success' else '失败',
+            'message': detail.get('message') or log.message or '',
+            'checked_at': detail.get('checked_at') or _format_datetime(log.created_at),
+            'created_at': _format_datetime(log.created_at),
+            'actor': log.actor or 'system',
+            'status_code': detail.get('status_code') or 0,
+            'health_url': detail.get('health_url') or '',
+            'provider': detail.get('provider') or '',
+            'request_preview': detail.get('request_preview') or {},
+            'response_preview': detail.get('response_preview'),
+        }
+        items.append(item)
+        if integration_key and integration_key not in latest_by_key:
+            latest_by_key[integration_key] = {
+                'integration_key': integration_key,
+                'label': item['label'],
+                'status': item['status'],
+                'status_label': item['status_label'],
+                'message': item['message'],
+                'checked_at': item['checked_at'],
+            }
+
+    summary = {
+        'count': len(items),
+        'latest_by_key': [latest_by_key[key] for key in ['hotword', 'creator_sync', 'image_provider'] if key in latest_by_key],
+        'success_count': len([item for item in items if item['status'] == 'success']),
+        'failed_count': len([item for item in items if item['status'] != 'success']),
+    }
+    return {
+        'success': True,
+        'summary': summary,
+        'items': items,
+    }
+
+
+def _build_first_run_playbooks_payload():
+    hotword_settings = _hotword_runtime_settings()
+    creator_sync_settings = _creator_sync_runtime_settings()
+    hotword_mode = _resolved_hotword_mode(hotword_settings)
+    creator_sync_mode = _resolved_creator_sync_mode(creator_sync_settings)
+    image_capabilities = _image_provider_capabilities()
+    integration_history = _build_integration_ping_history_payload(limit=30)
+    latest_ping_map = {
+        item.get('integration_key'): item
+        for item in (integration_history.get('summary', {}).get('latest_by_key') or [])
+    }
+
+    def step_item(label, status, hint, evidence=''):
+        return {
+            'label': label,
+            'status': status,
+            'hint': hint,
+            'evidence': evidence,
+        }
+
+    def latest_task_status(task):
+        if not task:
+            return ''
+        return (task.status or '').strip() or ''
+
+    hotword_task = DataSourceTask.query.filter_by(task_type='hotword_sync').order_by(
+        DataSourceTask.finished_at.desc(), DataSourceTask.updated_at.desc(), DataSourceTask.created_at.desc(), DataSourceTask.id.desc()
+    ).first()
+    creator_sync_task = DataSourceTask.query.filter_by(task_type='creator_account_sync').order_by(
+        DataSourceTask.finished_at.desc(), DataSourceTask.updated_at.desc(), DataSourceTask.created_at.desc(), DataSourceTask.id.desc()
+    ).first()
+    asset_task = AssetGenerationTask.query.order_by(
+        AssetGenerationTask.finished_at.desc(), AssetGenerationTask.updated_at.desc(), AssetGenerationTask.created_at.desc(), AssetGenerationTask.id.desc()
+    ).first()
+
+    hotword_ping = latest_ping_map.get('hotword', {})
+    creator_ping = latest_ping_map.get('creator_sync', {})
+    image_ping = latest_ping_map.get('image_provider', {})
+
+    hotword_steps = [
+        step_item(
+            '切到 remote 并填写热点接口 URL',
+            'ready' if hotword_mode == 'remote' and bool((hotword_settings.get('hotword_api_url') or '').strip()) else 'blocked',
+            '先在自动化中心把热点抓取模式切到 remote，并填好第三方热点接口地址。',
+            f"当前模式：{hotword_mode} ｜ URL：{hotword_settings.get('hotword_api_url') or '-'}",
+        ),
+        step_item(
+            '补鉴权头、结果路径和样例 JSON',
+            'ready' if hotword_ping.get('status') == 'success' or bool((hotword_settings.get('hotword_api_headers_json') or '').strip()) or bool((hotword_settings.get('hotword_result_path') or '').strip()) else 'pending',
+            '如果第三方接口需要会员鉴权或返回层级较深，这一步要一起补齐。',
+            f"Headers：{'已配' if (hotword_settings.get('hotword_api_headers_json') or '').strip() else '未配'} ｜ ResultPath：{hotword_settings.get('hotword_result_path') or '-'}",
+        ),
+        step_item(
+            '点击“测试热点接口”直到成功',
+            'ready' if hotword_ping.get('status') == 'success' else ('blocked' if hotword_ping else 'pending'),
+            '通过标准：接口状态成功，且能看到归一化样例。',
+            hotword_ping.get('message') or '还没有热点接口联调记录',
+        ),
+        step_item(
+            '执行首轮热点抓取',
+            'ready' if latest_task_status(hotword_task) == 'success' and (hotword_task.item_count or 0) > 0 else ('blocked' if hotword_task else 'pending'),
+            '点击“异步抓取热点”，让系统真正落一批 TrendNote。',
+            f"最近任务：{latest_task_status(hotword_task) or '无'} ｜ 条数：{hotword_task.item_count if hotword_task else 0}",
+        ),
+        step_item(
+            '验证候选话题自动生成',
+            'ready' if TopicIdea.query.count() > 0 else 'pending',
+            '如果开启了“抓完热点后自动生题”，这里应该能看到候选话题增长。',
+            f"当前候选话题数：{TopicIdea.query.count()}",
+        ),
+    ]
+
+    creator_steps = [
+        step_item(
+            '切到 remote 并填写 crawler API URL',
+            'ready' if creator_sync_mode == 'remote' and bool((creator_sync_settings.get('creator_sync_api_url') or '').strip()) else 'blocked',
+            '先把账号同步模式切到 remote，并填好 crawler 或第三方会员接口地址。',
+            f"当前模式：{creator_sync_mode} ｜ URL：{creator_sync_settings.get('creator_sync_api_url') or '-'}",
+        ),
+        step_item(
+            '补登录态 / 会员凭据',
+            'ready' if bool((os.environ.get('PLAYWRIGHT_STORAGE_STATE_PATH') or '').strip()) or creator_ping.get('status') == 'success' else 'pending',
+            '如果是真实抓取，需要 Playwright 登录态或第三方会员凭据。',
+            f"PLAYWRIGHT_STORAGE_STATE_PATH：{os.environ.get('PLAYWRIGHT_STORAGE_STATE_PATH') or '-'}",
+        ),
+        step_item(
+            '点击“测试 crawler 接口”直到成功',
+            'ready' if creator_ping.get('status') == 'success' else ('blocked' if creator_ping else 'pending'),
+            '通过标准：/healthz 正常，接口返回账号和笔记结构可解析。',
+            creator_ping.get('message') or '还没有 crawler 联调记录',
+        ),
+        step_item(
+            '执行首轮账号同步',
+            'ready' if latest_task_status(creator_sync_task) == 'success' and (creator_sync_task.item_count or 0) > 0 else ('blocked' if creator_sync_task else 'pending'),
+            '点击“异步同步账号”，让系统真正导入账号和笔记数据。',
+            f"最近任务：{latest_task_status(creator_sync_task) or '无'} ｜ 条数：{creator_sync_task.item_count if creator_sync_task else 0}",
+        ),
+        step_item(
+            '验证后续笔记与互动更新',
+            'ready' if CreatorAccount.query.count() > 0 and CreatorPost.query.count() > 0 else 'pending',
+            '通过标准：账号看板里能看到账号、笔记和互动数据持续累计。',
+            f"账号数：{CreatorAccount.query.count()} ｜ 笔记数：{CreatorPost.query.count()}",
+        ),
+    ]
+
+    image_steps = [
+        step_item(
+            '选择图片 Provider 并填 API / 模型',
+            'ready' if bool(image_capabilities.get('image_provider_configured')) and (image_capabilities.get('image_provider_name') or '') != 'svg_fallback' else 'blocked',
+            '先套用火山或兼容接口预设，再补 API URL / Base、模型名和 Key。',
+            f"Provider：{image_capabilities.get('image_provider_name') or 'svg_fallback'} ｜ Model：{image_capabilities.get('image_provider_model') or '-'}",
+        ),
+        step_item(
+            '点击“测试图片接口”直到成功',
+            'ready' if image_ping.get('status') == 'success' else ('blocked' if image_ping else 'pending'),
+            '通过标准：接口状态成功，能看到请求预览和返回样例。',
+            image_ping.get('message') or '还没有图片接口联调记录',
+        ),
+        step_item(
+            '执行首轮图片生成任务',
+            'ready' if latest_task_status(asset_task) == 'success' and AssetLibrary.query.count() > 0 else ('blocked' if asset_task else 'pending'),
+            '等接口联通后，跑一轮真实图片生成任务，把结果落进素材库。',
+            f"最近任务：{latest_task_status(asset_task) or '无'} ｜ 素材库：{AssetLibrary.query.count()}",
+        ),
+        step_item(
+            '验证素材库回流和可下载',
+            'ready' if AssetLibrary.query.count() > 0 else 'pending',
+            '通过标准：素材库能看到预览、来源 provider 和下载名。',
+            f"当前素材数：{AssetLibrary.query.count()}",
+        ),
+    ]
+
+    playbooks = [
+        {
+            'key': 'hotword',
+            'label': '热点抓取首轮运行卡',
+            'description': '把第三方热点接口接进来，并跑通“热点 -> 候选话题”闭环。',
+            'action_label': '测试热点接口',
+            'action_key': 'hotword',
+            'steps': hotword_steps,
+        },
+        {
+            'key': 'creator_sync',
+            'label': '账号同步首轮运行卡',
+            'description': '把报名人账号后续内容和互动数据持续同步回系统。',
+            'action_label': '测试 crawler 接口',
+            'action_key': 'creator_sync',
+            'steps': creator_steps,
+        },
+        {
+            'key': 'image_provider',
+            'label': '图片接口首轮运行卡',
+            'description': '把图片中心从 SVG fallback 升级为真实图片服务。',
+            'action_label': '测试图片接口',
+            'action_key': 'image_provider',
+            'steps': image_steps,
+        },
+    ]
+
+    summary = {
+        'total_playbooks': len(playbooks),
+        'ready_steps': sum(1 for playbook in playbooks for step in playbook['steps'] if step['status'] == 'ready'),
+        'blocked_steps': sum(1 for playbook in playbooks for step in playbook['steps'] if step['status'] == 'blocked'),
+        'pending_steps': sum(1 for playbook in playbooks for step in playbook['steps'] if step['status'] == 'pending'),
+    }
+    return {
+        'success': True,
+        'summary': summary,
+        'items': playbooks,
+    }
+
+
+def _sample_creator_sync_targets(limit=2):
+    targets = _tracked_creator_sync_targets(limit=limit)
+    if targets:
+        return targets
+    return [{
+        'registration_id': 1,
+        'submission_id': 1,
+        'topic_id': 1,
+        'creator_account_id': 0,
+        'profile_url': 'https://www.xiaohongshu.com/user/profile/demo_profile',
+        'account_handle': 'demo_account',
+        'owner_name': '测试账号',
+        'owner_phone': '13800000000',
+        'last_synced_at': _format_datetime(datetime.now()),
+        'note_url': 'https://www.xiaohongshu.com/explore/demo_note',
+    }]
+
+
+def _build_integration_contract_payload():
+    hotword_settings = _hotword_runtime_settings()
+    creator_sync_settings = _creator_sync_runtime_settings()
+    image_capabilities = _image_provider_capabilities()
+
+    hotword_keywords = ['脂肪肝', '肝硬化']
+    hotword_request_preview = _build_hotword_remote_preview(
+        hotword_settings,
+        keywords=hotword_keywords,
+        source_platform=hotword_settings.get('hotword_source_platform') or '小红书',
+        source_channel=hotword_settings.get('hotword_source_channel') or '会员接口',
+        batch_name='contract_demo_hotword',
+    )
+    creator_targets = _sample_creator_sync_targets(limit=2)
+    creator_request_preview = _build_creator_sync_remote_preview(
+        creator_sync_settings,
+        targets=creator_targets,
+        source_channel=creator_sync_settings.get('creator_sync_source_channel') or 'Crawler服务',
+        batch_name='contract_demo_creator_sync',
+    )
+    image_provider = (image_capabilities.get('image_provider_name') or 'generic_json').strip() or 'generic_json'
+    if image_provider == 'svg_fallback':
+        image_provider = 'generic_json'
+    image_request_preview = _build_asset_provider_request_preview(
+        image_provider,
+        image_capabilities.get('image_provider_model') or 'demo-image-model',
+        '生成一张适合小红书医疗科普封面的测试图片，画面干净，标题区留白。',
+        image_capabilities.get('image_provider_size') or '1024x1536',
+        image_capabilities.get('image_default_style_type') or 'medical_science',
+        image_count=1,
+    )
+
+    contracts = [
+        {
+            'key': 'hotword',
+            'label': '热点接口合同样例',
+            'description': '给第三方热点会员/API 服务商时，要求其至少返回可解析的热点条目列表。',
+            'request_preview': hotword_request_preview,
+            'response_example': {
+                'items': [{
+                    'keyword': '脂肪肝',
+                    'title': '脂肪肝人群该如何判断风险升级',
+                    'link': 'https://example.com/hot/1',
+                    'views': 12800,
+                    'likes': 356,
+                    'favorites': 102,
+                    'comments': 41,
+                    'author': '示例账号',
+                    'summary': '讨论度持续上升，适合延展成医学科普话题。',
+                }]
+            },
+            'required_fields': ['keyword', 'title', 'link', 'views', 'likes', 'favorites', 'comments'],
+            'acceptance': [
+                '测试接口时能返回 1 条以上热点数据',
+                '标题、链接、互动量字段能够被系统识别',
+                '点击“测试热点接口”后能看到归一化样例',
+            ],
+        },
+        {
+            'key': 'creator_sync',
+            'label': '账号同步接口合同样例',
+            'description': '给 crawler 或第三方会员服务商时，要求其返回账号、笔记、快照三类数据。',
+            'request_preview': creator_request_preview,
+            'response_example': {
+                'accounts': [{
+                    'platform': 'xhs',
+                    'account_handle': 'demo_account',
+                    'display_name': '测试账号',
+                    'profile_url': 'https://www.xiaohongshu.com/user/profile/demo_profile',
+                    'follower_count': 1234,
+                }],
+                'posts': [{
+                    'platform': 'xhs',
+                    'account_handle': 'demo_account',
+                    'profile_url': 'https://www.xiaohongshu.com/user/profile/demo_profile',
+                    'post_url': 'https://www.xiaohongshu.com/explore/demo_note',
+                    'title': '测试账号新发的一条笔记',
+                    'publish_time': '2026-04-15 12:30:00',
+                    'views': 980,
+                    'likes': 66,
+                    'favorites': 18,
+                    'comments': 9,
+                }],
+                'snapshots': [{
+                    'platform': 'xhs',
+                    'account_handle': 'demo_account',
+                    'profile_url': 'https://www.xiaohongshu.com/user/profile/demo_profile',
+                    'snapshot_date': '2026-04-15',
+                    'follower_count': 1234,
+                    'post_count': 18,
+                    'total_views': 9800,
+                    'total_interactions': 1300,
+                }],
+            },
+            'required_fields': ['accounts', 'posts', 'snapshots', 'post_url', 'profile_url', 'views', 'likes', 'favorites', 'comments'],
+            'acceptance': [
+                '测试接口时 /healthz 可访问',
+                '点击“测试 crawler 接口”后接口状态成功',
+                '执行首轮账号同步后，系统里能看到账号和笔记入库',
+            ],
+        },
+        {
+            'key': 'image_provider',
+            'label': '图片接口合同样例',
+            'description': '给火山引擎或其他图片服务商时，要求其至少兼容标准图片生成请求和 URL/Base64 返回。',
+            'request_preview': image_request_preview,
+            'response_example': {
+                'data': [{
+                    'url': 'https://example.com/generated/demo-image-1.png',
+                }]
+            },
+            'required_fields': ['model', 'prompt', 'size'],
+            'acceptance': [
+                '点击“测试图片接口”后接口状态成功',
+                '返回结果里至少包含一张图片 URL 或 base64',
+                '执行正式图片任务后，素材库能看到预览和下载项',
+            ],
+        },
+    ]
+
+    return {
+        'success': True,
+        'summary': {
+            'count': len(contracts),
+            'labels': [item['label'] for item in contracts],
+        },
+        'items': contracts,
+    }
+
+
+def _latest_data_source_task(task_type):
+    return DataSourceTask.query.filter_by(task_type=task_type).order_by(
+        DataSourceTask.finished_at.desc(), DataSourceTask.updated_at.desc(), DataSourceTask.created_at.desc(), DataSourceTask.id.desc()
+    ).first()
+
+
+def _latest_asset_generation_task():
+    return AssetGenerationTask.query.order_by(
+        AssetGenerationTask.finished_at.desc(), AssetGenerationTask.updated_at.desc(), AssetGenerationTask.created_at.desc(), AssetGenerationTask.id.desc()
+    ).first()
+
+
+def _build_integration_acceptance_payload():
+    history = _build_integration_ping_history_payload(limit=30)
+    latest_ping_map = {
+        item.get('integration_key'): item
+        for item in (history.get('summary', {}).get('latest_by_key') or [])
+    }
+    hotword_settings = _hotword_runtime_settings()
+    creator_sync_settings = _creator_sync_runtime_settings()
+    hotword_mode = _resolved_hotword_mode(hotword_settings)
+    creator_sync_mode = _resolved_creator_sync_mode(creator_sync_settings)
+    image_capabilities = _image_provider_capabilities()
+
+    hotword_task = _latest_data_source_task('hotword_sync')
+    creator_sync_task = _latest_data_source_task('creator_account_sync')
+    asset_task = _latest_asset_generation_task()
+
+    def acceptance_item(key, label, status, message, evidence=None, next_action=''):
+        return {
+            'key': key,
+            'label': label,
+            'status': status,
+            'status_label': {
+                'ready': '已通过',
+                'blocked': '未通过',
+                'pending': '待执行',
+                'pending_external': '待外部条件',
+            }.get(status, status),
+            'message': message,
+            'evidence': evidence or [],
+            'next_action': next_action,
+            'ok': status == 'ready',
+        }
+
+    items = []
+
+    hotword_evidence = [
+        f"模式：{hotword_mode}",
+        f"最近联调：{(latest_ping_map.get('hotword') or {}).get('status_label', '无')}",
+        f"最近抓取任务：{(hotword_task.status if hotword_task else '无')}",
+        f"热点池条数：{TrendNote.query.count()}",
+        f"候选话题数：{TopicIdea.query.count()}",
+    ]
+    hotword_ping_ok = (latest_ping_map.get('hotword') or {}).get('status') == 'success'
+    hotword_task_ok = bool(hotword_task and hotword_task.status == 'success' and (hotword_task.item_count or 0) > 0)
+    hotword_data_ok = TrendNote.query.count() > 0
+    if hotword_mode != 'remote':
+        items.append(acceptance_item(
+            'hotword',
+            '热点抓取验收',
+            'pending_external',
+            '当前还没切到真实热点接口，无法做正式验收。',
+            evidence=hotword_evidence,
+            next_action='先提供第三方热点接口并切到 remote，再跑测试热点接口和首轮抓取。',
+        ))
+    elif hotword_ping_ok and hotword_task_ok and hotword_data_ok:
+        items.append(acceptance_item(
+            'hotword',
+            '热点抓取验收',
+            'ready',
+            '热点接口已联通，且首轮抓取与入库已通过。',
+            evidence=hotword_evidence,
+            next_action='可以继续验证自动生题和审核发布闭环。',
+        ))
+    elif hotword_ping_ok:
+        items.append(acceptance_item(
+            'hotword',
+            '热点抓取验收',
+            'pending',
+            '热点接口已经测通，但还没完成正式抓取入库验收。',
+            evidence=hotword_evidence,
+            next_action='点击“异步抓取热点”，确认 TrendNote 条数增长。',
+        ))
+    else:
+        items.append(acceptance_item(
+            'hotword',
+            '热点抓取验收',
+            'blocked',
+            '热点接口还没联通成功，正式验收尚未通过。',
+            evidence=hotword_evidence,
+            next_action='先反复测试热点接口，直到联调记录显示成功。',
+        ))
+
+    creator_evidence = [
+        f"模式：{creator_sync_mode}",
+        f"最近联调：{(latest_ping_map.get('creator_sync') or {}).get('status_label', '无')}",
+        f"最近同步任务：{(creator_sync_task.status if creator_sync_task else '无')}",
+        f"账号数：{CreatorAccount.query.count()}",
+        f"笔记数：{CreatorPost.query.count()}",
+    ]
+    creator_ping_ok = (latest_ping_map.get('creator_sync') or {}).get('status') == 'success'
+    creator_task_ok = bool(creator_sync_task and creator_sync_task.status == 'success' and (creator_sync_task.item_count or 0) > 0)
+    creator_data_ok = CreatorAccount.query.count() > 0 and CreatorPost.query.count() > 0
+    if creator_sync_mode != 'remote':
+        items.append(acceptance_item(
+            'creator_sync',
+            '账号同步验收',
+            'pending_external',
+            '当前还没切到真实 crawler / 第三方账号接口，无法做正式验收。',
+            evidence=creator_evidence,
+            next_action='先提供 crawler 或会员接口并切到 remote，再跑测试 crawler 接口和首轮同步。',
+        ))
+    elif creator_ping_ok and creator_task_ok and creator_data_ok:
+        items.append(acceptance_item(
+            'creator_sync',
+            '账号同步验收',
+            'ready',
+            '账号同步接口已联通，且账号和笔记数据已成功回流。',
+            evidence=creator_evidence,
+            next_action='可以继续验证后续新笔记累计和互动更新。',
+        ))
+    elif creator_ping_ok:
+        items.append(acceptance_item(
+            'creator_sync',
+            '账号同步验收',
+            'pending',
+            'crawler 接口已经测通，但还没完成正式同步入库验收。',
+            evidence=creator_evidence,
+            next_action='点击“异步同步账号”，确认账号和笔记条数增长。',
+        ))
+    else:
+        items.append(acceptance_item(
+            'creator_sync',
+            '账号同步验收',
+            'blocked',
+            '账号同步接口还没联通成功，正式验收尚未通过。',
+            evidence=creator_evidence,
+            next_action='先把 crawler 接口和登录态调通，直到联调记录显示成功。',
+        ))
+
+    image_provider = (image_capabilities.get('image_provider_name') or 'svg_fallback').strip() or 'svg_fallback'
+    image_evidence = [
+        f"Provider：{image_provider}",
+        f"最近联调：{(latest_ping_map.get('image_provider') or {}).get('status_label', '无')}",
+        f"最近图片任务：{(asset_task.status if asset_task else '无')}",
+        f"素材库条数：{AssetLibrary.query.count()}",
+    ]
+    image_real_enabled = image_provider != 'svg_fallback' and bool(image_capabilities.get('image_provider_configured'))
+    image_ping_ok = (latest_ping_map.get('image_provider') or {}).get('status') == 'success'
+    asset_task_ok = bool(asset_task and asset_task.status == 'success' and (asset_task.source_provider or '') != 'svg_fallback')
+    asset_data_ok = AssetLibrary.query.filter(AssetLibrary.source_provider != 'svg_fallback').count() > 0
+    if not image_real_enabled:
+        items.append(acceptance_item(
+            'image_provider',
+            '图片接口验收',
+            'pending_external',
+            '当前仍是 SVG fallback，真实图片接口还没接入，无法做正式验收。',
+            evidence=image_evidence,
+            next_action='先提供火山引擎或其他图片 API，再用图片调试沙盒联调。',
+        ))
+    elif image_ping_ok and asset_task_ok and asset_data_ok:
+        items.append(acceptance_item(
+            'image_provider',
+            '图片接口验收',
+            'ready',
+            '图片接口已联通，且真实图片任务和素材库回流已通过。',
+            evidence=image_evidence,
+            next_action='可以继续切到正式图片工作流。',
+        ))
+    elif image_ping_ok:
+        items.append(acceptance_item(
+            'image_provider',
+            '图片接口验收',
+            'pending',
+            '图片接口已经测通，但还没完成正式图片任务验收。',
+            evidence=image_evidence,
+            next_action='执行一轮正式图片生成任务，确认素材库出现远端生成结果。',
+        ))
+    else:
+        items.append(acceptance_item(
+            'image_provider',
+            '图片接口验收',
+            'blocked',
+            '图片接口还没联通成功，正式验收尚未通过。',
+            evidence=image_evidence,
+            next_action='先把 API URL、模型和 Key 调通，直到测试图片接口成功。',
+        ))
+
+    summary = {
+        'total': len(items),
+        'ready': len([item for item in items if item['status'] == 'ready']),
+        'blocked': len([item for item in items if item['status'] == 'blocked']),
+        'pending': len([item for item in items if item['status'] == 'pending']),
+        'pending_external': len([item for item in items if item['status'] == 'pending_external']),
+    }
+    summary['message'] = f"正式验收已通过 {summary['ready']}/{summary['total']} 条链路。"
+    return {
+        'success': True,
+        'summary': summary,
+        'items': items,
+    }
+
+
+def _build_trial_readiness_payload():
+    launch_milestones = _build_launch_milestones_payload()
+    integration_acceptance = _build_integration_acceptance_payload()
+    capacity = _build_capacity_readiness_payload()
+
+    milestone_map = {item.get('key'): item for item in (launch_milestones.get('items') or [])}
+    acceptance_map = {item.get('key'): item for item in (integration_acceptance.get('items') or [])}
+
+    web_item = milestone_map.get('web_foundation', {})
+    async_item = milestone_map.get('async_chain', {})
+    hotword_item = acceptance_map.get('hotword', {})
+    creator_item = acceptance_map.get('creator_sync', {})
+    image_item = acceptance_map.get('image_provider', {})
+
+    internal_blockers = []
+    if web_item.get('status') != 'ready':
+        internal_blockers.append('Web 基础服务未完全就绪')
+    if async_item.get('status') == 'blocked':
+        internal_blockers.append('异步执行链未补齐')
+    if not capacity.get('summary', {}).get('capacity_ready'):
+        internal_blockers.append('容量准备度未通过')
+
+    acceptance_blockers = [
+        item.get('label') for item in [hotword_item, creator_item, image_item]
+        if item.get('status') == 'blocked'
+    ]
+    external_pending = [
+        item.get('label') for item in [hotword_item, creator_item, image_item]
+        if item.get('status') == 'pending_external'
+    ]
+    execution_pending = [
+        item.get('label') for item in [hotword_item, creator_item, image_item]
+        if item.get('status') == 'pending'
+    ]
+
+    def phase_item(key, label, status, message, blockers=None, next_action=''):
+        return {
+            'key': key,
+            'label': label,
+            'status': status,
+            'status_label': {
+                'ready': '已就绪',
+                'blocked': '未就绪',
+                'pending_external': '待外部条件',
+                'pending': '待执行',
+            }.get(status, status),
+            'message': message,
+            'blockers': blockers or [],
+            'next_action': next_action,
+            'ok': status == 'ready',
+        }
+
+    phases = []
+
+    if web_item.get('status') == 'ready':
+        phases.append(phase_item(
+            'demo',
+            '系统演示',
+            'ready',
+            '当前前后台、自动化中心和核心页面已经适合对外演示。',
+            next_action='可以继续演示运营流程、自动化中心和账号看板。',
+        ))
+    else:
+        phases.append(phase_item(
+            'demo',
+            '系统演示',
+            'blocked',
+            'Web 基础服务还没完全稳定，暂不建议做正式演示。',
+            blockers=web_item.get('blockers') or [web_item.get('message') or 'Web 未就绪'],
+            next_action='先补齐 Web 缺口，再确认首页、后台登录和自动化中心能正常打开。',
+        ))
+
+    if internal_blockers:
+        phases.append(phase_item(
+            'integration',
+            '接口联调准备',
+            'blocked',
+            '系统内部条件还没完全补齐，接口联调准备度不足。',
+            blockers=internal_blockers,
+            next_action='先补齐 Worker / Beat / 容量等内部条件，再开始真实接口联调。',
+        ))
+    elif external_pending:
+        phases.append(phase_item(
+            'integration',
+            '接口联调准备',
+            'pending_external',
+            '系统内部工具链已经准备好，现在主要等第三方 API/会员接口。',
+            blockers=external_pending,
+            next_action='你把热点、crawler、图片 API 给我后，就可以直接按运行卡开始联调。',
+        ))
+    else:
+        phases.append(phase_item(
+            'integration',
+            '接口联调准备',
+            'ready',
+            '系统内部和外部接口基础条件都已具备，可以连续做真实联调。',
+            next_action='依次执行热点、账号同步、图片三条运行卡，并观察联调记录与验收结果。',
+        ))
+
+    if internal_blockers or acceptance_blockers:
+        phases.append(phase_item(
+            'pilot',
+            '真实试运行',
+            'blocked',
+            '当前还不适合进入真实试运行。',
+            blockers=internal_blockers + acceptance_blockers,
+            next_action='先让三条外部链路至少完成首轮正式验收，再进入试运行。',
+        ))
+    elif external_pending:
+        phases.append(phase_item(
+            'pilot',
+            '真实试运行',
+            'pending_external',
+            '系统主干已具备，但还缺第三方真实接口，因此暂不能进入完整试运行。',
+            blockers=external_pending,
+            next_action='等你把第三方接口给我后，我会按验收面板逐项通过再进入试运行。',
+        ))
+    elif execution_pending:
+        phases.append(phase_item(
+            'pilot',
+            '真实试运行',
+            'pending',
+            '接口已经有基础条件，但还差正式抓取 / 同步 / 出图验收。',
+            blockers=execution_pending,
+            next_action='执行正式热点抓取、正式账号同步、正式图片任务后，再看验收面板是否全部转绿。',
+        ))
+    else:
+        phases.append(phase_item(
+            'pilot',
+            '真实试运行',
+            'ready',
+            '当前已经具备进入真实试运行的条件。',
+            next_action='可以开始小规模真实试运行，并继续观察任务队列、热点抓取和账号同步稳定性。',
+        ))
+
+    summary = {
+        'overall_status': phases[-1]['status'] if phases else 'blocked',
+        'overall_status_label': phases[-1]['status_label'] if phases else '未就绪',
+        'message': phases[-1]['message'] if phases else '暂无判定',
+        'phase_count': len(phases),
+        'ready': len([item for item in phases if item['status'] == 'ready']),
+        'blocked': len([item for item in phases if item['status'] == 'blocked']),
+        'pending_external': len([item for item in phases if item['status'] == 'pending_external']),
+        'pending': len([item for item in phases if item['status'] == 'pending']),
+    }
+    return {
+        'success': True,
+        'summary': summary,
+        'items': phases,
+    }
+
+
 def _serialize_topic(topic):
     return {
         'id': topic.id,
@@ -3166,6 +3959,41 @@ def _build_recent_failed_jobs_payload(limit=10):
                 'type': 'worker_ping',
                 'id': 0,
                 'label': '重新检测',
+            },
+        })
+
+    integration_failed_actions = [
+        'hotword_ping_check_failed',
+        'creator_sync_ping_check_failed',
+        'image_provider_ping_check_failed',
+    ]
+    failed_integration_logs = OperationLog.query.filter(
+        OperationLog.action.in_(integration_failed_actions)
+    ).order_by(OperationLog.created_at.desc(), OperationLog.id.desc()).limit(safe_limit).all()
+    retry_type_map = {
+        'hotword_ping_check_failed': ('hotword_ping', '重试热点接口'),
+        'creator_sync_ping_check_failed': ('creator_sync_ping', '重试 crawler 接口'),
+        'image_provider_ping_check_failed': ('image_ping', '重试图片接口'),
+    }
+    for log in failed_integration_logs:
+        detail = _deserialize_operation_detail(log.detail)
+        retry_type, retry_label = retry_type_map.get(log.action, ('', '重试'))
+        items.append({
+            'kind': 'integration_ping',
+            'kind_label': detail.get('label') or '接口联调',
+            'id': log.id,
+            'title': detail.get('label') or '接口联调',
+            'occurred_at': detail.get('checked_at') or _format_datetime(log.created_at),
+            'status': detail.get('status') or 'failed',
+            'status_label': 'failed',
+            'message': detail.get('message') or log.message or '接口联调失败',
+            'task_id': detail.get('health_url') or detail.get('provider') or '',
+            'source_label': detail.get('integration_key') or '-',
+            'detail': detail,
+            'retry': {
+                'type': retry_type,
+                'id': 0,
+                'label': retry_label,
             },
         })
 
@@ -7017,6 +7845,11 @@ register_automation_dashboard_routes(app, {
     'build_deployment_blockers_payload': _build_deployment_blockers_payload,
     'build_launch_milestones_payload': _build_launch_milestones_payload,
     'build_integration_checklist_payload': _build_integration_checklist_payload,
+    'build_integration_ping_history_payload': _build_integration_ping_history_payload,
+    'build_first_run_playbooks_payload': _build_first_run_playbooks_payload,
+    'build_integration_contract_payload': _build_integration_contract_payload,
+    'build_integration_acceptance_payload': _build_integration_acceptance_payload,
+    'build_trial_readiness_payload': _build_trial_readiness_payload,
     'build_capacity_readiness_payload': _build_capacity_readiness_payload,
     'build_recent_failed_jobs_payload': _build_recent_failed_jobs_payload,
     'build_service_matrix_payload': _build_service_matrix_payload,
@@ -8599,6 +9432,8 @@ def trigger_hotword_sync_ping():
     timeout_seconds = min(max(_safe_int(data.get('wait_seconds'), 3), 1), 15)
     keywords = split_hotword_keywords(data.get('keywords') or '')
     result = _hotword_healthcheck(payload=data, timeout_seconds=timeout_seconds, sample_keywords=keywords, include_rows=True)
+    _log_integration_ping_result('hotword', result, request_payload=data)
+    db.session.commit()
     return jsonify({
         'success': bool(result.get('ok')),
         **result,
@@ -8634,6 +9469,8 @@ def trigger_creator_account_sync_ping():
     data = request.json or {}
     timeout_seconds = min(max(_safe_int(data.get('wait_seconds'), 3), 1), 15)
     result = _creator_sync_healthcheck(timeout_seconds=timeout_seconds)
+    _log_integration_ping_result('creator_sync', result, request_payload=data)
+    db.session.commit()
     return jsonify({
         'success': bool(result.get('ok')),
         **result,
@@ -8649,6 +9486,8 @@ def trigger_asset_provider_ping():
     data = request.json or {}
     timeout_seconds = min(max(_safe_int(data.get('wait_seconds'), 10), 1), 60)
     result = _image_provider_healthcheck(payload=data, timeout_seconds=timeout_seconds)
+    _log_integration_ping_result('image_provider', result, request_payload=data)
+    db.session.commit()
     return jsonify({
         'success': bool(result.get('ok')),
         **result,

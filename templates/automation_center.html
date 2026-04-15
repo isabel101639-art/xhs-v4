@@ -690,6 +690,69 @@
         </div>
 
         <div class="panel p-4 mb-4">
+            <div class="section-title">接口联调记录</div>
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                <input id="integrationPingLimit" class="form-control" style="max-width: 200px;" value="12" placeholder="条数">
+                <button class="btn btn-outline-primary" onclick="loadIntegrationPings()">刷新联调记录</button>
+                <div id="integrationPingMsg" class="subtle d-flex align-items-center"></div>
+            </div>
+            <div id="integrationPingSummaryWrap" class="mini-note mb-3">这里会展示热点、crawler、图片接口最近一次联调结果。</div>
+            <div class="table-wrap">
+                <table class="table data-table align-middle">
+                    <thead>
+                        <tr>
+                            <th>时间</th>
+                            <th>接口</th>
+                            <th>状态</th>
+                            <th>摘要</th>
+                            <th>地址/Provider</th>
+                            <th>请求/返回</th>
+                        </tr>
+                    </thead>
+                    <tbody id="integrationPingTableBody">
+                        <tr><td colspan="6" class="text-center text-muted">暂无联调记录</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="panel p-4 mb-4">
+            <div class="section-title">首轮联调运行卡</div>
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                <button class="btn btn-outline-primary" onclick="loadFirstRunPlaybooks()">刷新运行卡</button>
+                <div id="firstRunPlaybookMsg" class="subtle d-flex align-items-center"></div>
+            </div>
+            <div id="firstRunPlaybookWrap" class="mini-note">这里会把热点、账号同步、图片三条线的首轮联调步骤和通过标准列出来。</div>
+        </div>
+
+        <div class="panel p-4 mb-4">
+            <div class="section-title">第三方接口合同样例</div>
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                <button class="btn btn-outline-primary" onclick="loadIntegrationContracts()">刷新合同样例</button>
+                <div id="integrationContractMsg" class="subtle d-flex align-items-center"></div>
+            </div>
+            <div id="integrationContractWrap" class="mini-note">这里会把热点、crawler、图片三条线的标准请求/返回样例列出来，你可以直接发给第三方接口服务商。</div>
+        </div>
+
+        <div class="panel p-4 mb-4">
+            <div class="section-title">联调验收结果</div>
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                <button class="btn btn-outline-primary" onclick="loadIntegrationAcceptance()">刷新验收结果</button>
+                <div id="integrationAcceptanceMsg" class="subtle d-flex align-items-center"></div>
+            </div>
+            <div id="integrationAcceptanceWrap" class="mini-note">这里会判断热点、账号同步、图片三条链路是否已经完成正式验收。</div>
+        </div>
+
+        <div class="panel p-4 mb-4">
+            <div class="section-title">试运行判定</div>
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                <button class="btn btn-outline-primary" onclick="loadTrialReadiness()">刷新试运行判定</button>
+                <div id="trialReadinessMsg" class="subtle d-flex align-items-center"></div>
+            </div>
+            <div id="trialReadinessWrap" class="mini-note">这里会给出当前是否适合演示、是否适合开始接口联调，以及是否适合进入真实试运行。</div>
+        </div>
+
+        <div class="panel p-4 mb-4">
             <div class="section-title">运行诊断</div>
             <div class="d-flex gap-2 flex-wrap mb-3">
                 <button class="btn btn-outline-primary" onclick="loadDiagnostics()">刷新诊断</button>
@@ -1249,6 +1312,7 @@
         let assetTaskCache = {};
         let assetLibraryCache = {};
         let deploymentHelperCache = {};
+        let integrationContractCache = {};
         const assetStyleTypeDefinitions = {{ asset_style_types|tojson }};
         const imageModelDefinitions = {{ image_model_options|tojson }};
 
@@ -2138,6 +2202,239 @@
             `;
         }
 
+        async function loadIntegrationPings() {
+            const limit = parseInt(document.getElementById('integrationPingLimit')?.value || '12', 10);
+            const res = await fetch(`/api/admin/integration-pings?limit=${limit}`);
+            const data = await res.json();
+            const body = document.getElementById('integrationPingTableBody');
+            const summaryWrap = document.getElementById('integrationPingSummaryWrap');
+            if (!data.success) {
+                document.getElementById('integrationPingMsg').textContent = data.message || '联调记录加载失败';
+                body.innerHTML = '<tr><td colspan="6" class="text-center text-muted">联调记录加载失败</td></tr>';
+                return;
+            }
+            const summary = data.summary || {};
+            const latestItems = summary.latest_by_key || [];
+            document.getElementById('integrationPingMsg').textContent = `最近 ${summary.count || 0} 条 ｜ 成功 ${summary.success_count || 0} ｜ 失败 ${summary.failed_count || 0}`;
+            summaryWrap.innerHTML = latestItems.length ? `
+                <div class="row g-3">
+                    ${latestItems.map((item) => `
+                        <div class="col-lg-4">
+                            <div class="detail-card h-100">
+                                <div class="d-flex justify-content-between align-items-center gap-2">
+                                    <strong>${escapeHtml(item.label || item.integration_key || '-')}</strong>
+                                    <span class="job-state ${item.status === 'success' ? 'job-success' : 'job-failure'}">${escapeHtml(item.status_label || item.status || '-')}</span>
+                                </div>
+                                <div class="subtle mt-2">${escapeHtml(item.message || '-')}</div>
+                                <div class="subtle mt-2">最近时间：${escapeHtml(item.checked_at || '-')}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : '还没有接口联调记录。后面你点“测试热点接口 / 测试 crawler 接口 / 测试图片接口”后，这里就会开始沉淀历史。';
+            const items = data.items || [];
+            body.innerHTML = items.map((item) => `
+                <tr>
+                    <td>${escapeHtml(item.checked_at || item.created_at || '-')}</td>
+                    <td>${escapeHtml(item.label || item.integration_key || '-')}</td>
+                    <td><span class="job-state ${item.status === 'success' ? 'job-success' : 'job-failure'}">${escapeHtml(item.status_label || item.status || '-')}</span></td>
+                    <td>${escapeHtml(item.message || '-')}</td>
+                    <td>
+                        <div>${escapeHtml(item.health_url || item.provider || '-')}</div>
+                        <div class="subtle">HTTP：${item.status_code || '-'}</div>
+                    </td>
+                    <td>
+                        <details><summary>查看</summary><pre style="white-space: pre-wrap; word-break: break-word; font-size:12px;">${escapeHtml(JSON.stringify({request_preview: item.request_preview || {}, response_preview: item.response_preview || {}}, null, 2))}</pre></details>
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="6" class="text-center text-muted">暂无联调记录</td></tr>';
+        }
+
+        function renderFirstRunActionButton(playbook) {
+            const key = playbook?.action_key || '';
+            if (key === 'hotword') {
+                return '<button class="btn btn-sm btn-outline-primary" onclick="pingHotwordSync()">测试热点接口</button>';
+            }
+            if (key === 'creator_sync') {
+                return '<button class="btn btn-sm btn-outline-primary" onclick="pingCreatorAccountSync()">测试 crawler 接口</button>';
+            }
+            if (key === 'image_provider') {
+                return '<button class="btn btn-sm btn-outline-primary" onclick="pingImageProvider()">测试图片接口</button>';
+            }
+            return '';
+        }
+
+        async function loadFirstRunPlaybooks() {
+            const res = await fetch('/api/admin/first-run-playbooks');
+            const data = await res.json();
+            const wrap = document.getElementById('firstRunPlaybookWrap');
+            if (!data.success) {
+                document.getElementById('firstRunPlaybookMsg').textContent = data.message || '运行卡加载失败';
+                return;
+            }
+            const summary = data.summary || {};
+            document.getElementById('firstRunPlaybookMsg').textContent = `已完成步骤 ${summary.ready_steps || 0} ｜ 待补齐 ${summary.blocked_steps || 0} ｜ 待执行 ${summary.pending_steps || 0}`;
+            wrap.innerHTML = `
+                <div class="row g-3">
+                    ${(data.items || []).map((playbook) => `
+                        <div class="col-lg-4">
+                            <div class="detail-card h-100">
+                                <div class="d-flex justify-content-between align-items-center gap-2">
+                                    <strong>${escapeHtml(playbook.label || playbook.key || '-')}</strong>
+                                    ${renderFirstRunActionButton(playbook)}
+                                </div>
+                                <div class="subtle mt-2">${escapeHtml(playbook.description || '-')}</div>
+                                <div class="mt-3">
+                                    ${(playbook.steps || []).map((step, idx) => `
+                                        <div class="mini-note mb-2">
+                                            <div class="d-flex justify-content-between align-items-center gap-2">
+                                                <strong>第 ${idx + 1} 步：${escapeHtml(step.label || '-')}</strong>
+                                                <span class="job-state ${step.status === 'ready' ? 'job-success' : (step.status === 'blocked' ? 'job-failure' : 'job-pending')}">
+                                                    ${step.status === 'ready' ? '已通过' : (step.status === 'blocked' ? '待补齐' : '待执行')}
+                                                </span>
+                                            </div>
+                                            <div class="subtle mt-2">${escapeHtml(step.hint || '-')}</div>
+                                            ${step.evidence ? `<div class="subtle mt-2">当前状态：${escapeHtml(step.evidence)}</div>` : ''}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('') || '<div class="text-muted">暂无运行卡</div>'}
+                </div>
+            `;
+        }
+
+        async function loadIntegrationContracts() {
+            const res = await fetch('/api/admin/integration-contracts');
+            const data = await res.json();
+            const wrap = document.getElementById('integrationContractWrap');
+            if (!data.success) {
+                document.getElementById('integrationContractMsg').textContent = data.message || '合同样例加载失败';
+                return;
+            }
+            const summary = data.summary || {};
+            integrationContractCache = Object.fromEntries((data.items || []).map((item) => [item.key, item]));
+            document.getElementById('integrationContractMsg').textContent = `共 ${summary.count || 0} 份标准合同样例`;
+            wrap.innerHTML = `
+                <div class="row g-3">
+                    ${(data.items || []).map((item) => `
+                        <div class="col-lg-4">
+                            <div class="detail-card h-100">
+                                <div class="d-flex justify-content-between align-items-center gap-2">
+                                    <strong>${escapeHtml(item.label || item.key || '-')}</strong>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="copyIntegrationContract('${item.key || ''}')">复制合同</button>
+                                </div>
+                                <div class="subtle mt-2">${escapeHtml(item.description || '-')}</div>
+                                <div class="mt-3">
+                                    <strong>请求样例</strong>
+                                    <div class="json-box mt-2">${escapeHtml(JSON.stringify(item.request_preview || {}, null, 2))}</div>
+                                </div>
+                                <div class="mt-3">
+                                    <strong>返回样例</strong>
+                                    <div class="json-box mt-2">${escapeHtml(JSON.stringify(item.response_example || {}, null, 2))}</div>
+                                </div>
+                                <div class="mt-3">
+                                    <strong>必备字段</strong>
+                                    <div class="subtle mt-2">${escapeHtml((item.required_fields || []).join('、') || '无')}</div>
+                                </div>
+                                <div class="mt-3">
+                                    <strong>验收标准</strong>
+                                    <div class="subtle mt-2">${(item.acceptance || []).map((line) => escapeHtml(line)).join(' ｜ ')}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('') || '<div class="text-muted">暂无合同样例</div>'}
+                </div>
+            `;
+        }
+
+        async function copyIntegrationContract(contractKey) {
+            const contract = integrationContractCache[contractKey];
+            if (!contract) return;
+            const payload = {
+                label: contract.label || contract.key || '',
+                description: contract.description || '',
+                request_preview: contract.request_preview || {},
+                response_example: contract.response_example || {},
+                required_fields: contract.required_fields || [],
+                acceptance: contract.acceptance || [],
+            };
+            document.getElementById('integrationContractMsg').textContent = await copyPlainText(
+                JSON.stringify(payload, null, 2),
+                `${contract.label || contractKey} 已复制`
+            );
+        }
+
+        async function loadIntegrationAcceptance() {
+            const res = await fetch('/api/admin/integration-acceptance');
+            const data = await res.json();
+            const wrap = document.getElementById('integrationAcceptanceWrap');
+            if (!data.success) {
+                document.getElementById('integrationAcceptanceMsg').textContent = data.message || '验收结果加载失败';
+                return;
+            }
+            const summary = data.summary || {};
+            document.getElementById('integrationAcceptanceMsg').textContent = summary.message || '暂无验收结果';
+            wrap.innerHTML = `
+                <div class="row g-3">
+                    ${(data.items || []).map((item) => `
+                        <div class="col-lg-4">
+                            <div class="detail-card h-100">
+                                <div class="d-flex justify-content-between align-items-center gap-2">
+                                    <strong>${escapeHtml(item.label || item.key || '-')}</strong>
+                                    <span class="job-state ${item.status === 'ready' ? 'job-success' : (item.status === 'blocked' ? 'job-failure' : 'job-pending')}">
+                                        ${escapeHtml(item.status_label || item.status || '-')}
+                                    </span>
+                                </div>
+                                <div class="subtle mt-2">${escapeHtml(item.message || '-')}</div>
+                                <div class="mt-3">
+                                    ${(item.evidence || []).map((line) => `<div class="subtle mb-1">${escapeHtml(line)}</div>`).join('') || '<div class="text-muted">暂无证据</div>'}
+                                </div>
+                                ${item.next_action ? `<div class="mini-note mt-3"><strong>下一步</strong><div class="subtle mt-2">${escapeHtml(item.next_action)}</div></div>` : ''}
+                            </div>
+                        </div>
+                    `).join('') || '<div class="text-muted">暂无验收数据</div>'}
+                </div>
+            `;
+        }
+
+        async function loadTrialReadiness() {
+            const res = await fetch('/api/admin/trial-readiness');
+            const data = await res.json();
+            const wrap = document.getElementById('trialReadinessWrap');
+            if (!data.success) {
+                document.getElementById('trialReadinessMsg').textContent = data.message || '试运行判定加载失败';
+                return;
+            }
+            const summary = data.summary || {};
+            document.getElementById('trialReadinessMsg').textContent = `${summary.overall_status_label || '未就绪'} ｜ ${summary.message || ''}`;
+            wrap.innerHTML = `
+                <div class="row g-3">
+                    ${(data.items || []).map((item) => `
+                        <div class="col-lg-4">
+                            <div class="detail-card h-100">
+                                <div class="d-flex justify-content-between align-items-center gap-2">
+                                    <strong>${escapeHtml(item.label || item.key || '-')}</strong>
+                                    <span class="job-state ${item.status === 'ready' ? 'job-success' : (item.status === 'blocked' ? 'job-failure' : 'job-pending')}">
+                                        ${escapeHtml(item.status_label || item.status || '-')}
+                                    </span>
+                                </div>
+                                <div class="subtle mt-2">${escapeHtml(item.message || '-')}</div>
+                                ${(item.blockers || []).length ? `
+                                    <div class="mini-note mt-3">
+                                        <strong>当前阻塞项</strong>
+                                        <div class="subtle mt-2">${(item.blockers || []).map((line) => escapeHtml(String(line))).join(' ｜ ')}</div>
+                                    </div>
+                                ` : ''}
+                                ${item.next_action ? `<div class="subtle mt-3">下一步：${escapeHtml(item.next_action)}</div>` : ''}
+                            </div>
+                        </div>
+                    `).join('') || '<div class="text-muted">暂无试运行判定</div>'}
+                </div>
+            `;
+        }
+
         async function copyDeploymentEnv(serviceKey) {
             const service = deploymentHelperCache[serviceKey];
             if (!service) return;
@@ -2954,6 +3251,10 @@
                 `;
             }
             loadDiagnostics();
+            loadIntegrationPings();
+            loadFirstRunPlaybooks();
+            loadIntegrationAcceptance();
+            loadTrialReadiness();
         }
 
         async function saveHotwordScheduleFromCurrentConfig() {
@@ -3049,6 +3350,10 @@
             ].filter(Boolean).join(' ｜ ');
             document.getElementById('creatorSyncJobMsg').textContent = `${data.message || '已处理'}${meta ? ` ｜ ${meta}` : ''}`;
             loadDiagnostics();
+            loadIntegrationPings();
+            loadFirstRunPlaybooks();
+            loadIntegrationAcceptance();
+            loadTrialReadiness();
         }
 
         async function pingImageProvider() {
@@ -3088,6 +3393,10 @@
                 `;
             }
             loadDiagnostics();
+            loadIntegrationPings();
+            loadFirstRunPlaybooks();
+            loadIntegrationAcceptance();
+            loadTrialReadiness();
         }
 
         async function retryDataSourceTask(taskId) {
@@ -3251,6 +3560,21 @@
                 loadFailedJobs();
                 return;
             }
+            if (type === 'hotword_ping') {
+                await pingHotwordSync();
+                loadFailedJobs();
+                return;
+            }
+            if (type === 'creator_sync_ping') {
+                await pingCreatorAccountSync();
+                loadFailedJobs();
+                return;
+            }
+            if (type === 'image_ping') {
+                await pingImageProvider();
+                loadFailedJobs();
+                return;
+            }
             if (type === 'data_source_task') {
                 await retryDataSourceTask(id);
                 loadFailedJobs();
@@ -3277,6 +3601,10 @@
                 jobHistoryTimer = setInterval(() => {
                     loadJobHistory();
                     loadFailedJobs();
+                    loadIntegrationPings();
+                    loadFirstRunPlaybooks();
+                    loadIntegrationAcceptance();
+                    loadTrialReadiness();
                     loadDataSourceTasks();
                     loadAssetTasks();
                     loadAssetLibrary();
@@ -3356,6 +3684,11 @@
         loadSchedules();
         loadDeploymentHelper();
         loadIntegrationChecklist();
+        loadIntegrationPings();
+        loadFirstRunPlaybooks();
+        loadIntegrationContracts();
+        loadIntegrationAcceptance();
+        loadTrialReadiness();
         loadDiagnostics();
         loadReadinessCheck();
         document.getElementById('autoRefreshJobs')?.addEventListener('change', syncJobAutoRefresh);
