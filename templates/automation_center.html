@@ -672,6 +672,15 @@
         </div>
 
         <div class="panel p-4 mb-4">
+            <div class="section-title">关键里程碑</div>
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                <button class="btn btn-outline-primary" onclick="loadDiagnostics()">刷新里程碑</button>
+                <div id="launchMilestoneMsg" class="subtle d-flex align-items-center"></div>
+            </div>
+            <div id="launchMilestoneWrap" class="mini-note">这里会直接告诉你：Web、异步链路、热点、账号同步、图片这 5 条关键线目前完成到哪一步。</div>
+        </div>
+
+        <div class="panel p-4 mb-4">
             <div class="section-title">API 联调准备清单</div>
             <div class="d-flex gap-2 flex-wrap mb-3">
                 <button class="btn btn-outline-primary" onclick="loadIntegrationChecklist()">刷新联调清单</button>
@@ -1463,7 +1472,10 @@
             if (focusKeys.has('beat')) {
                 actionButtons.push(`<button class="btn btn-sm btn-outline-dark" onclick="loadDeploymentHelper()">打开部署助手</button>`);
             }
-            const blockerLines = (deploymentBlockers || []).map((item) => `${item.service_name} 缺少：${(item.missing_required || []).join(', ')}`);
+            const blockerLines = (deploymentBlockers || []).map((item) => {
+                const missingNames = (item.missing_items || []).map((env) => env.label || env.key).join('、');
+                return `${item.service_name} 缺少：${missingNames || (item.missing_required || []).join(', ')}`;
+            });
             wrap.className = 'status-alert mb-4';
             wrap.innerHTML = `
                 <strong>当前最需要补齐的项</strong>
@@ -1472,6 +1484,60 @@
                 ${blockerLines.length ? `<div class="subtle mt-2">环境变量缺口：${blockerLines.join(' ｜ ')}</div>` : ''}
                 ${actionButtons.length ? `<div class="d-flex gap-2 flex-wrap mt-3">${actionButtons.join('')}</div>` : ''}
             `;
+        }
+
+        function renderLaunchMilestones(payload) {
+            const wrap = document.getElementById('launchMilestoneWrap');
+            const msg = document.getElementById('launchMilestoneMsg');
+            if (!wrap || !msg) return;
+            const summary = payload?.summary || {};
+            const items = payload?.items || [];
+            msg.textContent = summary.message || '暂无里程碑数据';
+            wrap.innerHTML = `
+                <div class="row g-3">
+                    ${items.map((item) => `
+                        <div class="col-lg-6">
+                            <div class="detail-card h-100">
+                                <div class="d-flex justify-content-between align-items-center gap-2">
+                                    <strong>${escapeHtml(item.label || item.key || '-')}</strong>
+                                    <span class="job-state ${item.status === 'ready' ? 'job-success' : (item.status === 'pending_external' ? 'job-pending' : 'job-failure')}">
+                                        ${item.status === 'ready' ? '已完成' : (item.status === 'pending_external' ? '待外部条件' : '待补齐')}
+                                    </span>
+                                </div>
+                                <div class="subtle mt-2">${escapeHtml(item.description || '-')}</div>
+                                <div class="subtle mt-2">当前判断：${escapeHtml(item.message || '-')}</div>
+                                ${(item.blockers || []).length ? `
+                                    <div class="mini-note mt-3">
+                                        <strong>当前缺口</strong>
+                                        <div class="subtle mt-2">${(item.blockers || []).map((blocker) => escapeHtml(String(blocker))).join(' ｜ ')}</div>
+                                    </div>
+                                ` : ''}
+                                ${item.next_action ? `<div class="subtle mt-3">下一步：${escapeHtml(item.next_action)}</div>` : ''}
+                                <div class="d-flex gap-2 flex-wrap mt-3">
+                                    ${renderMilestoneActions(item)}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('') || '<div class="text-muted">暂无里程碑数据</div>'}
+                </div>
+            `;
+        }
+
+        function renderMilestoneActions(item) {
+            const key = item?.key || '';
+            if (key === 'web_foundation' || key === 'async_chain') {
+                return '<button class="btn btn-sm btn-outline-dark" onclick="loadDeploymentHelper()">打开部署助手</button><button class="btn btn-sm btn-outline-primary" onclick="runWorkerPing()">检测 Worker</button>';
+            }
+            if (key === 'hotword_pipeline') {
+                return '<button class="btn btn-sm btn-outline-primary" onclick="pingHotwordSync()">测试热点接口</button>';
+            }
+            if (key === 'creator_sync_pipeline') {
+                return '<button class="btn btn-sm btn-outline-primary" onclick="pingCreatorAccountSync()">测试 crawler 接口</button>';
+            }
+            if (key === 'image_pipeline') {
+                return '<button class="btn btn-sm btn-outline-primary" onclick="pingImageProvider()">测试图片接口</button>';
+            }
+            return '';
         }
 
         function renderStyleTypeOptions(targetId, items, selectedValue) {
@@ -1849,6 +1915,7 @@
             const imageHealth = data.image_health || {};
             const serviceMatrix = data.service_matrix || [];
             const deploymentBlockers = data.deployment_blockers || [];
+            const launchMilestones = data.launch_milestones || {};
             const capacity = data.capacity || {};
             const lastPing = worker.last_ping || {};
             const capabilities = data.capabilities || {};
@@ -1857,6 +1924,7 @@
                 ? '最近成功'
                 : (worker.health_status === 'degraded' ? '最近失败' : '未检查');
             renderSystemAlert(serviceMatrix, runtime, deploymentBlockers);
+            renderLaunchMilestones(launchMilestones);
             document.getElementById('diagnosticMsg').textContent = `数据库：${runtime.database_backend || '-'} ｜ Worker：${workerSummary} ｜ Beat：${runtime.beat_enabled ? '启用' : '未启用'} ｜ 图片提供方：${capabilities.image_provider_name || '-'}`;
             wrap.innerHTML = `
                 <div class="row g-3">
@@ -1993,11 +2061,26 @@
                                 <div class="subtle mb-2">${escapeHtml(service.summary || '-')}</div>
                                 <div class="subtle">服务名：${escapeHtml(service.service_name || '-')}</div>
                                 <div class="subtle">启动命令：<code>${escapeHtml(service.start_command || '-')}</code></div>
-                                <div class="subtle mt-2">缺失必填：${(service.missing_required || []).length ? escapeHtml(service.missing_required.join(', ')) : '无'}</div>
+                                <div class="subtle mt-2">缺失必填：${(service.missing_required_items || []).length ? escapeHtml((service.missing_required_items || []).map((item) => item.label || item.key).join('、')) : '无'}</div>
                                 <div class="d-flex gap-2 flex-wrap mt-3">
                                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyDeploymentEnv('${service.key || ''}')">复制环境变量</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyDeploymentMissingEnv('${service.key || ''}')">复制缺失模板</button>
                                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyDeploymentCommand('${service.key || ''}')">复制启动命令</button>
                                 </div>
+                                ${(service.missing_required_items || []).length ? `
+                                    <div class="mt-3">
+                                        ${(service.missing_required_items || []).map((item) => `
+                                            <div class="mini-note mb-2">
+                                                <div class="d-flex justify-content-between align-items-center gap-2">
+                                                    <strong>${escapeHtml(item.label || item.key || '-')}</strong>
+                                                    <span class="badge bg-warning text-dark">${escapeHtml(item.key || '-')}</span>
+                                                </div>
+                                                ${item.purpose ? `<div class="subtle mt-2">${escapeHtml(item.purpose)}</div>` : ''}
+                                                ${item.example ? `<div class="subtle mt-2">建议值：<code>${escapeHtml(item.example)}</code></div>` : ''}
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                ` : ''}
                                 <div class="json-box mt-3">${escapeHtml(service.env_preview || '')}</div>
                             </div>
                         </div>
@@ -2059,6 +2142,12 @@
             const service = deploymentHelperCache[serviceKey];
             if (!service) return;
             document.getElementById('deploymentHelperMsg').textContent = await copyPlainText(service.env_preview || '', `${service.name || serviceKey} 环境变量已复制`);
+        }
+
+        async function copyDeploymentMissingEnv(serviceKey) {
+            const service = deploymentHelperCache[serviceKey];
+            if (!service) return;
+            document.getElementById('deploymentHelperMsg').textContent = await copyPlainText(service.missing_env_preview || '', `${service.name || serviceKey} 缺失模板已复制`);
         }
 
         async function copyDeploymentCommand(serviceKey) {

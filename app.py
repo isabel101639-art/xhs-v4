@@ -2263,6 +2263,152 @@ def _build_deployment_helper_payload():
     hotword_settings = _hotword_runtime_settings()
     creator_sync_settings = _creator_sync_runtime_settings()
     capabilities = _image_provider_capabilities()
+    env_guides = {
+        'SECRET_KEY': {
+            'label': 'Flask 密钥',
+            'purpose': '用于登录会话、表单签名和后台安全校验。',
+            'example': '<生成一串随机长密钥>',
+            'placeholder': '<required secret>',
+        },
+        'ADMIN_USERNAME': {
+            'label': '后台管理员账号',
+            'purpose': '登录管理后台和自动化中心使用。',
+            'example': 'furui',
+        },
+        'ADMIN_PASSWORD': {
+            'label': '后台管理员密码',
+            'purpose': '登录管理后台和自动化中心使用。',
+            'example': '<strong password>',
+            'placeholder': '<required password>',
+        },
+        'DEEPSEEK_API_KEY': {
+            'label': 'DeepSeek API Key',
+            'purpose': '用于候选话题生成、文案生成等 AI 能力。',
+            'example': '<deepseek api key>',
+            'placeholder': '<required api key>',
+        },
+        'DATABASE_URL': {
+            'label': 'PostgreSQL 连接串',
+            'purpose': '主业务数据库，Web、Worker、Beat 都依赖它。',
+            'example': 'postgresql://user:password@postgresql:5432/postgres',
+            'placeholder': '<postgres url>',
+        },
+        'REDIS_URL': {
+            'label': 'Redis 地址',
+            'purpose': '缓存和异步任务基础依赖，建议与 Broker 保持同一实例。',
+            'example': 'redis://redis:6379/0',
+        },
+        'CELERY_BROKER_URL': {
+            'label': 'Celery Broker',
+            'purpose': 'Worker/Beat 分发任务时使用的消息队列地址。',
+            'example': 'redis://redis:6379/0',
+        },
+        'CELERY_RESULT_BACKEND': {
+            'label': 'Celery Result Backend',
+            'purpose': '保存任务执行结果，便于自动化中心查看状态。',
+            'example': 'redis://redis:6379/1',
+        },
+        'ENABLE_AUTOMATION_BEAT': {
+            'label': '启用 Beat 调度',
+            'purpose': '控制定时任务派发服务是否生效。',
+            'example': 'true',
+        },
+        'CELERY_BEAT_LOG_LEVEL': {
+            'label': 'Beat 日志级别',
+            'purpose': '建议保留 info，排查调度时更直观。',
+            'example': 'info',
+        },
+        'HOTWORD_FETCH_MODE': {
+            'label': '热点抓取模式',
+            'purpose': 'remote 时走第三方热点 API，skeleton 时仅本地骨架联调。',
+            'example': 'remote',
+        },
+        'HOTWORD_API_URL': {
+            'label': '热点 API URL',
+            'purpose': '第三方热点接口入口地址。',
+            'example': 'https://api.example.com/hotwords',
+        },
+        'HOTWORD_RESULT_PATH': {
+            'label': '热点结果路径',
+            'purpose': '当第三方返回不是根数组时，用于指定 items 所在路径。',
+            'example': 'data.items',
+        },
+        'HOTWORD_API_HEADERS_JSON': {
+            'label': '热点请求头 JSON',
+            'purpose': '放鉴权 token、会员 key 等头信息。',
+            'example': '{"Authorization":"Bearer xxx"}',
+        },
+        'HOTWORD_API_QUERY_JSON': {
+            'label': '热点 Query JSON',
+            'purpose': '第三方接口要求 URL 参数时填写。',
+            'example': '{"limit":20}',
+        },
+        'HOTWORD_API_BODY_JSON': {
+            'label': '热点 Body JSON',
+            'purpose': '第三方接口要求 POST Body 时填写。',
+            'example': '{"keyword":"医疗"}',
+        },
+        'CREATOR_SYNC_FETCH_MODE': {
+            'label': '账号同步模式',
+            'purpose': 'remote 时会调用 crawler 服务抓取用户账号和笔记。',
+            'example': 'remote',
+        },
+        'CREATOR_SYNC_API_URL': {
+            'label': 'Crawler API URL',
+            'purpose': '报名人账号同步接口地址。',
+            'example': 'http://crawler:8081/xhs/account_posts',
+        },
+        'CREATOR_SYNC_RESULT_PATH': {
+            'label': 'Crawler 结果路径',
+            'purpose': '当 crawler 返回结构不是根节点时指定路径。',
+            'example': 'data',
+        },
+        'CREATOR_SYNC_API_HEADERS_JSON': {
+            'label': 'Crawler 请求头 JSON',
+            'purpose': '需要会员鉴权或签名时填写。',
+            'example': '{"Authorization":"Bearer xxx"}',
+        },
+        'ASSET_IMAGE_PROVIDER': {
+            'label': '图片 Provider',
+            'purpose': '把图片中心从 SVG fallback 切到真实图片服务。',
+            'example': 'volcengine_ark',
+        },
+        'ASSET_IMAGE_API_BASE': {
+            'label': '图片 API Base',
+            'purpose': 'OpenAI 兼容类接口常用的基础地址。',
+            'example': 'https://ark.cn-beijing.volces.com/api/v3',
+        },
+        'ASSET_IMAGE_API_URL': {
+            'label': '图片 API URL',
+            'purpose': '直接指定图片生成接口地址。',
+            'example': 'https://api.example.com/images/generations',
+        },
+        'ASSET_IMAGE_MODEL': {
+            'label': '图片模型名',
+            'purpose': '例如火山引擎模型名或其他供应商模型标识。',
+            'example': 'doubao-seedream-3-0-t2i-250415',
+        },
+        'ASSET_IMAGE_SIZE': {
+            'label': '图片尺寸',
+            'purpose': '默认生成尺寸，建议与封面/海报规格一致。',
+            'example': '1024x1536',
+        },
+        'CRAWLER_PROVIDER': {
+            'label': 'Crawler Provider',
+            'purpose': '先可用 mock 跑通，后续切换到 playwright_xhs。',
+            'example': 'playwright_xhs',
+        },
+        'CRAWLER_PORT': {
+            'label': 'Crawler 端口',
+            'purpose': '独立 crawler 服务监听端口。',
+            'example': '8081',
+        },
+        'PLAYWRIGHT_STORAGE_STATE_PATH': {
+            'label': 'Playwright 登录态文件',
+            'purpose': '真实抓小红书账号时复用登录态，减少人工扫码。',
+            'example': '/app/crawler_service/.state/xhs_storage_state.json',
+        },
+    }
     sensitive_keys = {
         'SECRET_KEY',
         'ADMIN_PASSWORD',
@@ -2337,6 +2483,7 @@ def _build_deployment_helper_payload():
     }
 
     def env_item(key, required=True, label=''):
+        guide = env_guides.get(key, {})
         current_value, source = _deployment_config_value(key, runtime_config=runtime_config)
         display_value = ''
         if current_value:
@@ -2346,16 +2493,21 @@ def _build_deployment_helper_payload():
         configured = bool(current_value)
         preview_value = current_value if (configured and key not in sensitive_keys) else (env_defaults.get(key, '') or '')
         if key in sensitive_keys:
-            preview_value = '<required>' if required else '<optional>'
+            preview_value = guide.get('placeholder') or ('<required>' if required else '<optional>')
+        copy_value = preview_value or guide.get('example') or (guide.get('placeholder') if key in sensitive_keys else '')
         return {
             'key': key,
-            'label': label or key,
+            'label': label or guide.get('label') or key,
             'required': required,
             'configured': configured,
             'display_value': display_value or ('<未配置>' if required else '<可选>'),
             'preview_value': preview_value,
+            'copy_value': copy_value,
             'source': source or ('default' if env_defaults.get(key) else ''),
             'sensitive': key in sensitive_keys,
+            'purpose': guide.get('purpose') or '',
+            'example': guide.get('example') or '',
+            'placeholder': guide.get('placeholder') or '',
         }
 
     services = [
@@ -2486,12 +2638,17 @@ def _build_deployment_helper_payload():
         missing = [item['key'] for item in required_items if not item['configured']]
         service['ready'] = len(missing) == 0
         service['missing_required'] = missing
+        service['missing_required_items'] = [item for item in required_items if not item['configured']]
         preview_lines = []
         for item in required_items + service['optional_envs']:
             if not item['preview_value'] and not item['required']:
                 continue
             preview_lines.append(f"{item['key']}={item['preview_value']}")
         service['env_preview'] = '\n'.join(preview_lines)
+        missing_preview_lines = []
+        for item in service['missing_required_items']:
+            missing_preview_lines.append(f"{item['key']}={item['copy_value'] or '<required>'}")
+        service['missing_env_preview'] = '\n'.join(missing_preview_lines)
 
     missing_required_total = sum(len(item['missing_required']) for item in services)
     current_worker_ping = _latest_worker_ping_snapshot()
@@ -2553,9 +2710,235 @@ def _build_deployment_blockers_payload():
             'service_key': service.get('key'),
             'service_name': service.get('name') or service.get('service_name') or service.get('key'),
             'missing_required': missing,
+            'missing_items': service.get('missing_required_items') or [],
             'start_command': service.get('start_command') or '',
         })
     return blockers
+
+
+def _build_launch_milestones_payload(hotword_health=None, creator_sync_health=None, image_health=None):
+    helper = _build_deployment_helper_payload()
+    services = {item.get('key'): item for item in (helper.get('services') or [])}
+    service_matrix = {item.get('key'): item for item in _build_service_matrix_payload()}
+    hotword_settings = _hotword_runtime_settings()
+    creator_sync_settings = _creator_sync_runtime_settings()
+    hotword_mode = _resolved_hotword_mode(hotword_settings)
+    creator_sync_mode = _resolved_creator_sync_mode(creator_sync_settings)
+    hotword_health = hotword_health or (_hotword_healthcheck(timeout_seconds=3) if hotword_mode == 'remote' else {'enabled': False, 'ok': False, 'message': '当前未启用真实热点接口'})
+    creator_sync_health = creator_sync_health or (_creator_sync_healthcheck(timeout_seconds=3) if creator_sync_mode == 'remote' else {'enabled': False, 'ok': False, 'message': '当前未启用账号同步 crawler'})
+    image_health = image_health or _image_provider_healthcheck(timeout_seconds=5)
+    inline_jobs = _env_flag('INLINE_AUTOMATION_JOBS', False)
+    beat_enabled = _coerce_bool(os.environ.get('ENABLE_AUTOMATION_BEAT', 'true'))
+
+    def milestone_item(key, label, status, description, message, blockers=None, next_action=''):
+        return {
+            'key': key,
+            'label': label,
+            'status': status,
+            'description': description,
+            'message': message,
+            'blockers': blockers or [],
+            'next_action': next_action,
+            'ok': status == 'ready',
+        }
+
+    def item_labels(items):
+        return [item.get('label') or item.get('key') for item in (items or [])]
+
+    milestones = []
+
+    web_service = services.get('web') or {}
+    web_missing = item_labels(web_service.get('missing_required_items'))
+    if web_missing:
+        milestones.append(milestone_item(
+            'web_foundation',
+            'Web 基础服务',
+            'blocked',
+            '前后台页面、健康检查和数据库连接的基础运行层。',
+            f"Web 还缺少 {len(web_missing)} 项关键配置。",
+            blockers=web_missing,
+            next_action='先在当前 Web 服务补齐缺失环境变量，再确认 /healthz 和后台登录可访问。',
+        ))
+    else:
+        milestones.append(milestone_item(
+            'web_foundation',
+            'Web 基础服务',
+            'ready',
+            '前后台页面、健康检查和数据库连接的基础运行层。',
+            '当前 Web 主服务已经具备稳定运行条件。',
+            next_action='保持当前 Web 服务为主入口，后续重点补齐异步链路和外部接口。',
+        ))
+
+    worker_ready = bool(service_matrix.get('worker', {}).get('ok'))
+    beat_ready = bool(service_matrix.get('beat', {}).get('ok'))
+    worker_missing = item_labels((services.get('worker') or {}).get('missing_required_items'))
+    beat_missing = item_labels((services.get('beat') or {}).get('missing_required_items'))
+    async_blockers = worker_missing + beat_missing
+    if inline_jobs:
+        milestones.append(milestone_item(
+            'async_chain',
+            '异步执行链',
+            'pending_external',
+            '负责热点抓取、账号同步、图片生成和定时任务。',
+            '当前处于 inline 本地模式，本地联调可用，但生产仍建议单独部署 Worker / Beat。',
+            blockers=['尚未切换到生产异步模式'],
+            next_action='新增 xhs-v4-worker 和 xhs-v4-beat，并复制部署助手中的缺失模板。',
+        ))
+    elif worker_ready and ((not beat_enabled) or beat_ready):
+        milestones.append(milestone_item(
+            'async_chain',
+            '异步执行链',
+            'ready',
+            '负责热点抓取、账号同步、图片生成和定时任务。',
+            'Worker 与 Beat 已具备运行条件。',
+            next_action='接下来重点验证真实热点源、Crawler 和图片接口。',
+        ))
+    else:
+        if beat_enabled and not beat_ready and not beat_missing:
+            async_blockers.append('Beat 服务尚未部署或未检测到可用 Broker')
+        if not worker_ready and not worker_missing:
+            async_blockers.append('Worker 尚未通过联通检查')
+        milestones.append(milestone_item(
+            'async_chain',
+            '异步执行链',
+            'blocked',
+            '负责热点抓取、账号同步、图片生成和定时任务。',
+            '当前生产异步链路还没有完全到位。',
+            blockers=async_blockers,
+            next_action='先补齐 Worker / Beat 服务和 Redis/Celery 连接，再执行“检测 Worker”。',
+        ))
+
+    if hotword_mode != 'remote':
+        milestones.append(milestone_item(
+            'hotword_pipeline',
+            '热点抓取链路',
+            'pending_external',
+            '从第三方热点接口抓取内容，并自动生成候选话题。',
+            '当前还在 skeleton / 本地模式，真实热点源尚未接入。',
+            blockers=['待提供热点 API URL、鉴权和样例响应'],
+            next_action='你买好热点会员或 API 后，把接口地址、鉴权头和样例 JSON 给我，我直接联调测试。',
+        ))
+    elif hotword_health.get('ok'):
+        milestones.append(milestone_item(
+            'hotword_pipeline',
+            '热点抓取链路',
+            'ready',
+            '从第三方热点接口抓取内容，并自动生成候选话题。',
+            hotword_health.get('message') or '热点远端接口可用。',
+            next_action='下一步可以直接跑首轮真实 TrendNote 抓取并验证自动生题。',
+        ))
+    else:
+        hotword_blockers = []
+        if not (hotword_settings.get('hotword_api_url') or '').strip():
+            hotword_blockers.append('热点 API URL')
+        if not (hotword_settings.get('hotword_api_headers_json') or '').strip():
+            hotword_blockers.append('热点鉴权头 / 会员凭据')
+        if not (hotword_settings.get('hotword_result_path') or '').strip():
+            hotword_blockers.append('结果路径（如返回非根数组）')
+        if not hotword_blockers:
+            hotword_blockers.append(hotword_health.get('message') or '热点接口联通失败')
+        milestones.append(milestone_item(
+            'hotword_pipeline',
+            '热点抓取链路',
+            'blocked',
+            '从第三方热点接口抓取内容，并自动生成候选话题。',
+            '热点接口已切到 remote，但还没联通成功。',
+            blockers=hotword_blockers,
+            next_action='在自动化中心先点“测试热点接口”，根据返回再修请求头、结果路径或超时设置。',
+        ))
+
+    if creator_sync_mode != 'remote':
+        milestones.append(milestone_item(
+            'creator_sync_pipeline',
+            '账号同步链路',
+            'pending_external',
+            '抓取报名人后续发布的笔记，并持续更新互动数据。',
+            'Crawler 真实接口尚未启用，当前还不能自动追踪报名人后续内容。',
+            blockers=['待提供 crawler API / 第三方会员接口', '待部署独立 crawler 服务'],
+            next_action='你买好第三方会员接口后，把 crawler API 结构给我，我直接接通线上账号同步。',
+        ))
+    elif creator_sync_health.get('ok'):
+        milestones.append(milestone_item(
+            'creator_sync_pipeline',
+            '账号同步链路',
+            'ready',
+            '抓取报名人后续发布的笔记，并持续更新互动数据。',
+            creator_sync_health.get('message') or '账号同步 crawler 服务可用。',
+            next_action='下一步可以导入真实账号主页并验证新笔记累计与互动更新。',
+        ))
+    else:
+        creator_blockers = []
+        if not (creator_sync_settings.get('creator_sync_api_url') or '').strip():
+            creator_blockers.append('Crawler API URL')
+        if not (os.environ.get('PLAYWRIGHT_STORAGE_STATE_PATH') or '').strip():
+            creator_blockers.append('Playwright 登录态 / 会员凭据')
+        if not (creator_sync_settings.get('creator_sync_result_path') or '').strip():
+            creator_blockers.append('结果路径（如 crawler 返回非根节点）')
+        if not creator_blockers:
+            creator_blockers.append(creator_sync_health.get('message') or '账号同步接口联通失败')
+        milestones.append(milestone_item(
+            'creator_sync_pipeline',
+            '账号同步链路',
+            'blocked',
+            '抓取报名人后续发布的笔记，并持续更新互动数据。',
+            '账号同步已切到 remote，但 crawler 还没联通成功。',
+            blockers=creator_blockers,
+            next_action='先在自动化中心点“测试 crawler 接口”，确保 /healthz 和返回结构都正常。',
+        ))
+
+    image_provider_name = (_image_provider_capabilities().get('image_provider_name') or 'svg_fallback').strip()
+    image_real_enabled = image_provider_name != 'svg_fallback' and bool(_image_provider_capabilities().get('image_provider_configured'))
+    if not image_real_enabled:
+        milestones.append(milestone_item(
+            'image_pipeline',
+            '图片生成链路',
+            'pending_external',
+            '把图片中心从 SVG fallback 升级为真实图片生成服务。',
+            '当前仍是 SVG fallback，真实图片 API 还没启用。',
+            blockers=['待提供火山引擎或其他图片 API', '待配置模型名 / API Key'],
+            next_action='等你把火山引擎 API 给我后，我会直接用图片调试沙盒完成联调。',
+        ))
+    elif image_health.get('ok'):
+        milestones.append(milestone_item(
+            'image_pipeline',
+            '图片生成链路',
+            'ready',
+            '把图片中心从 SVG fallback 升级为真实图片生成服务。',
+            image_health.get('message') or '图片远端接口可用。',
+            next_action='下一步可以把正式图片任务切到远端生成，并验证素材库回流。',
+        ))
+    else:
+        image_blockers = []
+        capabilities = _image_provider_capabilities()
+        if not capabilities.get('api_key_configured'):
+            image_blockers.append('图片 API Key')
+        if not capabilities.get('image_provider_api_url') and not capabilities.get('image_provider_api_base'):
+            image_blockers.append('图片接口 URL / API Base')
+        if not capabilities.get('image_provider_model'):
+            image_blockers.append('图片模型名')
+        if not image_blockers:
+            image_blockers.append(image_health.get('message') or '图片接口联通失败')
+        milestones.append(milestone_item(
+            'image_pipeline',
+            '图片生成链路',
+            'blocked',
+            '把图片中心从 SVG fallback 升级为真实图片生成服务。',
+            '图片接口已配置，但当前还没联通成功。',
+            blockers=image_blockers,
+            next_action='先套用图片 provider 预设，再用图片调试沙盒逐项排查 API URL、模型和认证信息。',
+        ))
+
+    summary = {
+        'total': len(milestones),
+        'ready': len([item for item in milestones if item['status'] == 'ready']),
+        'blocked': len([item for item in milestones if item['status'] == 'blocked']),
+        'pending_external': len([item for item in milestones if item['status'] == 'pending_external']),
+    }
+    summary['message'] = f"已完成 {summary['ready']}/{summary['total']} 个关键里程碑，还差 {summary['blocked'] + summary['pending_external']} 项。"
+    return {
+        'summary': summary,
+        'items': milestones,
+    }
 
 
 def _build_integration_checklist_payload():
@@ -6632,6 +7015,7 @@ register_automation_dashboard_routes(app, {
     'clear_demo_operational_data': _clear_demo_operational_data,
     'build_deployment_helper_payload': _build_deployment_helper_payload,
     'build_deployment_blockers_payload': _build_deployment_blockers_payload,
+    'build_launch_milestones_payload': _build_launch_milestones_payload,
     'build_integration_checklist_payload': _build_integration_checklist_payload,
     'build_capacity_readiness_payload': _build_capacity_readiness_payload,
     'build_recent_failed_jobs_payload': _build_recent_failed_jobs_payload,
