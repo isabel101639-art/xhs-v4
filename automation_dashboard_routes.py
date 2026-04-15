@@ -34,6 +34,9 @@ def register_automation_dashboard_routes(app, helpers):
     build_integration_contract_payload = helpers['build_integration_contract_payload']
     build_integration_acceptance_payload = helpers['build_integration_acceptance_payload']
     build_trial_readiness_payload = helpers['build_trial_readiness_payload']
+    build_go_live_readiness_payload = helpers['build_go_live_readiness_payload']
+    build_go_live_checklist_payload = helpers['build_go_live_checklist_payload']
+    build_post_launch_watchlist_payload = helpers['build_post_launch_watchlist_payload']
     build_capacity_readiness_payload = helpers['build_capacity_readiness_payload']
     build_recent_failed_jobs_payload = helpers['build_recent_failed_jobs_payload']
     build_service_matrix_payload = helpers['build_service_matrix_payload']
@@ -322,6 +325,27 @@ def register_automation_dashboard_routes(app, helpers):
         if guard:
             return guard
         return jsonify(build_trial_readiness_payload())
+
+    @app.route('/api/admin/go-live-readiness')
+    def go_live_readiness():
+        guard = admin_json_guard()
+        if guard:
+            return guard
+        return jsonify(build_go_live_readiness_payload())
+
+    @app.route('/api/admin/go-live-checklist')
+    def go_live_checklist():
+        guard = admin_json_guard()
+        if guard:
+            return guard
+        return jsonify(build_go_live_checklist_payload())
+
+    @app.route('/api/admin/post-launch-watchlist')
+    def post_launch_watchlist():
+        guard = admin_json_guard()
+        if guard:
+            return guard
+        return jsonify(build_post_launch_watchlist_payload())
 
     @app.route('/api/admin/failed-jobs')
     def failed_jobs():

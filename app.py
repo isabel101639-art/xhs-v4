@@ -1668,6 +1668,450 @@ def _build_trial_readiness_payload():
     }
 
 
+def _build_go_live_readiness_payload():
+    trial = _build_trial_readiness_payload()
+    acceptance = _build_integration_acceptance_payload()
+    launch_milestones = _build_launch_milestones_payload()
+    capacity = _build_capacity_readiness_payload()
+
+    trial_map = {item.get('key'): item for item in (trial.get('items') or [])}
+    acceptance_map = {item.get('key'): item for item in (acceptance.get('items') or [])}
+    milestone_map = {item.get('key'): item for item in (launch_milestones.get('items') or [])}
+
+    hotword_mode = _resolved_hotword_mode(_hotword_runtime_settings())
+    creator_sync_mode = _resolved_creator_sync_mode(_creator_sync_runtime_settings())
+    beat_enabled = _coerce_bool(os.environ.get('ENABLE_AUTOMATION_BEAT', 'true'))
+    inline_jobs = _env_flag('INLINE_AUTOMATION_JOBS', False)
+
+    schedules = {
+        item.job_key: item
+        for item in AutomationSchedule.query.all()
+    }
+
+    def phase_item(key, label, status, message, blockers=None, evidence=None, next_action=''):
+        return {
+            'key': key,
+            'label': label,
+            'status': status,
+            'status_label': {
+                'ready': '可上线',
+                'blocked': '不可上线',
+                'pending_external': '待外部条件',
+                'pending': '待执行',
+            }.get(status, status),
+            'message': message,
+            'blockers': blockers or [],
+            'evidence': evidence or [],
+            'next_action': next_action,
+            'ok': status == 'ready',
+        }
+
+    foundation_blockers = []
+    foundation_evidence = [
+        f"Web：{(milestone_map.get('web_foundation') or {}).get('status_label', '未就绪')}",
+        f"异步执行链：{(milestone_map.get('async_chain') or {}).get('status_label', '未就绪')}",
+        f"容量准备度：{'通过' if capacity.get('summary', {}).get('capacity_ready') else '未通过'}",
+    ]
+    if (milestone_map.get('web_foundation') or {}).get('status') != 'ready':
+        foundation_blockers.append('Web 基础服务未完全就绪')
+    if (milestone_map.get('async_chain') or {}).get('status') != 'ready':
+        foundation_blockers.append('异步执行链未完全就绪')
+    if not capacity.get('summary', {}).get('capacity_ready'):
+        foundation_blockers.append('容量准备度未通过')
+
+    phases = []
+    if foundation_blockers:
+        phases.append(phase_item(
+            'foundation',
+            '基础上线条件',
+            'blocked',
+            '当前基础运行条件还不足以支撑正式上线。',
+            blockers=foundation_blockers,
+            evidence=foundation_evidence,
+            next_action='先补齐 Web、Worker/Beat、容量准备度，再考虑正式上线。',
+        ))
+    else:
+        phases.append(phase_item(
+            'foundation',
+            '基础上线条件',
+            'ready',
+            '当前基础运行层已经具备正式上线条件。',
+            evidence=foundation_evidence,
+            next_action='继续检查自动化调度和外部链路验收。',
+        ))
+
+    schedule_blockers = []
+    schedule_evidence = [
+        f"Beat 环境开关：{'启用' if beat_enabled else '关闭'}",
+        f"执行模式：{'inline 本地模式' if inline_jobs else 'celery 异步模式'}",
+        f"热点调度：{'启用' if bool((schedules.get('hotword_sync_daily') and schedules['hotword_sync_daily'].enabled)) else '关闭'}",
+        f"账号同步调度：{'启用' if bool((schedules.get('creator_accounts_sync_half_hourly') and schedules['creator_accounts_sync_half_hourly'].enabled)) else '关闭'}",
+    ]
+    if inline_jobs:
+        schedule_blockers.append('当前仍是 inline 本地模式')
+    if beat_enabled and not schedules.get('hotword_sync_daily'):
+        schedule_blockers.append('缺少默认热点调度')
+    if beat_enabled and hotword_mode == 'remote' and not bool((schedules.get('hotword_sync_daily') and schedules['hotword_sync_daily'].enabled)):
+        schedule_blockers.append('热点正式调度未启用')
+    if beat_enabled and creator_sync_mode == 'remote' and not bool((schedules.get('creator_accounts_sync_half_hourly') and schedules['creator_accounts_sync_half_hourly'].enabled)):
+        schedule_blockers.append('账号同步正式调度未启用')
+
+    if hotword_mode != 'remote' and creator_sync_mode != 'remote':
+        phases.append(phase_item(
+            'automation',
+            '自动化调度条件',
+            'pending_external',
+            '当前还没有切到真实热点或真实账号同步接口，正式调度暂不需要开启。',
+            blockers=['热点和账号同步仍在本地/骨架模式'],
+            evidence=schedule_evidence,
+            next_action='等真实接口切到 remote 后，再打开对应正式调度。',
+        ))
+    elif schedule_blockers:
+        phases.append(phase_item(
+            'automation',
+            '自动化调度条件',
+            'blocked',
+            '自动化调度条件还不满足正式上线要求。',
+            blockers=schedule_blockers,
+            evidence=schedule_evidence,
+            next_action='把执行模式切到 celery，并开启热点/账号同步正式调度。',
+        ))
+    else:
+        phases.append(phase_item(
+            'automation',
+            '自动化调度条件',
+            'ready',
+            '正式调度条件已经满足，可以按计划自动执行。',
+            evidence=schedule_evidence,
+            next_action='继续检查三条关键外部链路的正式验收状态。',
+        ))
+
+    acceptance_blockers = []
+    acceptance_pending_external = []
+    acceptance_pending = []
+    acceptance_evidence = []
+    for key in ['hotword', 'creator_sync', 'image_provider']:
+        item = acceptance_map.get(key) or {}
+        acceptance_evidence.append(f"{item.get('label', key)}：{item.get('status_label', '未检查')}")
+        if item.get('status') == 'blocked':
+            acceptance_blockers.append(item.get('label') or key)
+        elif item.get('status') == 'pending_external':
+            acceptance_pending_external.append(item.get('label') or key)
+        elif item.get('status') == 'pending':
+            acceptance_pending.append(item.get('label') or key)
+
+    if acceptance_blockers:
+        phases.append(phase_item(
+            'acceptance',
+            '关键链路正式验收',
+            'blocked',
+            '至少有一条关键外部链路还没通过正式验收。',
+            blockers=acceptance_blockers,
+            evidence=acceptance_evidence,
+            next_action='先让热点、账号同步、图片链路的验收面板全部转为“已通过”。',
+        ))
+    elif acceptance_pending_external:
+        phases.append(phase_item(
+            'acceptance',
+            '关键链路正式验收',
+            'pending_external',
+            '系统内部条件已经接近完成，但还在等外部接口条件。',
+            blockers=acceptance_pending_external,
+            evidence=acceptance_evidence,
+            next_action='你把第三方接口给我后，我会按运行卡把正式验收补完。',
+        ))
+    elif acceptance_pending:
+        phases.append(phase_item(
+            'acceptance',
+            '关键链路正式验收',
+            'pending',
+            '关键链路已经开始联调，但还差正式任务入库 / 同步 / 出图验收。',
+            blockers=acceptance_pending,
+            evidence=acceptance_evidence,
+            next_action='执行正式热点抓取、账号同步和图片任务，再看验收面板是否全部转绿。',
+        ))
+    else:
+        phases.append(phase_item(
+            'acceptance',
+            '关键链路正式验收',
+            'ready',
+            '三条关键外部链路都已经通过正式验收。',
+            evidence=acceptance_evidence,
+            next_action='可以进入正式上线前的最后检查。',
+        ))
+
+    overall_blockers = []
+    for phase in phases:
+        if phase['status'] == 'blocked':
+            overall_blockers.extend(phase.get('blockers') or [phase.get('message') or phase.get('label')])
+
+    if overall_blockers:
+        overall = phase_item(
+            'go_live',
+            '正式上线',
+            'blocked',
+            '当前还不适合进入正式上线运营。',
+            blockers=overall_blockers,
+            evidence=[item.get('status_label') for item in phases],
+            next_action='先补齐所有阻塞项，尤其是调度和正式验收项，再进入正式上线。',
+        )
+    else:
+        pending_external = any(item['status'] == 'pending_external' for item in phases)
+        pending_exec = any(item['status'] == 'pending' for item in phases)
+        if pending_external:
+            overall = phase_item(
+                'go_live',
+                '正式上线',
+                'pending_external',
+                '内部主干已经具备，但仍在等待外部接口条件，暂不建议正式上线。',
+                blockers=[item['label'] for item in phases if item['status'] == 'pending_external'],
+                evidence=[item.get('status_label') for item in phases],
+                next_action='等第三方接口到位并完成验收后，再进入正式上线。',
+            )
+        elif pending_exec:
+            overall = phase_item(
+                'go_live',
+                '正式上线',
+                'pending',
+                '当前距离正式上线只差最后几项执行型验收。',
+                blockers=[item['label'] for item in phases if item['status'] == 'pending'],
+                evidence=[item.get('status_label') for item in phases],
+                next_action='把最后待执行的正式任务跑完，再复查上线判断。',
+            )
+        else:
+            overall = phase_item(
+                'go_live',
+                '正式上线',
+                'ready',
+                '当前已经具备正式上线运营条件。',
+                evidence=[item.get('status_label') for item in phases],
+                next_action='可以开始正式运营，并持续观察任务成功率和外部接口稳定性。',
+            )
+
+    summary = {
+        'overall_status': overall['status'],
+        'overall_status_label': overall['status_label'],
+        'message': overall['message'],
+        'phase_count': len(phases) + 1,
+        'ready': len([item for item in phases + [overall] if item['status'] == 'ready']),
+        'blocked': len([item for item in phases + [overall] if item['status'] == 'blocked']),
+        'pending_external': len([item for item in phases + [overall] if item['status'] == 'pending_external']),
+        'pending': len([item for item in phases + [overall] if item['status'] == 'pending']),
+    }
+    return {
+        'success': True,
+        'summary': summary,
+        'items': phases + [overall],
+    }
+
+
+def _build_go_live_checklist_payload():
+    acceptance = _build_integration_acceptance_payload()
+    go_live = _build_go_live_readiness_payload()
+    hotword_mode = _resolved_hotword_mode(_hotword_runtime_settings())
+    creator_sync_mode = _resolved_creator_sync_mode(_creator_sync_runtime_settings())
+    beat_enabled = _coerce_bool(os.environ.get('ENABLE_AUTOMATION_BEAT', 'true'))
+    inline_jobs = _env_flag('INLINE_AUTOMATION_JOBS', False)
+    schedules = {item.job_key: item for item in AutomationSchedule.query.all()}
+
+    admin_password_env = (os.environ.get('ADMIN_PASSWORD') or '').strip()
+    secret_key_env = (os.environ.get('SECRET_KEY') or '').strip()
+    session_secure = _env_flag('SESSION_COOKIE_SECURE', False)
+    preferred_scheme = (os.environ.get('PREFERRED_URL_SCHEME') or 'https').strip().lower()
+    backup_count = BackupRecord.query.count()
+    snapshot_count = ActivitySnapshot.query.count()
+
+    def checklist_item(key, label, status, message, evidence='', next_action=''):
+        return {
+            'key': key,
+            'label': label,
+            'status': status,
+            'status_label': {
+                'ready': '已完成',
+                'blocked': '未完成',
+                'pending': '待执行',
+                'pending_external': '待外部条件',
+            }.get(status, status),
+            'message': message,
+            'evidence': evidence,
+            'next_action': next_action,
+            'ok': status == 'ready',
+        }
+
+    items = []
+    security_ready = bool(secret_key_env) and bool(admin_password_env) and admin_password_env != 'wangdandan39' and preferred_scheme == 'https' and session_secure
+    items.append(checklist_item(
+        'security',
+        '安全配置复核',
+        'ready' if security_ready else 'blocked',
+        '确认 SECRET_KEY、管理员密码、HTTPS 和 Cookie 安全策略都适合正式上线。',
+        evidence=f"SECRET_KEY：{'已配' if secret_key_env else '未配'} ｜ ADMIN_PASSWORD：{'已配' if admin_password_env else '未配'} ｜ SESSION_COOKIE_SECURE：{'true' if session_secure else 'false'} ｜ PREFERRED_URL_SCHEME：{preferred_scheme or '-'}",
+        next_action='正式上线前建议把 SESSION_COOKIE_SECURE 切到 true，并确认管理员密码不是默认值。',
+    ))
+
+    backup_ready = backup_count > 0 or snapshot_count > 0
+    items.append(checklist_item(
+        'backup',
+        '备份 / 快照',
+        'ready' if backup_ready else 'pending',
+        '上线前至少保留一份活动快照或备份记录，方便异常时快速回滚。',
+        evidence=f"备份数：{backup_count} ｜ 快照数：{snapshot_count}",
+        next_action='如果还没有备份，先在后台创建活动快照或手动备份。',
+    ))
+
+    scheduler_required = hotword_mode == 'remote' or creator_sync_mode == 'remote'
+    scheduler_ready = (not beat_enabled) or (not inline_jobs and (
+        (hotword_mode != 'remote' or bool((schedules.get('hotword_sync_daily') and schedules['hotword_sync_daily'].enabled))) and
+        (creator_sync_mode != 'remote' or bool((schedules.get('creator_accounts_sync_half_hourly') and schedules['creator_accounts_sync_half_hourly'].enabled)))
+    ))
+    items.append(checklist_item(
+        'schedules',
+        '正式调度复核',
+        'ready' if scheduler_ready else ('pending_external' if not scheduler_required else 'blocked'),
+        '确认热点巡检和账号同步的正式调度是否已经按线上策略开启。',
+        evidence=f"热点模式：{hotword_mode} ｜ 账号同步模式：{creator_sync_mode} ｜ 热点调度：{'启用' if bool((schedules.get('hotword_sync_daily') and schedules['hotword_sync_daily'].enabled)) else '关闭'} ｜ 账号同步调度：{'启用' if bool((schedules.get('creator_accounts_sync_half_hourly') and schedules['creator_accounts_sync_half_hourly'].enabled)) else '关闭'}",
+        next_action='如果要正式依赖自动抓取，先把 Beat 和对应调度项打开。',
+    ))
+
+    acceptance_items = acceptance.get('items') or []
+    acceptance_ready = all(item.get('status') == 'ready' for item in acceptance_items)
+    items.append(checklist_item(
+        'acceptance',
+        '关键链路正式验收',
+        'ready' if acceptance_ready else ('pending_external' if any(item.get('status') == 'pending_external' for item in acceptance_items) else 'pending'),
+        '确认热点、账号同步、图片三条关键链路都已经通过正式验收。',
+        evidence=' ｜ '.join([f"{item.get('label')}：{item.get('status_label')}" for item in acceptance_items]) or '暂无验收数据',
+        next_action='正式上线前建议至少把会用到的外部链路都转成“已通过”。',
+    ))
+
+    go_live_summary = go_live.get('summary') or {}
+    items.append(checklist_item(
+        'final_review',
+        '最终上线复核',
+        'ready' if go_live_summary.get('overall_status') == 'ready' else 'blocked',
+        go_live_summary.get('message') or '暂无最终上线结论',
+        evidence=f"上线判断：{go_live_summary.get('overall_status_label') or '-'}",
+        next_action='最后再刷新一次“正式上线判断”，确认整体转为“可上线”再开始正式运营。',
+    ))
+
+    summary = {
+        'count': len(items),
+        'ready': len([item for item in items if item['status'] == 'ready']),
+        'blocked': len([item for item in items if item['status'] == 'blocked']),
+        'pending': len([item for item in items if item['status'] == 'pending']),
+        'pending_external': len([item for item in items if item['status'] == 'pending_external']),
+    }
+    summary['message'] = f"上线前最后动作已完成 {summary['ready']}/{summary['count']} 项。"
+    return {
+        'success': True,
+        'summary': summary,
+        'items': items,
+    }
+
+
+def _build_post_launch_watchlist_payload():
+    failed_jobs = _build_recent_failed_jobs_payload(limit=20)
+    last_worker_ping = _latest_worker_ping_snapshot()
+    hotword_task = _latest_data_source_task('hotword_sync')
+    creator_sync_task = _latest_data_source_task('creator_account_sync')
+    asset_task = _latest_asset_generation_task()
+
+    def watch_item(key, label, status, message, evidence=None, threshold=''):
+        return {
+            'key': key,
+            'label': label,
+            'status': status,
+            'status_label': {
+                'ready': '正常',
+                'blocked': '关注',
+                'pending': '待观察',
+            }.get(status, status),
+            'message': message,
+            'evidence': evidence or [],
+            'threshold': threshold,
+            'ok': status == 'ready',
+        }
+
+    failed_count = failed_jobs.get('summary', {}).get('count', 0)
+    failed_messages = [item.get('message') or item.get('kind_label') for item in (failed_jobs.get('items') or [])[:3]]
+    items = [
+        watch_item(
+            'worker',
+            'Worker / 异步任务',
+            'ready' if last_worker_ping.get('status') == 'success' and failed_count == 0 else ('pending' if not last_worker_ping.get('has_result') else 'blocked'),
+            '上线后优先看 Worker Ping 和失败任务是否持续稳定。',
+            evidence=[
+                f"最近 Worker Ping：{last_worker_ping.get('status_label') or '未检查'}",
+                f"最近失败任务数：{failed_count}",
+                *failed_messages,
+            ],
+            threshold='建议失败任务持续为 0，或出现后能在当班内清零。',
+        ),
+        watch_item(
+            'hotword',
+            '热点抓取稳定性',
+            'ready' if hotword_task and hotword_task.status == 'success' else ('pending' if not hotword_task else 'blocked'),
+            '观察热点抓取是否按调度稳定入库，是否出现长时间断更。',
+            evidence=[
+                f"最近任务状态：{hotword_task.status if hotword_task else '无'}",
+                f"最近入库条数：{hotword_task.item_count if hotword_task else 0}",
+                f"热点池总数：{TrendNote.query.count()}",
+            ],
+            threshold='建议每天都能看到新热点入库，且最近任务状态持续成功。',
+        ),
+        watch_item(
+            'creator_sync',
+            '账号同步稳定性',
+            'ready' if creator_sync_task and creator_sync_task.status == 'success' else ('pending' if not creator_sync_task else 'blocked'),
+            '观察账号同步任务是否能稳定跑完，用户后续笔记和互动是否正常累计。',
+            evidence=[
+                f"最近同步状态：{creator_sync_task.status if creator_sync_task else '无'}",
+                f"最近同步条数：{creator_sync_task.item_count if creator_sync_task else 0}",
+                f"账号数：{CreatorAccount.query.count()} ｜ 笔记数：{CreatorPost.query.count()}",
+            ],
+            threshold='建议最近同步任务持续成功，且账号/笔记数能随业务继续增长。',
+        ),
+        watch_item(
+            'image',
+            '图片生成稳定性',
+            'ready' if asset_task and asset_task.status == 'success' else ('pending' if not asset_task else 'blocked'),
+            '如果正式启用图片接口，上线后前几天要重点看图片任务是否报错、素材库是否有沉淀。',
+            evidence=[
+                f"最近图片任务：{asset_task.status if asset_task else '无'}",
+                f"素材库总数：{AssetLibrary.query.count()}",
+                f"真实图片素材数：{AssetLibrary.query.filter(AssetLibrary.source_provider != 'svg_fallback').count()}",
+            ],
+            threshold='建议真实图片任务成功率稳定，素材库持续新增。',
+        ),
+        watch_item(
+            'capacity',
+            '容量与数据增长',
+            'ready' if _build_capacity_readiness_payload().get('summary', {}).get('capacity_ready') else 'blocked',
+            '关注报名、提报、热点、账号笔记等数据量是否按预期增长，避免突然堆积。',
+            evidence=[
+                f"报名数：{Registration.query.count()}",
+                f"提报数：{Submission.query.count()}",
+                f"热点数：{TrendNote.query.count()}",
+                f"候选话题数：{TopicIdea.query.count()}",
+            ],
+            threshold='按你当前目标量级，系统可承接 100+ 人/月、2000 条/月，重点看异步链路是否持续稳定。',
+        ),
+    ]
+
+    summary = {
+        'count': len(items),
+        'healthy': len([item for item in items if item['status'] == 'ready']),
+        'attention': len([item for item in items if item['status'] == 'blocked']),
+        'pending': len([item for item in items if item['status'] == 'pending']),
+    }
+    summary['message'] = f"上线后首周建议重点盯 {summary['count']} 项，目前正常 {summary['healthy']} 项。"
+    return {
+        'success': True,
+        'summary': summary,
+        'items': items,
+    }
+
+
 def _serialize_topic(topic):
     return {
         'id': topic.id,
@@ -7850,6 +8294,9 @@ register_automation_dashboard_routes(app, {
     'build_integration_contract_payload': _build_integration_contract_payload,
     'build_integration_acceptance_payload': _build_integration_acceptance_payload,
     'build_trial_readiness_payload': _build_trial_readiness_payload,
+    'build_go_live_readiness_payload': _build_go_live_readiness_payload,
+    'build_go_live_checklist_payload': _build_go_live_checklist_payload,
+    'build_post_launch_watchlist_payload': _build_post_launch_watchlist_payload,
     'build_capacity_readiness_payload': _build_capacity_readiness_payload,
     'build_recent_failed_jobs_payload': _build_recent_failed_jobs_payload,
     'build_service_matrix_payload': _build_service_matrix_payload,

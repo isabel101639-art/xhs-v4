@@ -753,6 +753,33 @@
         </div>
 
         <div class="panel p-4 mb-4">
+            <div class="section-title">正式上线判断</div>
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                <button class="btn btn-outline-primary" onclick="loadGoLiveReadiness()">刷新正式上线判断</button>
+                <div id="goLiveReadinessMsg" class="subtle d-flex align-items-center"></div>
+            </div>
+            <div id="goLiveReadinessWrap" class="mini-note">这里会综合基础服务、调度、正式验收和容量准备度，判断当前是否适合正式上线运营。</div>
+        </div>
+
+        <div class="panel p-4 mb-4">
+            <div class="section-title">上线前最后动作清单</div>
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                <button class="btn btn-outline-primary" onclick="loadGoLiveChecklist()">刷新动作清单</button>
+                <div id="goLiveChecklistMsg" class="subtle d-flex align-items-center"></div>
+            </div>
+            <div id="goLiveChecklistWrap" class="mini-note">这里会列出正式上线前最后还要确认的动作，包括安全、备份、调度和验收。</div>
+        </div>
+
+        <div class="panel p-4 mb-4">
+            <div class="section-title">上线后首周观察项</div>
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                <button class="btn btn-outline-primary" onclick="loadPostLaunchWatchlist()">刷新观察项</button>
+                <div id="postLaunchWatchlistMsg" class="subtle d-flex align-items-center"></div>
+            </div>
+            <div id="postLaunchWatchlistWrap" class="mini-note">这里会告诉你正式上线后第一周重点盯哪些任务和指标。</div>
+        </div>
+
+        <div class="panel p-4 mb-4">
             <div class="section-title">运行诊断</div>
             <div class="d-flex gap-2 flex-wrap mb-3">
                 <button class="btn btn-outline-primary" onclick="loadDiagnostics()">刷新诊断</button>
@@ -2399,6 +2426,20 @@
             `;
         }
 
+        function renderReadinessActionButtons(item) {
+            const key = item?.key || '';
+            if (['demo', 'foundation'].includes(key)) {
+                return '<button class="btn btn-sm btn-outline-dark" onclick="loadDeploymentHelper()">打开部署助手</button><button class="btn btn-sm btn-outline-primary" onclick="loadDiagnostics()">刷新诊断</button>';
+            }
+            if (['integration', 'automation'].includes(key)) {
+                return '<button class="btn btn-sm btn-outline-dark" onclick="loadDeploymentHelper()">打开部署助手</button><button class="btn btn-sm btn-outline-primary" onclick="loadSchedules()">查看调度</button>';
+            }
+            if (['pilot', 'acceptance', 'go_live'].includes(key)) {
+                return '<button class="btn btn-sm btn-outline-primary" onclick="loadIntegrationAcceptance()">刷新验收</button><button class="btn btn-sm btn-outline-secondary" onclick="loadFirstRunPlaybooks()">看运行卡</button>';
+            }
+            return '';
+        }
+
         async function loadTrialReadiness() {
             const res = await fetch('/api/admin/trial-readiness');
             const data = await res.json();
@@ -2428,9 +2469,127 @@
                                     </div>
                                 ` : ''}
                                 ${item.next_action ? `<div class="subtle mt-3">下一步：${escapeHtml(item.next_action)}</div>` : ''}
+                                <div class="d-flex gap-2 flex-wrap mt-3">
+                                    ${renderReadinessActionButtons(item)}
+                                </div>
                             </div>
                         </div>
                     `).join('') || '<div class="text-muted">暂无试运行判定</div>'}
+                </div>
+            `;
+        }
+
+        async function loadGoLiveReadiness() {
+            const res = await fetch('/api/admin/go-live-readiness');
+            const data = await res.json();
+            const wrap = document.getElementById('goLiveReadinessWrap');
+            if (!data.success) {
+                document.getElementById('goLiveReadinessMsg').textContent = data.message || '正式上线判断加载失败';
+                return;
+            }
+            const summary = data.summary || {};
+            document.getElementById('goLiveReadinessMsg').textContent = `${summary.overall_status_label || '未就绪'} ｜ ${summary.message || ''}`;
+            wrap.innerHTML = `
+                <div class="row g-3">
+                    ${(data.items || []).map((item) => `
+                        <div class="col-lg-4">
+                            <div class="detail-card h-100">
+                                <div class="d-flex justify-content-between align-items-center gap-2">
+                                    <strong>${escapeHtml(item.label || item.key || '-')}</strong>
+                                    <span class="job-state ${item.status === 'ready' ? 'job-success' : (item.status === 'blocked' ? 'job-failure' : 'job-pending')}">
+                                        ${escapeHtml(item.status_label || item.status || '-')}
+                                    </span>
+                                </div>
+                                <div class="subtle mt-2">${escapeHtml(item.message || '-')}</div>
+                                ${(item.blockers || []).length ? `
+                                    <div class="mini-note mt-3">
+                                        <strong>当前阻塞项</strong>
+                                        <div class="subtle mt-2">${(item.blockers || []).map((line) => escapeHtml(String(line))).join(' ｜ ')}</div>
+                                    </div>
+                                ` : ''}
+                                ${(item.evidence || []).length ? `
+                                    <div class="mt-3">
+                                        ${(item.evidence || []).map((line) => `<div class="subtle mb-1">${escapeHtml(String(line))}</div>`).join('')}
+                                    </div>
+                                ` : ''}
+                                ${item.next_action ? `<div class="subtle mt-3">下一步：${escapeHtml(item.next_action)}</div>` : ''}
+                                <div class="d-flex gap-2 flex-wrap mt-3">
+                                    ${renderReadinessActionButtons(item)}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('') || '<div class="text-muted">暂无正式上线判断</div>'}
+                </div>
+            `;
+        }
+
+        async function loadGoLiveChecklist() {
+            const res = await fetch('/api/admin/go-live-checklist');
+            const data = await res.json();
+            const wrap = document.getElementById('goLiveChecklistWrap');
+            if (!data.success) {
+                document.getElementById('goLiveChecklistMsg').textContent = data.message || '上线清单加载失败';
+                return;
+            }
+            const summary = data.summary || {};
+            document.getElementById('goLiveChecklistMsg').textContent = summary.message || '暂无上线清单';
+            wrap.innerHTML = `
+                <div class="row g-3">
+                    ${(data.items || []).map((item) => `
+                        <div class="col-lg-4">
+                            <div class="detail-card h-100">
+                                <div class="d-flex justify-content-between align-items-center gap-2">
+                                    <strong>${escapeHtml(item.label || item.key || '-')}</strong>
+                                    <span class="job-state ${item.status === 'ready' ? 'job-success' : (item.status === 'blocked' ? 'job-failure' : 'job-pending')}">
+                                        ${escapeHtml(item.status_label || item.status || '-')}
+                                    </span>
+                                </div>
+                                <div class="subtle mt-2">${escapeHtml(item.message || '-')}</div>
+                                ${item.evidence ? `<div class="subtle mt-3">${escapeHtml(item.evidence)}</div>` : ''}
+                                ${item.next_action ? `<div class="mini-note mt-3"><strong>下一步</strong><div class="subtle mt-2">${escapeHtml(item.next_action)}</div></div>` : ''}
+                                <div class="d-flex gap-2 flex-wrap mt-3">
+                                    ${renderReadinessActionButtons(item)}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('') || '<div class="text-muted">暂无上线清单</div>'}
+                </div>
+            `;
+        }
+
+        async function loadPostLaunchWatchlist() {
+            const res = await fetch('/api/admin/post-launch-watchlist');
+            const data = await res.json();
+            const wrap = document.getElementById('postLaunchWatchlistWrap');
+            if (!data.success) {
+                document.getElementById('postLaunchWatchlistMsg').textContent = data.message || '观察项加载失败';
+                return;
+            }
+            const summary = data.summary || {};
+            document.getElementById('postLaunchWatchlistMsg').textContent = summary.message || '暂无观察项';
+            wrap.innerHTML = `
+                <div class="row g-3">
+                    ${(data.items || []).map((item) => `
+                        <div class="col-lg-4">
+                            <div class="detail-card h-100">
+                                <div class="d-flex justify-content-between align-items-center gap-2">
+                                    <strong>${escapeHtml(item.label || item.key || '-')}</strong>
+                                    <span class="job-state ${item.status === 'ready' ? 'job-success' : (item.status === 'blocked' ? 'job-failure' : 'job-pending')}">
+                                        ${escapeHtml(item.status_label || item.status || '-')}
+                                    </span>
+                                </div>
+                                <div class="subtle mt-2">${escapeHtml(item.message || '-')}</div>
+                                <div class="mt-3">
+                                    ${(item.evidence || []).map((line) => `<div class="subtle mb-1">${escapeHtml(String(line))}</div>`).join('') || '<div class="text-muted">暂无观察证据</div>'}
+                                </div>
+                                ${item.threshold ? `<div class="mini-note mt-3"><strong>建议阈值</strong><div class="subtle mt-2">${escapeHtml(item.threshold)}</div></div>` : ''}
+                                <div class="d-flex gap-2 flex-wrap mt-3">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="loadFailedJobs()">看失败任务</button>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="loadDiagnostics()">刷新诊断</button>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('') || '<div class="text-muted">暂无观察项</div>'}
                 </div>
             `;
         }
@@ -3255,6 +3414,7 @@
             loadFirstRunPlaybooks();
             loadIntegrationAcceptance();
             loadTrialReadiness();
+            loadGoLiveReadiness();
         }
 
         async function saveHotwordScheduleFromCurrentConfig() {
@@ -3354,6 +3514,7 @@
             loadFirstRunPlaybooks();
             loadIntegrationAcceptance();
             loadTrialReadiness();
+            loadGoLiveReadiness();
         }
 
         async function pingImageProvider() {
@@ -3397,6 +3558,7 @@
             loadFirstRunPlaybooks();
             loadIntegrationAcceptance();
             loadTrialReadiness();
+            loadGoLiveReadiness();
         }
 
         async function retryDataSourceTask(taskId) {
@@ -3605,6 +3767,9 @@
                     loadFirstRunPlaybooks();
                     loadIntegrationAcceptance();
                     loadTrialReadiness();
+                    loadGoLiveReadiness();
+                    loadGoLiveChecklist();
+                    loadPostLaunchWatchlist();
                     loadDataSourceTasks();
                     loadAssetTasks();
                     loadAssetLibrary();
@@ -3689,6 +3854,9 @@
         loadIntegrationContracts();
         loadIntegrationAcceptance();
         loadTrialReadiness();
+        loadGoLiveReadiness();
+        loadGoLiveChecklist();
+        loadPostLaunchWatchlist();
         loadDiagnostics();
         loadReadinessCheck();
         document.getElementById('autoRefreshJobs')?.addEventListener('change', syncJobAutoRefresh);
