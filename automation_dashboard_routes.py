@@ -22,6 +22,9 @@ def register_automation_dashboard_routes(app, helpers):
     image_provider_options = helpers['image_provider_options']
     image_provider_presets = helpers['image_provider_presets']
     image_model_options = helpers['image_model_options']
+    product_category_options = helpers['product_category_options']
+    product_visual_role_options = helpers['product_visual_role_options']
+    product_profile_options = helpers['product_profile_options']
     safe_int = helpers['safe_int']
     build_readiness_checks = helpers['build_readiness_checks']
     build_project_status_payload = helpers['build_project_status_payload']
@@ -74,6 +77,9 @@ def register_automation_dashboard_routes(app, helpers):
             asset_style_types=asset_style_type_options(),
             image_provider_options=image_provider_options(),
             image_model_options=image_model_options('volcengine_las'),
+            product_category_options=product_category_options(),
+            product_visual_role_options=product_visual_role_options(),
+            product_profile_options=product_profile_options(),
         )
 
     @app.route('/api/automation/overview')

@@ -1,6 +1,7 @@
 import json
 import os
 import uuid
+from collections import Counter, defaultdict
 
 from flask import jsonify, request
 from werkzeug.utils import secure_filename
@@ -25,6 +26,7 @@ def register_automation_asset_routes(app, helpers):
     db = helpers['db']
     datetime = helpers['datetime']
     normalize_quota = helpers['normalize_quota']
+    product_profile_meta = helpers['product_profile_meta']
     allowed_upload_exts = {'.png', '.jpg', '.jpeg', '.webp', '.gif'}
 
     def _asset_upload_dir():
@@ -78,6 +80,9 @@ def register_automation_asset_routes(app, helpers):
         library_type = (request.args.get('library_type') or '').strip()
         pool_status = (request.args.get('pool_status') or '').strip()
         source_provider = (request.args.get('source_provider') or '').strip()
+        product_category = (request.args.get('product_category') or '').strip()
+        product_name = (request.args.get('product_name') or '').strip()
+        visual_role = (request.args.get('visual_role') or '').strip()
         keyword = (request.args.get('keyword') or '').strip()
         limit = min(max(safe_int(request.args.get('limit'), 30), 1), 100)
 
@@ -88,11 +93,19 @@ def register_automation_asset_routes(app, helpers):
             query = query.filter_by(pool_status=pool_status)
         if source_provider:
             query = query.filter_by(source_provider=source_provider)
+        if product_category:
+            query = query.filter_by(product_category=product_category)
+        if product_name:
+            query = query.filter(AssetLibrary.product_name.contains(product_name))
+        if visual_role:
+            query = query.filter_by(visual_role=visual_role)
         if keyword:
             query = query.filter(
                 (AssetLibrary.title.contains(keyword)) |
                 (AssetLibrary.subtitle.contains(keyword)) |
-                (AssetLibrary.tags.contains(keyword))
+                (AssetLibrary.tags.contains(keyword)) |
+                (AssetLibrary.product_name.contains(keyword)) |
+                (AssetLibrary.product_indication.contains(keyword))
             )
 
         items = query.order_by(AssetLibrary.created_at.desc(), AssetLibrary.id.desc()).limit(limit).all()
@@ -118,6 +131,15 @@ def register_automation_asset_routes(app, helpers):
             return jsonify({'success': False, 'message': '资产标题不能为空'})
         if not preview_url:
             return jsonify({'success': False, 'message': '预览链接不能为空'})
+        profile_meta = product_profile_meta(data.get('product_profile') or '')
+        product_category = (data.get('product_category') or profile_meta.get('product_category') or '').strip()[:30]
+        product_name = (data.get('product_name') or profile_meta.get('product_name') or '').strip()[:200]
+        product_indication = (data.get('product_indication') or profile_meta.get('product_indication') or '').strip()[:200]
+        visual_role = (data.get('visual_role') or profile_meta.get('default_visual_role') or '').strip()[:50]
+        merged_tags = ','.join(filter(None, [
+            (data.get('tags') or '').strip(),
+            ','.join(profile_meta.get('default_tags') or []),
+        ]))[:300]
 
         item = AssetLibrary(
             library_type=library_type,
@@ -128,7 +150,11 @@ def register_automation_asset_routes(app, helpers):
             model_name=(data.get('model_name') or '').strip()[:100],
             pool_status=(data.get('pool_status') or 'reserve').strip()[:20],
             status='active',
-            tags=(data.get('tags') or '').strip()[:300],
+            product_category=product_category,
+            product_name=product_name,
+            product_indication=product_indication,
+            visual_role=visual_role,
+            tags=merged_tags,
             prompt_text=(data.get('prompt_text') or '').strip(),
             preview_url=preview_url,
             download_name=(data.get('download_name') or '').strip()[:200],
@@ -136,6 +162,11 @@ def register_automation_asset_routes(app, helpers):
                 'manual': True,
                 'library_type': library_type,
                 'preview_url': preview_url,
+                'product_profile': (data.get('product_profile') or '').strip(),
+                'product_category': product_category,
+                'product_name': product_name,
+                'product_indication': product_indication,
+                'visual_role': visual_role,
             }, ensure_ascii=False),
         )
         db.session.add(item)
@@ -145,6 +176,9 @@ def register_automation_asset_routes(app, helpers):
             'library_type': item.library_type,
             'asset_type': item.asset_type,
             'pool_status': item.pool_status,
+            'product_category': item.product_category,
+            'product_name': item.product_name,
+            'visual_role': item.visual_role,
         })
         db.session.commit()
         return jsonify({
@@ -170,6 +204,15 @@ def register_automation_asset_routes(app, helpers):
         title = (request.form.get('title') or '').strip()
         if not title:
             return jsonify({'success': False, 'message': '资产标题不能为空'})
+        profile_meta = product_profile_meta(request.form.get('product_profile') or '')
+        product_category = (request.form.get('product_category') or profile_meta.get('product_category') or '').strip()[:30]
+        product_name = (request.form.get('product_name') or profile_meta.get('product_name') or '').strip()[:200]
+        product_indication = (request.form.get('product_indication') or profile_meta.get('product_indication') or '').strip()[:200]
+        visual_role = (request.form.get('visual_role') or profile_meta.get('default_visual_role') or '').strip()[:50]
+        merged_tags = ','.join(filter(None, [
+            (request.form.get('tags') or '').strip(),
+            ','.join(profile_meta.get('default_tags') or []),
+        ]))[:300]
 
         try:
             upload_result = _save_asset_upload(file_storage)
@@ -185,7 +228,11 @@ def register_automation_asset_routes(app, helpers):
             model_name=(request.form.get('model_name') or '').strip()[:100],
             pool_status=(request.form.get('pool_status') or 'reserve').strip()[:20],
             status='active',
-            tags=(request.form.get('tags') or '').strip()[:300],
+            product_category=product_category,
+            product_name=product_name,
+            product_indication=product_indication,
+            visual_role=visual_role,
+            tags=merged_tags,
             prompt_text=(request.form.get('prompt_text') or '').strip(),
             preview_url=upload_result['preview_url'],
             download_name=((request.form.get('download_name') or '').strip()[:200] or upload_result['download_name']),
@@ -194,6 +241,11 @@ def register_automation_asset_routes(app, helpers):
                 'upload_type': 'local_file',
                 'original_filename': file_storage.filename,
                 'stored_path': upload_result['preview_url'],
+                'product_profile': (request.form.get('product_profile') or '').strip(),
+                'product_category': product_category,
+                'product_name': product_name,
+                'product_indication': product_indication,
+                'visual_role': visual_role,
             }, ensure_ascii=False),
         )
         db.session.add(item)
@@ -204,6 +256,9 @@ def register_automation_asset_routes(app, helpers):
             'asset_type': item.asset_type,
             'pool_status': item.pool_status,
             'preview_url': item.preview_url,
+            'product_category': item.product_category,
+            'product_name': item.product_name,
+            'visual_role': item.visual_role,
         })
         db.session.commit()
         return jsonify({
@@ -221,6 +276,9 @@ def register_automation_asset_routes(app, helpers):
         library_type = (request.args.get('library_type') or '').strip()
         pool_status = (request.args.get('pool_status') or '').strip()
         source_provider = (request.args.get('source_provider') or '').strip()
+        product_category = (request.args.get('product_category') or '').strip()
+        product_name = (request.args.get('product_name') or '').strip()
+        visual_role = (request.args.get('visual_role') or '').strip()
         keyword = (request.args.get('keyword') or '').strip()
 
         query = AssetLibrary.query
@@ -230,19 +288,31 @@ def register_automation_asset_routes(app, helpers):
             query = query.filter_by(pool_status=pool_status)
         if source_provider:
             query = query.filter_by(source_provider=source_provider)
+        if product_category:
+            query = query.filter_by(product_category=product_category)
+        if product_name:
+            query = query.filter(AssetLibrary.product_name.contains(product_name))
+        if visual_role:
+            query = query.filter_by(visual_role=visual_role)
         if keyword:
             query = query.filter(
                 (AssetLibrary.title.contains(keyword)) |
                 (AssetLibrary.subtitle.contains(keyword)) |
-                (AssetLibrary.tags.contains(keyword))
+                (AssetLibrary.tags.contains(keyword)) |
+                (AssetLibrary.product_name.contains(keyword)) |
+                (AssetLibrary.product_indication.contains(keyword))
             )
 
         items = query.order_by(AssetLibrary.created_at.desc(), AssetLibrary.id.desc()).all()
-        rows = ['图库类型,资产类型,标题,副标题,来源提供方,模型,池状态,标签,预览链接,创建时间']
+        rows = ['图库类型,产品分类,产品名称,适应方向,视觉角色,资产类型,标题,副标题,来源提供方,模型,池状态,标签,预览链接,创建时间']
         for item in items:
             serialized = serialize_asset_library_item(item)
             rows.append(','.join([
                 (serialized.get('library_type_label') or '').replace(',', ' '),
+                (serialized.get('product_category_label') or '').replace(',', ' '),
+                (serialized.get('product_name') or '').replace(',', ' '),
+                (serialized.get('product_indication') or '').replace(',', ' '),
+                (serialized.get('visual_role') or '').replace(',', ' '),
                 (serialized.get('asset_type') or '').replace(',', ' '),
                 (serialized.get('title') or '').replace(',', ' '),
                 (serialized.get('subtitle') or '').replace(',', ' '),
@@ -258,6 +328,9 @@ def register_automation_asset_routes(app, helpers):
             'library_type': library_type,
             'pool_status': pool_status,
             'source_provider': source_provider,
+            'product_category': product_category,
+            'product_name': product_name,
+            'visual_role': visual_role,
             'keyword': keyword,
             'count': len(items),
         })
@@ -267,6 +340,47 @@ def register_automation_asset_routes(app, helpers):
             'Content-Type': 'text/csv; charset=utf-8',
             'Content-Disposition': 'attachment; filename=asset_library.csv'
         }
+
+    @app.route('/api/admin/assets/library/insights')
+    def asset_library_insights():
+        guard = admin_json_guard()
+        if guard:
+            return guard
+
+        items = AssetLibrary.query.order_by(AssetLibrary.created_at.desc(), AssetLibrary.id.desc()).all()
+        library_counter = Counter()
+        category_counter = Counter()
+        role_counter = Counter()
+        product_counter = Counter()
+        category_rows = defaultdict(lambda: {'count': 0, 'products': set()})
+        for item in items:
+            library_counter[item.library_type or 'generated'] += 1
+            category_key = (item.product_category or '未分类').strip() or '未分类'
+            role_key = (item.visual_role or '未标记').strip() or '未标记'
+            product_key = (item.product_name or '未指定产品').strip() or '未指定产品'
+            category_counter[category_key] += 1
+            role_counter[role_key] += 1
+            product_counter[product_key] += 1
+            category_rows[category_key]['count'] += 1
+            category_rows[category_key]['products'].add(product_key)
+
+        return jsonify({
+            'success': True,
+            'summary': {
+                'total': len(items),
+                'product_assets': sum(1 for item in items if (item.library_type or '') == 'product'),
+                'reference_assets': sum(1 for item in items if (item.library_type or '') == 'reference'),
+                'distinct_products': len([key for key in product_counter.keys() if key != '未指定产品']),
+            },
+            'library_types': [{'key': key, 'count': count} for key, count in library_counter.items()],
+            'product_categories': [{
+                'key': key,
+                'count': value['count'],
+                'product_count': len([name for name in value['products'] if name != '未指定产品']),
+            } for key, value in category_rows.items()],
+            'visual_roles': [{'key': key, 'count': count} for key, count in role_counter.most_common(10)],
+            'products': [{'name': key, 'count': count} for key, count in product_counter.most_common(12)],
+        })
 
     @app.route('/api/admin/assets/library/<int:item_id>')
     def asset_library_detail(item_id):

@@ -44,6 +44,7 @@ from public_routes import register_public_routes
 from automation_runtime import (
     AUTOMATION_RUNTIME_CONFIG_DEFAULTS,
     ASSET_STYLE_TYPE_DEFINITIONS,
+    PRODUCT_PROFILE_DEFINITIONS,
     VOLCENGINE_MODEL_OPTIONS,
     MEDICAL_SCIENCE_LAYOUT_VARIANTS,
     KNOWLEDGE_CARD_LAYOUT_VARIANTS,
@@ -59,6 +60,10 @@ from automation_runtime import (
     _asset_style_meta,
     _image_model_options,
     _image_provider_capabilities,
+    _product_category_options,
+    _product_visual_role_options,
+    _product_profile_options,
+    _product_profile_meta,
 )
 from creator_import import (
     parse_creator_import_bundle,
@@ -824,6 +829,11 @@ def _serialize_asset_library_item(item, detail=False):
         'pool_status': item.pool_status or 'reserve',
         'pool_status_label': _pool_status_label(item.pool_status or 'reserve'),
         'status': item.status or 'active',
+        'product_category': item.product_category or '',
+        'product_category_label': next((row['label'] for row in _product_category_options() if row['key'] == (item.product_category or '').strip()), item.product_category or ''),
+        'product_name': item.product_name or '',
+        'product_indication': item.product_indication or '',
+        'visual_role': item.visual_role or '',
         'tags': item.tags or '',
         'prompt_text': item.prompt_text or '',
         'preview_url': item.preview_url or '',
@@ -8638,6 +8648,9 @@ register_automation_dashboard_routes(app, {
     'image_provider_options': _image_provider_options,
     'image_provider_presets': _image_provider_presets,
     'image_model_options': _image_model_options,
+    'product_category_options': _product_category_options,
+    'product_visual_role_options': _product_visual_role_options,
+    'product_profile_options': _product_profile_options,
     'safe_int': _safe_int,
     'build_readiness_checks': _build_readiness_checks,
     'build_project_status_payload': _build_project_status_payload,
@@ -8711,6 +8724,7 @@ register_automation_asset_routes(app, {
     'db': db,
     'datetime': datetime,
     'normalize_quota': _normalize_quota,
+    'product_profile_meta': _product_profile_meta,
     'coerce_bool': _coerce_bool,
     'next_schedule_time': _next_schedule_time,
 })
@@ -10731,6 +10745,12 @@ def init_db():
                 'registration_id': 'INTEGER',
                 'topic_id': 'INTEGER',
                 'submission_id': 'INTEGER',
+            },
+            'asset_library': {
+                'product_category': 'VARCHAR(30)',
+                'product_name': 'VARCHAR(200)',
+                'product_indication': 'VARCHAR(200)',
+                'visual_role': 'VARCHAR(50)',
             },
         }
 

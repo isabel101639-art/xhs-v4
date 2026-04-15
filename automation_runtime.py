@@ -115,6 +115,79 @@ IMAGE_PROVIDER_PRESETS = [
     },
 ]
 
+PRODUCT_CATEGORY_OPTIONS = [
+    {'key': 'medicine', 'label': '药品'},
+    {'key': 'device', 'label': '器械'},
+]
+
+PRODUCT_VISUAL_ROLE_OPTIONS = [
+    {'key': 'hero', 'label': '主视觉图'},
+    {'key': 'standard_pack', 'label': '标准包装图'},
+    {'key': 'detail', 'label': '细节图 / 剂型图'},
+    {'key': 'scene', 'label': '场景图'},
+    {'key': 'instruction', 'label': '背面说明图'},
+    {'key': 'device_ui', 'label': '设备界面图'},
+    {'key': 'family_lineup', 'label': '产品家族图'},
+    {'key': 'reference_style', 'label': '风格参考图'},
+]
+
+PRODUCT_PROFILE_DEFINITIONS = [
+    {
+        'key': 'fibroscan_handy',
+        'label': 'FibroScan Handy',
+        'product_category': 'device',
+        'product_name': 'FibroScan Handy',
+        'product_indication': '肝脏无创监测 / 肝弹检测',
+        'default_visual_role': 'hero',
+        'default_tags': ['FibroScan', '福波看', '肝弹', '器械'],
+    },
+    {
+        'key': 'fibroscan_pro',
+        'label': 'FibroScan PRO',
+        'product_category': 'device',
+        'product_name': 'FibroScan PRO',
+        'product_indication': '肝脏无创监测 / 肝弹检测',
+        'default_visual_role': 'hero',
+        'default_tags': ['FibroScan', '福波看', '肝弹', '器械'],
+    },
+    {
+        'key': 'fibroscan_630',
+        'label': 'FibroScan 630',
+        'product_category': 'device',
+        'product_name': 'FibroScan 630',
+        'product_indication': '肝脏无创监测 / 肝弹检测',
+        'default_visual_role': 'hero',
+        'default_tags': ['FibroScan', '福波看', '肝弹', '器械'],
+    },
+    {
+        'key': 'fibroscan_family',
+        'label': 'FibroScan 产品家族',
+        'product_category': 'device',
+        'product_name': 'FibroScan 产品家族',
+        'product_indication': '肝脏无创监测 / 肝弹检测',
+        'default_visual_role': 'family_lineup',
+        'default_tags': ['FibroScan', '福波看', '产品家族', '器械'],
+    },
+    {
+        'key': 'fufang_biejia_ruangan_pian',
+        'label': '复方鳖甲软肝片（金装）',
+        'product_category': 'medicine',
+        'product_name': '复方鳖甲软肝片',
+        'product_indication': '肝纤维化 / 肝硬化',
+        'default_visual_role': 'standard_pack',
+        'default_tags': ['复方鳖甲软肝片', '肝纤维化', '肝硬化', '药品'],
+    },
+    {
+        'key': 'kezhi_jiaonang',
+        'label': '壳脂胶囊',
+        'product_category': 'medicine',
+        'product_name': '壳脂胶囊',
+        'product_indication': '脂肪肝',
+        'default_visual_role': 'standard_pack',
+        'default_tags': ['壳脂胶囊', '脂肪肝', '药品'],
+    },
+]
+
 ASSET_STYLE_TYPE_DEFINITIONS = [
     {
         'key': 'medical_science',
@@ -416,6 +489,26 @@ def _image_provider_options():
 
 def _image_provider_presets():
     return [dict(item) for item in IMAGE_PROVIDER_PRESETS]
+
+
+def _product_category_options():
+    return [dict(item) for item in PRODUCT_CATEGORY_OPTIONS]
+
+
+def _product_visual_role_options():
+    return [dict(item) for item in PRODUCT_VISUAL_ROLE_OPTIONS]
+
+
+def _product_profile_options():
+    return [dict(item) for item in PRODUCT_PROFILE_DEFINITIONS]
+
+
+def _product_profile_meta(profile_key=''):
+    raw = (profile_key or '').strip()
+    for item in PRODUCT_PROFILE_DEFINITIONS:
+        if raw == item['key'] or raw == item['label'] or raw == item['product_name']:
+            return dict(item)
+    return {}
 
 
 def _asset_style_type_options():

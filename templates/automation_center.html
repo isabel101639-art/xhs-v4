@@ -1029,6 +1029,15 @@
                     </select>
                 </div>
                 <div class="col-md-2">
+                    <label class="form-label subtle">产品分类</label>
+                    <select id="assetLibraryProductCategoryFilter" class="form-select" onchange="loadAssetLibrary()">
+                        <option value="">全部</option>
+                        {% for item in product_category_options %}
+                        <option value="{{ item.key }}">{{ item.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
                     <label class="form-label subtle">提供方筛选</label>
                     <select id="assetLibraryProviderFilter" class="form-select" onchange="loadAssetLibrary()">
                         <option value="">全部</option>
@@ -1039,10 +1048,14 @@
                     </select>
                 </div>
                 <div class="col-md-2">
+                    <label class="form-label subtle">产品名筛选</label>
+                    <input id="assetLibraryProductNameFilter" class="form-control" placeholder="如 FibroScan / 复方鳖甲软肝片" oninput="loadAssetLibrary()">
+                </div>
+                <div class="col-md-2">
                     <label class="form-label subtle">关键词筛选</label>
                     <input id="assetLibraryKeywordFilter" class="form-control" placeholder="标题 / 标签 / 话题" oninput="loadAssetLibrary()">
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-1">
                     <label class="form-label subtle">条数</label>
                     <input id="assetLibraryLimitFilter" type="number" min="1" max="100" value="30" class="form-control" onchange="loadAssetLibrary()">
                 </div>
@@ -1068,6 +1081,15 @@
                         <input id="assetLibraryFormAssetType" class="form-control" placeholder="如 产品图 / 知识卡片">
                     </div>
                     <div class="col-md-3">
+                        <label class="form-label subtle">产品预设</label>
+                        <select id="assetLibraryFormProductProfile" class="form-select" onchange="applyAssetProductProfile()">
+                            <option value="">手动填写</option>
+                            {% for item in product_profile_options %}
+                            <option value="{{ item.key }}">{{ item.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
                         <label class="form-label subtle">来源提供方</label>
                         <input id="assetLibraryFormProvider" class="form-control" value="manual_upload">
                     </div>
@@ -1077,6 +1099,32 @@
                             <option value="reserve">储备池</option>
                             <option value="candidate">候选池</option>
                             <option value="formal">正式池</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label subtle">产品分类</label>
+                        <select id="assetLibraryFormProductCategory" class="form-select">
+                            <option value="">未指定</option>
+                            {% for item in product_category_options %}
+                            <option value="{{ item.key }}">{{ item.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label subtle">产品名称</label>
+                        <input id="assetLibraryFormProductName" class="form-control" placeholder="如 FibroScan PRO / 壳脂胶囊">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label subtle">适应方向</label>
+                        <input id="assetLibraryFormProductIndication" class="form-control" placeholder="如 脂肪肝 / 肝硬化 / 肝弹检测">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label subtle">视觉角色</label>
+                        <select id="assetLibraryFormVisualRole" class="form-select">
+                            <option value="">未指定</option>
+                            {% for item in product_visual_role_options %}
+                            <option value="{{ item.key }}">{{ item.label }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                     <div class="col-md-6">
@@ -1124,6 +1172,7 @@
                         <tr>
                             <th>预览</th>
                             <th>分类</th>
+                            <th>产品</th>
                             <th>标题</th>
                             <th>来源</th>
                             <th>池状态</th>
@@ -1132,7 +1181,7 @@
                         </tr>
                     </thead>
                     <tbody id="assetLibraryTableBody">
-                        <tr><td colspan="7" class="text-center text-muted">暂无图片资产</td></tr>
+                        <tr><td colspan="8" class="text-center text-muted">暂无图片资产</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1371,6 +1420,7 @@
         let deploymentHelperCache = {};
         let integrationContractCache = {};
         let integrationHandoffPackCache = null;
+        const productProfiles = {{ product_profile_options|tojson }};
         const assetStyleTypeDefinitions = {{ asset_style_types|tojson }};
         const imageModelDefinitions = {{ image_model_options|tojson }};
 
@@ -1940,12 +1990,16 @@
             const params = new URLSearchParams();
             const libraryType = document.getElementById('assetLibraryTypeFilter')?.value;
             const poolStatus = document.getElementById('assetLibraryPoolFilter')?.value;
+            const productCategory = document.getElementById('assetLibraryProductCategoryFilter')?.value;
             const provider = document.getElementById('assetLibraryProviderFilter')?.value;
+            const productName = document.getElementById('assetLibraryProductNameFilter')?.value?.trim();
             const keyword = document.getElementById('assetLibraryKeywordFilter')?.value?.trim();
             const limit = document.getElementById('assetLibraryLimitFilter')?.value || '30';
             if (libraryType) params.set('library_type', libraryType);
             if (poolStatus) params.set('pool_status', poolStatus);
+            if (productCategory) params.set('product_category', productCategory);
             if (provider) params.set('source_provider', provider);
+            if (productName) params.set('product_name', productName);
             if (keyword) params.set('keyword', keyword);
             if (limit) params.set('limit', limit);
             const res = await fetch(`/api/admin/assets/library?${params.toString()}`);
@@ -1956,9 +2010,11 @@
                 <tr>
                     <td>${item.preview_url ? `<img class="asset-preview" src="${item.preview_url}" alt="${escapeHtml(item.title || '')}" style="max-width:120px;">` : '<span class="text-muted">无预览</span>'}</td>
                     <td>${escapeHtml(item.library_type_label || item.library_type || '-')}</td>
+                    <td>${escapeHtml(item.product_category_label || '-')}<div class="subtle">${escapeHtml(item.product_name || '-')}</div><div class="subtle">${escapeHtml(item.visual_role || '-')}</div></td>
                     <td>
                         <strong>${escapeHtml(item.title || '-')}</strong>
                         <div class="subtle">${escapeHtml(item.topic_name || '-')}</div>
+                        <div class="subtle">${escapeHtml(item.product_indication || '-')}</div>
                     </td>
                     <td>${escapeHtml(item.source_provider || '-')}<div class="subtle">${escapeHtml(item.model_name || '-')}</div></td>
                     <td><span class="badge ${poolStatusClass(item.pool_status)}">${escapeHtml(item.pool_status_label || item.pool_status || '储备池')}</span></td>
@@ -1972,13 +2028,34 @@
                         </div>
                     </td>
                 </tr>
-            `).join('') || '<tr><td colspan="7" class="text-center text-muted">暂无图片资产</td></tr>';
+            `).join('') || '<tr><td colspan="8" class="text-center text-muted">暂无图片资产</td></tr>';
+        }
+
+        function applyAssetProductProfile() {
+            const key = document.getElementById('assetLibraryFormProductProfile')?.value;
+            const profile = (productProfiles || []).find((item) => item.key === key);
+            if (!profile) return;
+            document.getElementById('assetLibraryFormProductCategory').value = profile.product_category || '';
+            document.getElementById('assetLibraryFormProductName').value = profile.product_name || '';
+            document.getElementById('assetLibraryFormProductIndication').value = profile.product_indication || '';
+            document.getElementById('assetLibraryFormVisualRole').value = profile.default_visual_role || '';
+            if (!document.getElementById('assetLibraryFormTags').value.trim() && (profile.default_tags || []).length) {
+                document.getElementById('assetLibraryFormTags').value = (profile.default_tags || []).join(',');
+            }
+            if (!document.getElementById('assetLibraryFormAssetType').value.trim()) {
+                document.getElementById('assetLibraryFormAssetType').value = profile.product_category === 'device' ? '器械产品图' : '药品产品图';
+            }
         }
 
         async function saveAssetLibraryItem() {
             const payload = {
                 library_type: document.getElementById('assetLibraryFormType').value,
                 asset_type: document.getElementById('assetLibraryFormAssetType').value.trim(),
+                product_profile: document.getElementById('assetLibraryFormProductProfile').value,
+                product_category: document.getElementById('assetLibraryFormProductCategory').value,
+                product_name: document.getElementById('assetLibraryFormProductName').value.trim(),
+                product_indication: document.getElementById('assetLibraryFormProductIndication').value.trim(),
+                visual_role: document.getElementById('assetLibraryFormVisualRole').value,
                 source_provider: document.getElementById('assetLibraryFormProvider').value.trim(),
                 pool_status: document.getElementById('assetLibraryFormPoolStatus').value,
                 title: document.getElementById('assetLibraryFormTitle').value.trim(),
@@ -1997,6 +2074,11 @@
             const data = await res.json();
             document.getElementById('assetLibraryMsg').textContent = data.message || '已处理';
             if (data.success) {
+                document.getElementById('assetLibraryFormProductProfile').value = '';
+                document.getElementById('assetLibraryFormProductCategory').value = '';
+                document.getElementById('assetLibraryFormProductName').value = '';
+                document.getElementById('assetLibraryFormProductIndication').value = '';
+                document.getElementById('assetLibraryFormVisualRole').value = '';
                 document.getElementById('assetLibraryFormTitle').value = '';
                 document.getElementById('assetLibraryFormSubtitle').value = '';
                 document.getElementById('assetLibraryFormPreviewUrl').value = '';
@@ -2021,6 +2103,11 @@
             form.append('file', file);
             form.append('library_type', document.getElementById('assetLibraryFormType').value);
             form.append('asset_type', document.getElementById('assetLibraryFormAssetType').value.trim());
+            form.append('product_profile', document.getElementById('assetLibraryFormProductProfile').value);
+            form.append('product_category', document.getElementById('assetLibraryFormProductCategory').value);
+            form.append('product_name', document.getElementById('assetLibraryFormProductName').value.trim());
+            form.append('product_indication', document.getElementById('assetLibraryFormProductIndication').value.trim());
+            form.append('visual_role', document.getElementById('assetLibraryFormVisualRole').value);
             form.append('source_provider', document.getElementById('assetLibraryFormProvider').value.trim());
             form.append('pool_status', document.getElementById('assetLibraryFormPoolStatus').value);
             form.append('title', document.getElementById('assetLibraryFormTitle').value.trim());
@@ -2036,6 +2123,11 @@
             const data = await res.json();
             document.getElementById('assetLibraryMsg').textContent = data.message || '已处理';
             if (data.success) {
+                document.getElementById('assetLibraryFormProductProfile').value = '';
+                document.getElementById('assetLibraryFormProductCategory').value = '';
+                document.getElementById('assetLibraryFormProductName').value = '';
+                document.getElementById('assetLibraryFormProductIndication').value = '';
+                document.getElementById('assetLibraryFormVisualRole').value = '';
                 document.getElementById('assetLibraryFormTitle').value = '';
                 document.getElementById('assetLibraryFormSubtitle').value = '';
                 document.getElementById('assetLibraryFormPreviewUrl').value = '';
@@ -2927,6 +3019,9 @@
                         <div class="col-lg-4">
                             <strong>${escapeHtml(cached.title || '-')}</strong>
                             <div class="subtle mt-2">类型：${escapeHtml(cached.asset_type || '-')}</div>
+                            <div class="subtle">产品：${escapeHtml(cached.product_category_label || '-')} / ${escapeHtml(cached.product_name || '-')}</div>
+                            <div class="subtle">适应方向：${escapeHtml(cached.product_indication || '-')}</div>
+                            <div class="subtle">视觉角色：${escapeHtml(cached.visual_role || '-')}</div>
                             <div class="subtle">话题：${escapeHtml(cached.topic_name || '-')}</div>
                             <div class="subtle">报名人：${escapeHtml(cached.registration_name || '-')}</div>
                             <div class="subtle">池状态：${escapeHtml(cached.pool_status_label || cached.pool_status || '-')}</div>
