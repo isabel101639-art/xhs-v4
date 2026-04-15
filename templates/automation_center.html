@@ -1849,6 +1849,7 @@
             const imageHealth = data.image_health || {};
             const serviceMatrix = data.service_matrix || [];
             const deploymentBlockers = data.deployment_blockers || [];
+            const capacity = data.capacity || {};
             const lastPing = worker.last_ping || {};
             const capabilities = data.capabilities || {};
             const schedules = data.schedules || [];
@@ -1930,6 +1931,13 @@
                         <div class="subtle">Provider：${escapeHtml(imageHealth.provider || '-')}</div>
                         <div class="subtle">说明：${escapeHtml(imageHealth.message || '-')}</div>
                     </div>
+                    <div class="col-lg-3">
+                        <strong>容量准备度</strong>
+                        <div class="subtle mt-2">结论：${capacity.summary?.capacity_ready ? '已就绪' : '需补齐'}</div>
+                        <div class="subtle">说明：${escapeHtml(capacity.summary?.message || '-')}</div>
+                        <div class="subtle">目标：${capacity.target?.people_per_month_target || 0} 人/月 ｜ ${capacity.target?.posts_per_month_target || 0} 帖/月</div>
+                        <div class="subtle">索引就绪：${capacity.index_readiness?.ready || 0}/${capacity.index_readiness?.total || 0}</div>
+                    </div>
                     <div class="col-12">
                         <strong>服务矩阵</strong>
                         <div class="row g-2 mt-2">
@@ -1944,6 +1952,12 @@
                                     </div>
                                 </div>
                             `).join('') || '<div class="text-muted">暂无服务矩阵</div>'}
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <strong>容量风险</strong>
+                        <div class="subtle mt-2">
+                            ${(capacity.risks || []).join('<br>') || '当前没有明显的容量阻塞项'}
                         </div>
                     </div>
                     <div class="col-12">

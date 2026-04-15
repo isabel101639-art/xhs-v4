@@ -1308,6 +1308,7 @@ def _build_readiness_checks():
     creator_sync_mode = _resolved_creator_sync_mode(creator_sync_settings)
     creator_sync_health = _creator_sync_healthcheck(timeout_seconds=2) if creator_sync_mode == 'remote' else None
     image_health = _image_provider_healthcheck(timeout_seconds=5)
+    index_readiness = _build_index_readiness_payload()
     env_checks = [
         {'key': 'DATABASE_URL', 'ok': bool((os.environ.get('DATABASE_URL') or '').strip()), 'message': '数据库连接'},
         {'key': 'REDIS_URL', 'ok': inline_jobs or bool((os.environ.get('REDIS_URL') or '').strip()), 'message': 'Redis 连接' if not inline_jobs else 'Redis 连接（本地内联模式可选）'},
@@ -1333,6 +1334,7 @@ def _build_readiness_checks():
     service_checks = [
         {'key': 'image_provider', 'ok': True, 'message': f'图片 provider：{capability.get("image_provider_name")}'},
         {'key': 'image_provider_ready', 'ok': capability.get('image_provider_configured') or capability.get('fallback_mode'), 'message': '图片任务可运行'},
+        {'key': 'db_indexes', 'ok': index_readiness['summary']['missing'] == 0, 'message': f'数据库关键索引已就绪 {index_readiness["summary"]["ready"]}/{index_readiness["summary"]["total"]}'},
         {'key': 'beat_enabled', 'ok': _coerce_bool(os.environ.get('ENABLE_AUTOMATION_BEAT', 'true')), 'message': 'Beat 开关'},
         {'key': 'image_remote_health', 'ok': (not image_health.get('enabled')) or bool(image_health.get('ok')), 'message': image_health.get('message') or '图片远端接口未检测'},
         {'key': 'hotword_mode', 'ok': hotword_mode in {'remote', 'skeleton'}, 'message': f'热点抓取模式：{hotword_mode}'},
@@ -2873,6 +2875,148 @@ def _build_service_matrix_payload():
             ),
         },
     ]
+
+
+SCHEMA_REQUIRED_INDEXES = {
+    'registration': [
+        ('idx_registration_topic_account', ['topic_id', 'xhs_account']),
+        ('idx_registration_phone', ['phone']),
+        ('idx_registration_group_name', ['group_num', 'name']),
+        ('idx_registration_created_at', ['created_at']),
+    ],
+    'submission': [
+        ('idx_submission_registration_id', ['registration_id']),
+        ('idx_submission_creator_account', ['xhs_creator_account_id']),
+        ('idx_submission_primary_post', ['xhs_primary_post_id']),
+        ('idx_submission_tracking_status', ['xhs_tracking_status']),
+    ],
+    'topic': [
+        ('idx_topic_activity_pool', ['activity_id', 'pool_status']),
+        ('idx_topic_activity_published', ['activity_id', 'published_at']),
+    ],
+    'trend_note': [
+        ('idx_trend_note_link', ['link']),
+        ('idx_trend_note_title_keyword', ['title', 'keyword']),
+        ('idx_trend_note_pool_platform', ['pool_status', 'source_platform']),
+        ('idx_trend_note_created_at', ['created_at']),
+        ('idx_trend_note_hot_score', ['hot_score']),
+    ],
+    'topic_idea': [
+        ('idx_topic_idea_status_activity', ['status', 'activity_id']),
+        ('idx_topic_idea_created_at', ['created_at']),
+    ],
+    'data_source_task': [
+        ('idx_data_source_task_type_status', ['task_type', 'status']),
+        ('idx_data_source_task_created_at', ['created_at']),
+    ],
+    'creator_account': [
+        ('idx_creator_account_platform_phone', ['platform', 'owner_phone']),
+        ('idx_creator_account_platform_handle', ['platform', 'account_handle']),
+        ('idx_creator_account_platform_profile', ['platform', 'profile_url']),
+        ('idx_creator_account_last_synced', ['last_synced_at']),
+    ],
+    'creator_post': [
+        ('idx_creator_post_account_postid', ['creator_account_id', 'platform_post_id']),
+        ('idx_creator_post_account_posturl', ['creator_account_id', 'post_url']),
+        ('idx_creator_post_registration', ['registration_id']),
+        ('idx_creator_post_submission', ['submission_id']),
+        ('idx_creator_post_publish_time', ['publish_time']),
+    ],
+    'creator_account_snapshot': [
+        ('idx_creator_snapshot_account_date', ['creator_account_id', 'snapshot_date']),
+    ],
+    'operation_log': [
+        ('idx_operation_log_action_created', ['action', 'created_at']),
+    ],
+    'announcement': [
+        ('idx_announcement_status_priority', ['status', 'priority']),
+    ],
+}
+
+
+def _existing_index_names(table_name):
+    try:
+        indexes = inspect(db.engine).get_indexes(table_name)
+    except Exception:
+        return set()
+    return {item.get('name') for item in indexes if item.get('name')}
+
+
+def _ensure_indexes(conn, table_name, index_specs):
+    existing_names = _existing_index_names(table_name)
+    created = []
+    for index_name, columns in index_specs:
+        if index_name in existing_names:
+            continue
+        columns_sql = ', '.join(columns)
+        try:
+            conn.execute(text(f'CREATE INDEX IF NOT EXISTS {index_name} ON {table_name} ({columns_sql})'))
+            created.append(index_name)
+            existing_names.add(index_name)
+        except Exception as exc:
+            raise RuntimeError(
+                f'auto index migration failed for {table_name}.{index_name}: ({columns_sql})'
+            ) from exc
+    return created
+
+
+def _build_index_readiness_payload():
+    items = []
+    total = 0
+    ready = 0
+    for table_name, specs in SCHEMA_REQUIRED_INDEXES.items():
+        existing = _existing_index_names(table_name)
+        for index_name, columns in specs:
+            total += 1
+            ok = index_name in existing
+            if ok:
+                ready += 1
+            items.append({
+                'table': table_name,
+                'index_name': index_name,
+                'columns': columns,
+                'ok': ok,
+            })
+    return {
+        'summary': {
+            'total': total,
+            'ready': ready,
+            'missing': total - ready,
+            'ready_rate': round((ready / total) * 100, 2) if total else 100,
+        },
+        'items': items,
+    }
+
+
+def _build_capacity_readiness_payload():
+    index_payload = _build_index_readiness_payload()
+    counts = {
+        'registrations': Registration.query.count(),
+        'submissions': Submission.query.count(),
+        'trend_notes': TrendNote.query.count(),
+        'topic_ideas': TopicIdea.query.count(),
+        'creator_accounts': CreatorAccount.query.count(),
+        'creator_posts': CreatorPost.query.count(),
+    }
+    estimated_monthly_targets = {
+        'people_per_month_target': 100,
+        'posts_per_month_target': 2000,
+    }
+    risks = []
+    if index_payload['summary']['missing'] > 0:
+        risks.append('数据库关键索引未完全补齐，后续数据量上来会影响查询和同步效率。')
+    if not _env_flag('INLINE_AUTOMATION_JOBS', False) and not bool((os.environ.get('CELERY_BROKER_URL') or '').strip()):
+        risks.append('生产异步链路未完全配置，批量任务高峰期可能无法稳定消化。')
+    return {
+        'summary': {
+            'capacity_ready': index_payload['summary']['missing'] == 0,
+            'message': '当前数据量级对 100+ 人/月、2000 条/月没有明显压力，关键在于补齐异步服务和索引。'
+        },
+        'current_counts': counts,
+        'target': estimated_monthly_targets,
+        'index_readiness': index_payload['summary'],
+        'risks': risks,
+    }
 
 
 def _run_worker_ping_check(timeout_seconds=3):
@@ -6489,6 +6633,7 @@ register_automation_dashboard_routes(app, {
     'build_deployment_helper_payload': _build_deployment_helper_payload,
     'build_deployment_blockers_payload': _build_deployment_blockers_payload,
     'build_integration_checklist_payload': _build_integration_checklist_payload,
+    'build_capacity_readiness_payload': _build_capacity_readiness_payload,
     'build_recent_failed_jobs_payload': _build_recent_failed_jobs_payload,
     'build_service_matrix_payload': _build_service_matrix_payload,
     'hotword_runtime_settings': _hotword_runtime_settings,
@@ -8581,6 +8726,8 @@ def init_db():
             existing_columns = {}
             for table_name, required_columns in schema_required_columns.items():
                 existing_columns[table_name] = ensure_columns(conn, table_name, required_columns)
+            for table_name, index_specs in SCHEMA_REQUIRED_INDEXES.items():
+                _ensure_indexes(conn, table_name, index_specs)
 
             submission_columns = existing_columns.get('submission', set())
             if {'likes', 'favorites', 'comments'}.issubset(submission_columns):

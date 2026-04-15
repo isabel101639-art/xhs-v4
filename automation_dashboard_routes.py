@@ -28,6 +28,7 @@ def register_automation_dashboard_routes(app, helpers):
     build_deployment_helper_payload = helpers['build_deployment_helper_payload']
     build_deployment_blockers_payload = helpers['build_deployment_blockers_payload']
     build_integration_checklist_payload = helpers['build_integration_checklist_payload']
+    build_capacity_readiness_payload = helpers['build_capacity_readiness_payload']
     build_recent_failed_jobs_payload = helpers['build_recent_failed_jobs_payload']
     build_service_matrix_payload = helpers['build_service_matrix_payload']
     hotword_runtime_settings = helpers['hotword_runtime_settings']
@@ -206,6 +207,7 @@ def register_automation_dashboard_routes(app, helpers):
             'image_health': image_health,
             'service_matrix': build_service_matrix_payload(),
             'deployment_blockers': build_deployment_blockers_payload(),
+            'capacity': build_capacity_readiness_payload(),
             'capabilities': image_provider_capabilities(),
             'counts': {
                 'activities': Activity.query.count(),
