@@ -805,6 +805,7 @@ def _serialize_asset_library_item(item, detail=False):
         'generated': '生成资产',
         'product': '产品图库',
         'content': '内容素材库',
+        'reference': '风格参考库',
     }
     return {
         'id': item.id,
@@ -5910,6 +5911,20 @@ def _build_style_specific_prompt(style_meta, clean_title='', primary_keyword='',
                 '可在主体周围安排标签框、解释框、对比箭头、定义区和结论区，让层级一目了然。',
                 '插画是医学手绘科普风，不要过度写实，不要廉价卡通，要兼顾专业感和亲和力。',
                 '如果模型不擅长精确文字，请用整齐的信息框和标签占位替代密集长文，保留后期排版空间。',
+            ])
+        return ' '.join(shared_lines + lines)
+
+    if style_key == 'reference_based':
+        lines = [
+            '这是一张参考图驱动的底图任务：优先吸收参考图的构图、色彩、留白、信息块位置和插画气质。',
+            '底图不要直接写中文大段文字，重点是把参考风格转成适合后续叠字的无字或少字底图。',
+            f'信息重点：{focus_text}。',
+            '如果参考图偏医学科普，就保留器官主体、放射状标注、局部放大和对比结构；如果参考图偏知识卡片，就保留模块化信息岛、粗箭头和柔和配色。',
+        ]
+        if prompt_mode != 'fast':
+            lines.extend([
+                '强调“风格靠近而不是照抄”：保留视觉语言，不复制原图中的具体文案、水印或品牌元素。',
+                '底图要给后续标题、说明卡片和标签框预留足够留白，方便系统后处理排版。',
             ])
         return ' '.join(shared_lines + lines)
 

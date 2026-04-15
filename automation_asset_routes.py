@@ -109,7 +109,7 @@ def register_automation_asset_routes(app, helpers):
 
         data = request.json or {}
         library_type = (data.get('library_type') or 'content').strip()
-        if library_type not in {'generated', 'product', 'content'}:
+        if library_type not in {'generated', 'product', 'content', 'reference'}:
             return jsonify({'success': False, 'message': '不支持的图库类型'})
 
         title = (data.get('title') or '').strip()
@@ -164,7 +164,7 @@ def register_automation_asset_routes(app, helpers):
             return jsonify({'success': False, 'message': '请先选择图片文件'})
 
         library_type = (request.form.get('library_type') or 'content').strip()
-        if library_type not in {'generated', 'product', 'content'}:
+        if library_type not in {'generated', 'product', 'content', 'reference'}:
             return jsonify({'success': False, 'message': '不支持的图库类型'})
 
         title = (request.form.get('title') or '').strip()
