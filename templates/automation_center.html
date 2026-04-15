@@ -1189,6 +1189,15 @@
         </div>
 
         <div class="panel p-4 mb-4">
+            <div class="section-title">产品图库分析</div>
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                <button class="btn btn-outline-primary" onclick="loadAssetLibraryInsights()">刷新图库分析</button>
+                <div id="assetLibraryInsightMsg" class="subtle d-flex align-items-center"></div>
+            </div>
+            <div id="assetLibraryInsightWrap" class="mini-note">这里会统计药品/器械覆盖度、视觉角色分布和产品条目完整度。</div>
+        </div>
+
+        <div class="panel p-4 mb-4">
             <div class="section-title">自动调度配置</div>
             <div class="subtle mb-3">这里控制“自动热点巡检”“自动候选话题生成”等周期任务。开启后需要配合独立 `beat` 服务一起运行。</div>
             <div class="d-flex gap-2 flex-wrap mb-3">
@@ -2047,6 +2056,54 @@
             }
         }
 
+        async function loadAssetLibraryInsights() {
+            const res = await fetch('/api/admin/assets/library/insights');
+            const data = await res.json();
+            const wrap = document.getElementById('assetLibraryInsightWrap');
+            if (!data.success) {
+                document.getElementById('assetLibraryInsightMsg').textContent = data.message || '图库分析加载失败';
+                return;
+            }
+            const summary = data.summary || {};
+            document.getElementById('assetLibraryInsightMsg').textContent = `总资产 ${summary.total || 0} ｜ 产品图库 ${summary.product_assets || 0} ｜ 风格参考 ${summary.reference_assets || 0} ｜ 独立产品 ${summary.distinct_products || 0}`;
+            wrap.innerHTML = `
+                <div class="row g-3">
+                    <div class="col-lg-3">
+                        <div class="detail-card h-100">
+                            <strong>图库分类</strong>
+                            <div class="mt-2">
+                                ${(data.library_types || []).map((item) => `<div class="subtle mb-2">${escapeHtml(item.key)}：${item.count}</div>`).join('') || '<div class="text-muted">暂无</div>'}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-3">
+                        <div class="detail-card h-100">
+                            <strong>产品分类覆盖</strong>
+                            <div class="mt-2">
+                                ${(data.product_categories || []).map((item) => `<div class="subtle mb-2">${escapeHtml(item.key)}：${item.count} 张 ｜ ${item.product_count} 个产品</div>`).join('') || '<div class="text-muted">暂无</div>'}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-3">
+                        <div class="detail-card h-100">
+                            <strong>视觉角色分布</strong>
+                            <div class="mt-2">
+                                ${(data.visual_roles || []).map((item) => `<div class="subtle mb-2">${escapeHtml(item.key)}：${item.count}</div>`).join('') || '<div class="text-muted">暂无</div>'}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-3">
+                        <div class="detail-card h-100">
+                            <strong>产品条目 Top</strong>
+                            <div class="mt-2">
+                                ${(data.products || []).map((item) => `<div class="subtle mb-2">${escapeHtml(item.name)}：${item.count}</div>`).join('') || '<div class="text-muted">暂无</div>'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
         async function saveAssetLibraryItem() {
             const payload = {
                 library_type: document.getElementById('assetLibraryFormType').value,
@@ -2088,6 +2145,7 @@
                 document.getElementById('assetLibraryFormPromptText').value = '';
                 document.getElementById('assetLibraryFormFile').value = '';
                 loadAssetLibrary();
+                loadAssetLibraryInsights();
                 loadOverview();
             }
         }
@@ -2137,6 +2195,7 @@
                 document.getElementById('assetLibraryFormPromptText').value = '';
                 document.getElementById('assetLibraryFormFile').value = '';
                 loadAssetLibrary();
+                loadAssetLibraryInsights();
                 loadOverview();
             }
         }
@@ -4174,6 +4233,7 @@
         loadDataSourceTasks();
         loadAssetTasks();
         loadAssetLibrary();
+        loadAssetLibraryInsights();
         loadSchedules();
         loadDeploymentHelper();
         loadIntegrationChecklist();
