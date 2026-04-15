@@ -1105,8 +1105,13 @@
                         <label class="form-label subtle">Prompt / 备注</label>
                         <textarea id="assetLibraryFormPromptText" rows="2" class="form-control" placeholder="记录该资产的来源说明或生成提示词"></textarea>
                     </div>
+                    <div class="col-md-12">
+                        <label class="form-label subtle">本地图片文件</label>
+                        <input id="assetLibraryFormFile" type="file" accept="image/*" class="form-control">
+                    </div>
                     <div class="col-12 d-flex gap-2 flex-wrap">
                         <button class="btn btn-accent" onclick="saveAssetLibraryItem()">保存到资产库</button>
+                        <button class="btn btn-outline-primary" onclick="uploadAssetLibraryFile()">上传本地图片并入库</button>
                         <div id="assetLibraryMsg" class="subtle d-flex align-items-center"></div>
                     </div>
                 </div>
@@ -1997,6 +2002,46 @@
                 document.getElementById('assetLibraryFormTags').value = '';
                 document.getElementById('assetLibraryFormModelName').value = '';
                 document.getElementById('assetLibraryFormPromptText').value = '';
+                document.getElementById('assetLibraryFormFile').value = '';
+                loadAssetLibrary();
+                loadOverview();
+            }
+        }
+
+        async function uploadAssetLibraryFile() {
+            const fileInput = document.getElementById('assetLibraryFormFile');
+            const file = fileInput?.files?.[0];
+            if (!file) {
+                document.getElementById('assetLibraryMsg').textContent = '请先选择图片文件';
+                return;
+            }
+            const form = new FormData();
+            form.append('file', file);
+            form.append('library_type', document.getElementById('assetLibraryFormType').value);
+            form.append('asset_type', document.getElementById('assetLibraryFormAssetType').value.trim());
+            form.append('source_provider', document.getElementById('assetLibraryFormProvider').value.trim());
+            form.append('pool_status', document.getElementById('assetLibraryFormPoolStatus').value);
+            form.append('title', document.getElementById('assetLibraryFormTitle').value.trim());
+            form.append('subtitle', document.getElementById('assetLibraryFormSubtitle').value.trim());
+            form.append('download_name', document.getElementById('assetLibraryFormDownloadName').value.trim());
+            form.append('tags', document.getElementById('assetLibraryFormTags').value.trim());
+            form.append('model_name', document.getElementById('assetLibraryFormModelName').value.trim());
+            form.append('prompt_text', document.getElementById('assetLibraryFormPromptText').value.trim());
+            const res = await fetch('/api/admin/assets/library/upload', {
+                method: 'POST',
+                body: form
+            });
+            const data = await res.json();
+            document.getElementById('assetLibraryMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                document.getElementById('assetLibraryFormTitle').value = '';
+                document.getElementById('assetLibraryFormSubtitle').value = '';
+                document.getElementById('assetLibraryFormPreviewUrl').value = '';
+                document.getElementById('assetLibraryFormDownloadName').value = '';
+                document.getElementById('assetLibraryFormTags').value = '';
+                document.getElementById('assetLibraryFormModelName').value = '';
+                document.getElementById('assetLibraryFormPromptText').value = '';
+                document.getElementById('assetLibraryFormFile').value = '';
                 loadAssetLibrary();
                 loadOverview();
             }

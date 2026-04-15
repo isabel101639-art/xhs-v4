@@ -1,6 +1,9 @@
 import json
+import os
+import uuid
 
 from flask import jsonify, request
+from werkzeug.utils import secure_filename
 
 from models import AssetGenerationTask, AssetLibrary, AutomationSchedule, DataSourceTask
 
@@ -22,6 +25,28 @@ def register_automation_asset_routes(app, helpers):
     db = helpers['db']
     datetime = helpers['datetime']
     normalize_quota = helpers['normalize_quota']
+    allowed_upload_exts = {'.png', '.jpg', '.jpeg', '.webp', '.gif'}
+
+    def _asset_upload_dir():
+        base_dir = os.path.join(app.static_folder, 'uploads', 'asset_library')
+        os.makedirs(base_dir, exist_ok=True)
+        return base_dir
+
+    def _save_asset_upload(file_storage):
+        raw_name = secure_filename(file_storage.filename or '') or 'asset'
+        _, ext = os.path.splitext(raw_name.lower())
+        if ext not in allowed_upload_exts:
+            raise ValueError('仅支持 png/jpg/jpeg/webp/gif 图片文件')
+        unique_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}{ext}"
+        upload_dir = _asset_upload_dir()
+        abs_path = os.path.join(upload_dir, unique_name)
+        file_storage.save(abs_path)
+        rel_path = f"/static/uploads/asset_library/{unique_name}"
+        return {
+            'absolute_path': abs_path,
+            'preview_url': rel_path,
+            'download_name': raw_name[:200],
+        }
 
     @app.route('/api/admin/assets/tasks')
     def list_asset_generation_tasks():
@@ -125,6 +150,65 @@ def register_automation_asset_routes(app, helpers):
         return jsonify({
             'success': True,
             'message': '图片资产已入库',
+            'item': serialize_asset_library_item(item)
+        })
+
+    @app.route('/api/admin/assets/library/upload', methods=['POST'])
+    def upload_asset_library_file():
+        guard = admin_json_guard()
+        if guard:
+            return guard
+
+        file_storage = request.files.get('file')
+        if not file_storage or not (file_storage.filename or '').strip():
+            return jsonify({'success': False, 'message': '请先选择图片文件'})
+
+        library_type = (request.form.get('library_type') or 'content').strip()
+        if library_type not in {'generated', 'product', 'content'}:
+            return jsonify({'success': False, 'message': '不支持的图库类型'})
+
+        title = (request.form.get('title') or '').strip()
+        if not title:
+            return jsonify({'success': False, 'message': '资产标题不能为空'})
+
+        try:
+            upload_result = _save_asset_upload(file_storage)
+        except ValueError as exc:
+            return jsonify({'success': False, 'message': str(exc)})
+
+        item = AssetLibrary(
+            library_type=library_type,
+            asset_type=(request.form.get('asset_type') or '知识卡片').strip()[:50],
+            title=title[:200],
+            subtitle=(request.form.get('subtitle') or '').strip()[:300],
+            source_provider=(request.form.get('source_provider') or 'manual_upload').strip()[:50],
+            model_name=(request.form.get('model_name') or '').strip()[:100],
+            pool_status=(request.form.get('pool_status') or 'reserve').strip()[:20],
+            status='active',
+            tags=(request.form.get('tags') or '').strip()[:300],
+            prompt_text=(request.form.get('prompt_text') or '').strip(),
+            preview_url=upload_result['preview_url'],
+            download_name=((request.form.get('download_name') or '').strip()[:200] or upload_result['download_name']),
+            raw_payload=json.dumps({
+                'manual': True,
+                'upload_type': 'local_file',
+                'original_filename': file_storage.filename,
+                'stored_path': upload_result['preview_url'],
+            }, ensure_ascii=False),
+        )
+        db.session.add(item)
+        db.session.flush()
+        log_operation('create', 'asset_library', target_id=item.id, message='上传图片资产到资产库', detail={
+            'title': item.title,
+            'library_type': item.library_type,
+            'asset_type': item.asset_type,
+            'pool_status': item.pool_status,
+            'preview_url': item.preview_url,
+        })
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': '图片文件已上传并入库',
             'item': serialize_asset_library_item(item)
         })
 
