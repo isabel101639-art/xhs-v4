@@ -780,6 +780,20 @@
         </div>
 
         <div class="panel p-4 mb-4">
+            <div class="section-title">第三方对接交付包</div>
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                <button class="btn btn-outline-primary" onclick="loadIntegrationHandoffPack()">刷新交付包</button>
+                <button class="btn btn-outline-secondary" onclick="copyIntegrationHandoffPack()">复制整包 JSON</button>
+                <button class="btn btn-outline-dark" onclick="exportIntegrationHandoffPack()">下载整包</button>
+                <button class="btn btn-outline-dark" onclick="exportIntegrationHandoffPack('hotword')">下载热点包</button>
+                <button class="btn btn-outline-dark" onclick="exportIntegrationHandoffPack('creator_sync')">下载账号同步包</button>
+                <button class="btn btn-outline-dark" onclick="exportIntegrationHandoffPack('image_provider')">下载图片包</button>
+                <div id="integrationHandoffMsg" class="subtle d-flex align-items-center"></div>
+            </div>
+            <div id="integrationHandoffWrap" class="mini-note">这里会把联调清单、合同样例、运行卡、验收结果、上线判断整合成一份对接交付包。</div>
+        </div>
+
+        <div class="panel p-4 mb-4">
             <div class="section-title">运行诊断</div>
             <div class="d-flex gap-2 flex-wrap mb-3">
                 <button class="btn btn-outline-primary" onclick="loadDiagnostics()">刷新诊断</button>
@@ -1251,6 +1265,15 @@
         </div>
 
         <div class="panel p-4 mb-4">
+            <div class="section-title">语料模板分析中心</div>
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                <button class="btn btn-outline-primary" onclick="loadCorpusInsights()">刷新语料分析</button>
+                <div id="corpusInsightMsg" class="subtle d-flex align-items-center"></div>
+            </div>
+            <div id="corpusInsightWrap" class="mini-note">这里会按分类、标签、模板类型和可复用程度分析当前语料库。</div>
+        </div>
+
+        <div class="panel p-4 mb-4">
             <div class="section-title">语料库</div>
             <div class="row g-3 mb-3">
                 <div class="col-md-3">
@@ -1340,6 +1363,7 @@
         let assetLibraryCache = {};
         let deploymentHelperCache = {};
         let integrationContractCache = {};
+        let integrationHandoffPackCache = null;
         const assetStyleTypeDefinitions = {{ asset_style_types|tojson }};
         const imageModelDefinitions = {{ image_model_options|tojson }};
 
@@ -2594,6 +2618,75 @@
             `;
         }
 
+        async function loadIntegrationHandoffPack(scope = 'all') {
+            const res = await fetch(`/api/admin/integration-handoff-pack?scope=${encodeURIComponent(scope)}`);
+            const data = await res.json();
+            const wrap = document.getElementById('integrationHandoffWrap');
+            if (!data.success) {
+                document.getElementById('integrationHandoffMsg').textContent = data.message || '交付包加载失败';
+                return;
+            }
+            integrationHandoffPackCache = data.package || {};
+            const summary = data.summary || {};
+            document.getElementById('integrationHandoffMsg').textContent = `范围：${summary.scope_label || '-'} ｜ 生成于 ${summary.generated_at || '-'} ｜ 合同 ${summary.contract_count || 0} 份 ｜ 运行卡 ${summary.playbook_count || 0} 条 ｜ 上线状态 ${summary.go_live_status || '-'}`;
+            wrap.innerHTML = `
+                <div class="row g-3">
+                    <div class="col-lg-4">
+                        <div class="detail-card h-100">
+                            <strong>运行快照</strong>
+                            <div class="subtle mt-2">热点模式：${escapeHtml(data.package?.runtime_snapshot?.hotword_mode || '-')}</div>
+                            <div class="subtle">热点接口：${escapeHtml(data.package?.runtime_snapshot?.hotword_api_url || '-')}</div>
+                            <div class="subtle">账号同步模式：${escapeHtml(data.package?.runtime_snapshot?.creator_sync_mode || '-')}</div>
+                            <div class="subtle">账号同步接口：${escapeHtml(data.package?.runtime_snapshot?.creator_sync_api_url || '-')}</div>
+                            <div class="subtle">图片 Provider：${escapeHtml(data.package?.runtime_snapshot?.image_provider || '-')}</div>
+                            <div class="subtle">图片模型：${escapeHtml(data.package?.runtime_snapshot?.image_model || '-')}</div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="detail-card h-100">
+                            <strong>业务数据量</strong>
+                            <div class="subtle mt-2">报名：${data.package?.counts?.registrations || 0}</div>
+                            <div class="subtle">提报：${data.package?.counts?.submissions || 0}</div>
+                            <div class="subtle">热点：${data.package?.counts?.trend_notes || 0}</div>
+                            <div class="subtle">候选话题：${data.package?.counts?.topic_ideas || 0}</div>
+                            <div class="subtle">账号：${data.package?.counts?.creator_accounts || 0}</div>
+                            <div class="subtle">笔记：${data.package?.counts?.creator_posts || 0}</div>
+                            <div class="subtle">素材：${data.package?.counts?.asset_library_items || 0}</div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="detail-card h-100">
+                            <strong>包含内容</strong>
+                            <div class="subtle mt-2">联调清单：${(data.package?.integration_checklist || []).length} 组</div>
+                            <div class="subtle">接口合同：${(data.package?.integration_contracts || []).length} 份</div>
+                            <div class="subtle">首轮运行卡：${(data.package?.first_run_playbooks || []).length} 条</div>
+                            <div class="subtle">联调验收：${(data.package?.integration_acceptance || []).length} 条</div>
+                            <div class="subtle">试运行判定：${(data.package?.trial_readiness || []).length} 条</div>
+                            <div class="subtle">正式上线判断：${(data.package?.go_live_readiness || []).length} 条</div>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="json-box">${escapeHtml(JSON.stringify(data.package || {}, null, 2))}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function copyIntegrationHandoffPack() {
+            if (!integrationHandoffPackCache) {
+                document.getElementById('integrationHandoffMsg').textContent = '请先刷新交付包';
+                return;
+            }
+            document.getElementById('integrationHandoffMsg').textContent = await copyPlainText(
+                JSON.stringify(integrationHandoffPackCache, null, 2),
+                '第三方对接交付包已复制'
+            );
+        }
+
+        function exportIntegrationHandoffPack(scope = 'all') {
+            window.open(`/api/admin/integration-handoff-pack/export?scope=${encodeURIComponent(scope)}`, '_blank');
+        }
+
         async function copyDeploymentEnv(serviceKey) {
             const service = deploymentHelperCache[serviceKey];
             if (!service) return;
@@ -2934,6 +3027,98 @@
                     </td>
                 </tr>
             `).join('') || '<tr><td colspan="7" class="text-center text-muted">暂无语料</td></tr>';
+            loadCorpusInsights();
+        }
+
+        async function loadCorpusInsights() {
+            const params = new URLSearchParams();
+            const poolStatus = document.getElementById('corpusPoolFilter')?.value;
+            if (poolStatus) params.set('pool_status', poolStatus);
+            const res = await fetch(`/api/corpus/insights?${params.toString()}`);
+            const data = await res.json();
+            const wrap = document.getElementById('corpusInsightWrap');
+            if (!data.success) {
+                document.getElementById('corpusInsightMsg').textContent = data.message || '语料分析加载失败';
+                return;
+            }
+            const summary = data.summary || {};
+            document.getElementById('corpusInsightMsg').textContent = summary.message || '暂无语料分析结果';
+            wrap.innerHTML = `
+                <div class="row g-3">
+                    <div class="col-lg-3">
+                        <div class="detail-card h-100">
+                            <strong>概览</strong>
+                            <div class="subtle mt-2">总数：${summary.total || 0}</div>
+                            <div class="subtle">激活：${summary.active || 0}</div>
+                            <div class="subtle">平均长度：${summary.avg_content_length || 0}</div>
+                            <div class="subtle">分类数：${summary.category_count || 0}</div>
+                            <div class="subtle">标签数：${summary.tag_count || 0}</div>
+                            <div class="subtle">模板数：${summary.template_count || 0}</div>
+                        </div>
+                    </div>
+                    <div class="col-lg-3">
+                        <div class="detail-card h-100">
+                            <strong>分类分布</strong>
+                            <div class="mt-2">
+                                ${(data.categories || []).map((item) => `
+                                    <div class="subtle mb-2">${escapeHtml(item.category)}：${item.count} 条<div class="text-muted">平均使用 ${item.avg_usage} ｜ 候选池 ${item.candidate_count}</div></div>
+                                `).join('') || '<div class="text-muted">暂无分类数据</div>'}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-3">
+                        <div class="detail-card h-100">
+                            <strong>高频标签</strong>
+                            <div class="mt-2">
+                                ${(data.tags || []).map((item) => `
+                                    <div class="subtle mb-2">${escapeHtml(item.tag)}：${item.count} 次</div>
+                                `).join('') || '<div class="text-muted">暂无标签数据</div>'}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-3">
+                        <div class="detail-card h-100">
+                            <strong>语料缺口</strong>
+                            <div class="mt-2">
+                                ${(data.gaps || []).map((item) => `<div class="subtle mb-2">${escapeHtml(item)}</div>`).join('') || '<div class="text-muted">当前没有明显缺口</div>'}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="detail-card h-100">
+                            <strong>模板类型</strong>
+                            <div class="mt-3">
+                                ${(data.templates || []).map((item) => `
+                                    <div class="mini-note mb-2">
+                                        <div class="d-flex justify-content-between align-items-center gap-2">
+                                            <strong>${escapeHtml(item.template_label)}</strong>
+                                            <span class="badge bg-light text-dark">${item.count} 条</span>
+                                        </div>
+                                        <div class="subtle mt-2">${escapeHtml(item.formula || '-')}</div>
+                                        <div class="subtle mt-2">平均使用：${item.avg_usage} ｜ 平均长度：${item.avg_length}</div>
+                                        <div class="subtle mt-2">示例：${escapeHtml((item.sample_titles || []).join(' ｜ ') || '-')}</div>
+                                    </div>
+                                `).join('') || '<div class="text-muted">暂无模板分析结果</div>'}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-5">
+                        <div class="detail-card h-100">
+                            <strong>高复用语料</strong>
+                            <div class="mt-3">
+                                ${(data.reusable_entries || []).map((item) => `
+                                    <div class="mini-note mb-2">
+                                        <strong>${escapeHtml(item.title || '-')}</strong>
+                                        <div class="subtle mt-2">${escapeHtml(item.category || '-')} ｜ ${escapeHtml(item.template_type || '-')}</div>
+                                        <div class="subtle mt-2">使用 ${item.usage_count || 0} 次 ｜ 长度 ${item.content_length || 0}</div>
+                                        <div class="subtle mt-2">标签：${escapeHtml((item.tags || []).join('、') || '-')}</div>
+                                    </div>
+                                `).join('') || '<div class="text-muted">暂无高复用语料</div>'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
         }
 
         async function loadIdeas() {
@@ -3770,6 +3955,7 @@
                     loadGoLiveReadiness();
                     loadGoLiveChecklist();
                     loadPostLaunchWatchlist();
+                    loadIntegrationHandoffPack();
                     loadDataSourceTasks();
                     loadAssetTasks();
                     loadAssetLibrary();
@@ -3857,6 +4043,7 @@
         loadGoLiveReadiness();
         loadGoLiveChecklist();
         loadPostLaunchWatchlist();
+        loadIntegrationHandoffPack();
         loadDiagnostics();
         loadReadinessCheck();
         document.getElementById('autoRefreshJobs')?.addEventListener('change', syncJobAutoRefresh);

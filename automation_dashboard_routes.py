@@ -1,4 +1,6 @@
-from flask import jsonify, redirect, render_template, request, session, url_for
+import json
+
+from flask import Response, jsonify, redirect, render_template, request, session, url_for
 
 from models import (
     Activity,
@@ -37,6 +39,7 @@ def register_automation_dashboard_routes(app, helpers):
     build_go_live_readiness_payload = helpers['build_go_live_readiness_payload']
     build_go_live_checklist_payload = helpers['build_go_live_checklist_payload']
     build_post_launch_watchlist_payload = helpers['build_post_launch_watchlist_payload']
+    build_integration_handoff_pack_payload = helpers['build_integration_handoff_pack_payload']
     build_capacity_readiness_payload = helpers['build_capacity_readiness_payload']
     build_recent_failed_jobs_payload = helpers['build_recent_failed_jobs_payload']
     build_service_matrix_payload = helpers['build_service_matrix_payload']
@@ -346,6 +349,32 @@ def register_automation_dashboard_routes(app, helpers):
         if guard:
             return guard
         return jsonify(build_post_launch_watchlist_payload())
+
+    @app.route('/api/admin/integration-handoff-pack')
+    def integration_handoff_pack():
+        guard = admin_json_guard()
+        if guard:
+            return guard
+        scope = (request.args.get('scope') or 'all').strip()
+        return jsonify(build_integration_handoff_pack_payload(scope=scope))
+
+    @app.route('/api/admin/integration-handoff-pack/export')
+    def export_integration_handoff_pack():
+        guard = admin_json_guard()
+        if guard:
+            return guard
+        scope = (request.args.get('scope') or 'all').strip()
+        payload = build_integration_handoff_pack_payload(scope=scope)
+        filename_scope = (payload.get('summary', {}).get('scope') or 'all').strip() or 'all'
+        filename = f'integration_handoff_pack_{filename_scope}.json'
+        body = json.dumps(payload.get('package') or {}, ensure_ascii=False, indent=2)
+        return Response(
+            body,
+            mimetype='application/json',
+            headers={
+                'Content-Disposition': f'attachment; filename=\"{filename}\"'
+            }
+        )
 
     @app.route('/api/admin/failed-jobs')
     def failed_jobs():

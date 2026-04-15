@@ -2112,6 +2112,120 @@ def _build_post_launch_watchlist_payload():
     }
 
 
+def _build_integration_handoff_pack_payload(scope='all'):
+    hotword_settings = _hotword_runtime_settings()
+    creator_sync_settings = _creator_sync_runtime_settings()
+    image_capabilities = _image_provider_capabilities()
+    checklist = _build_integration_checklist_payload()
+    contracts = _build_integration_contract_payload()
+    playbooks = _build_first_run_playbooks_payload()
+    acceptance = _build_integration_acceptance_payload()
+    trial = _build_trial_readiness_payload()
+    go_live = _build_go_live_readiness_payload()
+    go_live_checklist = _build_go_live_checklist_payload()
+    post_launch = _build_post_launch_watchlist_payload()
+
+    safe_scope = (scope or 'all').strip() or 'all'
+    scope_meta = {
+        'all': {'label': '完整交付包'},
+        'hotword': {'label': '热点接口交付包', 'checklist_key': 'hotword_api', 'runtime_keys': ['hotword_mode', 'hotword_api_url']},
+        'creator_sync': {'label': '账号同步交付包', 'checklist_key': 'creator_sync', 'runtime_keys': ['creator_sync_mode', 'creator_sync_api_url']},
+        'image_provider': {'label': '图片接口交付包', 'checklist_key': 'image_provider', 'runtime_keys': ['image_provider', 'image_api_url', 'image_model']},
+    }
+    if safe_scope not in scope_meta:
+        safe_scope = 'all'
+
+    package = {
+        'generated_at': _format_datetime(datetime.now()),
+        'scope': safe_scope,
+        'scope_label': scope_meta[safe_scope]['label'],
+        'runtime_snapshot': {
+            'hotword_mode': _resolved_hotword_mode(hotword_settings),
+            'hotword_api_url': hotword_settings.get('hotword_api_url') or '',
+            'creator_sync_mode': _resolved_creator_sync_mode(creator_sync_settings),
+            'creator_sync_api_url': creator_sync_settings.get('creator_sync_api_url') or '',
+            'image_provider': image_capabilities.get('image_provider_name') or 'svg_fallback',
+            'image_api_url': image_capabilities.get('image_provider_api_url') or '',
+            'image_model': image_capabilities.get('image_provider_model') or '',
+        },
+        'counts': {
+            'registrations': Registration.query.count(),
+            'submissions': Submission.query.count(),
+            'trend_notes': TrendNote.query.count(),
+            'topic_ideas': TopicIdea.query.count(),
+            'creator_accounts': CreatorAccount.query.count(),
+            'creator_posts': CreatorPost.query.count(),
+            'asset_library_items': AssetLibrary.query.count(),
+            'enabled_schedules': AutomationSchedule.query.filter_by(enabled=True).count(),
+        },
+        'integration_checklist': checklist,
+        'integration_contracts': contracts.get('items') or [],
+        'first_run_playbooks': playbooks.get('items') or [],
+        'integration_acceptance': acceptance.get('items') or [],
+        'trial_readiness': trial.get('items') or [],
+        'go_live_readiness': go_live.get('items') or [],
+        'go_live_checklist': go_live_checklist.get('items') or [],
+        'post_launch_watchlist': post_launch.get('items') or [],
+    }
+    if safe_scope != 'all':
+        package['integration_checklist'] = [
+            item for item in package['integration_checklist']
+            if item.get('key') == scope_meta[safe_scope].get('checklist_key')
+        ]
+        package['integration_contracts'] = [
+            item for item in package['integration_contracts']
+            if item.get('key') == safe_scope
+        ]
+        package['first_run_playbooks'] = [
+            item for item in package['first_run_playbooks']
+            if item.get('key') == safe_scope
+        ]
+        package['integration_acceptance'] = [
+            item for item in package['integration_acceptance']
+            if item.get('key') == safe_scope
+        ]
+        package['runtime_snapshot'] = {
+            key: value for key, value in package['runtime_snapshot'].items()
+            if key in scope_meta[safe_scope].get('runtime_keys', [])
+        }
+        package['trial_readiness'] = [
+            item for item in package['trial_readiness']
+            if item.get('key') in {'integration', 'pilot'}
+        ]
+        package['go_live_readiness'] = [
+            item for item in package['go_live_readiness']
+            if item.get('key') in {'automation', 'acceptance', 'go_live'}
+        ]
+        package['go_live_checklist'] = [
+            item for item in package['go_live_checklist']
+            if item.get('key') in {'schedules', 'acceptance', 'final_review'}
+        ]
+        package['post_launch_watchlist'] = [
+            item for item in package['post_launch_watchlist']
+            if item.get('key') in {
+                'hotword' if safe_scope == 'hotword' else (
+                    'creator_sync' if safe_scope == 'creator_sync' else 'image'
+                ),
+                'worker',
+                'capacity',
+            }
+        ]
+    return {
+        'success': True,
+        'summary': {
+            'generated_at': package['generated_at'],
+            'scope': safe_scope,
+            'scope_label': package['scope_label'],
+            'checklist_sections': len(package['integration_checklist']),
+            'contract_count': len(package['integration_contracts']),
+            'playbook_count': len(package['first_run_playbooks']),
+            'acceptance_count': len(package['integration_acceptance']),
+            'go_live_status': go_live.get('summary', {}).get('overall_status_label') or '未就绪',
+        },
+        'package': package,
+    }
+
+
 def _serialize_topic(topic):
     return {
         'id': topic.id,
@@ -2150,6 +2264,188 @@ def _serialize_corpus_entry(entry):
         'pool_status_label': _pool_status_label(entry.pool_status or 'reserve'),
         'created_at': entry.created_at.strftime('%Y-%m-%d %H:%M:%S') if entry.created_at else '',
         'updated_at': entry.updated_at.strftime('%Y-%m-%d %H:%M:%S') if entry.updated_at else '',
+    }
+
+
+CORPUS_TEMPLATE_TYPE_DEFINITIONS = [
+    {'key': 'checklist', 'label': '清单模板', 'formula': '适合“问题 + 3~5 条建议/动作”的知识清单'},
+    {'key': 'myth_busting', 'label': '误区纠正', 'formula': '适合“误区/别再/不是这样”式反认知内容'},
+    {'key': 'comparison', 'label': '对比拆解', 'formula': '适合“区别/对比/选哪个”式内容'},
+    {'key': 'process', 'label': '流程步骤', 'formula': '适合“先做什么，再做什么，最后如何判断”的流程表达'},
+    {'key': 'qna', 'label': '问答答疑', 'formula': '适合“为什么/怎么做/要不要”式答疑内容'},
+    {'key': 'case_story', 'label': '案例故事', 'formula': '适合“案例/患者/经历/故事”式情境内容'},
+    {'key': 'standard_explain', 'label': '标准说明', 'formula': '适合稳定、规范、知识说明类内容'},
+]
+
+
+def _split_corpus_tags(raw_tags):
+    return [item.strip() for item in re.split(r'[\n,，;；、|/]+', raw_tags or '') if item.strip()]
+
+
+def _corpus_template_meta(template_key=''):
+    raw = (template_key or '').strip()
+    for item in CORPUS_TEMPLATE_TYPE_DEFINITIONS:
+        if item['key'] == raw:
+            return dict(item)
+    return dict(CORPUS_TEMPLATE_TYPE_DEFINITIONS[-1])
+
+
+def _infer_corpus_template_type(title='', content=''):
+    text = f"{title or ''}\n{content or ''}".strip()
+    line_count = len([line for line in (content or '').splitlines() if line.strip()])
+    numbered_lines = len(re.findall(r'(^|\n)\s*(\d+[、\.]|[-*•])', content or ''))
+
+    if any(token in text for token in ['误区', '别再', '不是这样', '避坑', '别把']):
+        return _corpus_template_meta('myth_busting')
+    if any(token in text for token in ['对比', '区别', 'vs', 'VS', '哪个好', '怎么选']):
+        return _corpus_template_meta('comparison')
+    if any(token in text for token in ['案例', '患者', '经历', '故事', '复盘']):
+        return _corpus_template_meta('case_story')
+    if any(token in text for token in ['为什么', '怎么', '如何', '？', '?', '要不要']):
+        return _corpus_template_meta('qna')
+    if any(token in text for token in ['步骤', '流程', '先', '再', '最后']) and line_count >= 2:
+        return _corpus_template_meta('process')
+    if numbered_lines >= 2 or any(token in text for token in ['清单', '建议', '做到', '记住', '重点']) or line_count >= 4:
+        return _corpus_template_meta('checklist')
+    return _corpus_template_meta('standard_explain')
+
+
+def _build_corpus_insights_payload(pool_status='', category=''):
+    expected_categories = ['爆款拆解', '医学科普', '合规表达', '产品卖点', '封面模板']
+    query = CorpusEntry.query
+    raw_pool = (pool_status or '').strip()
+    raw_category = (category or '').strip()
+    if raw_pool:
+        query = query.filter_by(pool_status=raw_pool)
+    if raw_category:
+        query = query.filter_by(category=raw_category)
+    entries = query.order_by(CorpusEntry.updated_at.desc(), CorpusEntry.id.desc()).all()
+
+    category_counter = Counter()
+    source_counter = Counter()
+    tag_counter = Counter()
+    pool_counter = Counter()
+    template_counter = Counter()
+    template_samples = defaultdict(list)
+    category_stats = defaultdict(lambda: {'count': 0, 'usage': 0, 'length': 0, 'candidate': 0, 'reserve': 0, 'archived': 0})
+    template_stats = defaultdict(lambda: {'count': 0, 'usage': 0, 'length': 0})
+
+    reusable_entries = []
+    total_length = 0
+    for entry in entries:
+        content = (entry.content or '').strip()
+        title = (entry.title or '').strip()
+        content_length = len(content)
+        total_length += content_length
+        category_key = (entry.category or '未分类').strip() or '未分类'
+        source_key = (entry.source or '未标记来源').strip() or '未标记来源'
+        pool_key = (entry.pool_status or 'reserve').strip() or 'reserve'
+        template_meta = _infer_corpus_template_type(title=title, content=content)
+        template_key = template_meta['key']
+
+        category_counter[category_key] += 1
+        source_counter[source_key] += 1
+        pool_counter[pool_key] += 1
+        template_counter[template_key] += 1
+        for tag in _split_corpus_tags(entry.tags):
+            tag_counter[tag] += 1
+
+        stats = category_stats[category_key]
+        stats['count'] += 1
+        stats['usage'] += entry.usage_count or 0
+        stats['length'] += content_length
+        stats[pool_key if pool_key in {'candidate', 'reserve', 'archived'} else 'reserve'] += 1
+
+        t_stats = template_stats[template_key]
+        t_stats['count'] += 1
+        t_stats['usage'] += entry.usage_count or 0
+        t_stats['length'] += content_length
+        if len(template_samples[template_key]) < 3:
+            template_samples[template_key].append(title or f'语料 #{entry.id}')
+
+        reusable_entries.append({
+            'id': entry.id,
+            'title': title,
+            'category': category_key,
+            'source': source_key,
+            'usage_count': entry.usage_count or 0,
+            'content_length': content_length,
+            'template_type': template_meta['label'],
+            'tags': _split_corpus_tags(entry.tags)[:4],
+            'updated_at': _format_datetime(entry.updated_at),
+        })
+
+    reusable_entries.sort(key=lambda item: (item['usage_count'], item['content_length']), reverse=True)
+
+    category_rows = []
+    for key, stats in category_stats.items():
+        category_rows.append({
+            'category': key,
+            'count': stats['count'],
+            'avg_usage': round(stats['usage'] / stats['count'], 2) if stats['count'] else 0,
+            'avg_length': round(stats['length'] / stats['count'], 2) if stats['count'] else 0,
+            'candidate_count': stats['candidate'],
+            'reserve_count': stats['reserve'],
+            'archived_count': stats['archived'],
+        })
+    category_rows.sort(key=lambda item: (item['count'], item['avg_usage']), reverse=True)
+
+    source_rows = [{'source': key, 'count': count} for key, count in source_counter.most_common(8)]
+    tag_rows = [{'tag': key, 'count': count} for key, count in tag_counter.most_common(12)]
+    pool_rows = [{'pool_status': key, 'count': count, 'label': _pool_status_label(key)} for key, count in pool_counter.items()]
+
+    template_rows = []
+    for template_key, count in template_counter.items():
+        meta = _corpus_template_meta(template_key)
+        stats = template_stats[template_key]
+        template_rows.append({
+            'template_key': template_key,
+            'template_label': meta['label'],
+            'formula': meta['formula'],
+            'count': count,
+            'avg_usage': round(stats['usage'] / count, 2) if count else 0,
+            'avg_length': round(stats['length'] / count, 2) if count else 0,
+            'sample_titles': template_samples.get(template_key, []),
+        })
+    template_rows.sort(key=lambda item: (item['count'], item['avg_usage']), reverse=True)
+
+    gaps = []
+    for name in expected_categories:
+        row = next((item for item in category_rows if item['category'] == name), None)
+        if not row:
+            gaps.append(f'{name} 暂无语料，建议优先补 3~5 条标准样本。')
+        elif row['count'] < 3:
+            gaps.append(f'{name} 只有 {row["count"]} 条语料，建议再补充。')
+    if not tag_rows:
+        gaps.append('当前语料标签较少，建议后续录入时统一补标签，方便检索和复用。')
+
+    summary = {
+        'total': len(entries),
+        'active': len([item for item in entries if (item.status or 'active') == 'active']),
+        'avg_content_length': round(total_length / len(entries), 2) if entries else 0,
+        'category_count': len(category_rows),
+        'tag_count': len(tag_counter),
+        'template_count': len(template_rows),
+        'message': (
+            f'当前共 {len(entries)} 条语料，已识别 {len(template_rows)} 类模板。'
+            if entries else
+            '当前语料库还没有数据，先补样本后分析价值更高。'
+        ),
+    }
+    return {
+        'success': True,
+        'summary': summary,
+        'categories': category_rows,
+        'sources': source_rows,
+        'tags': tag_rows,
+        'pools': pool_rows,
+        'templates': template_rows,
+        'reusable_entries': reusable_entries[:8],
+        'gaps': gaps[:8],
+        'filters': {
+            'pool_status': raw_pool,
+            'category': raw_category,
+        },
     }
 
 
@@ -2599,6 +2895,9 @@ def _build_readiness_checks():
 def _build_project_status_payload():
     readiness = _build_readiness_checks()
     capability = _image_provider_capabilities()
+    image_real_provider_ready = bool(capability.get('image_provider_configured')) and not bool(capability.get('fallback_mode'))
+    corpus_insight_ready = True
+    integration_delivery_ready = True
     counts = {
         'activities': Activity.query.count(),
         'topics': Topic.query.count(),
@@ -2639,7 +2938,6 @@ def _build_project_status_payload():
         item['ok'] for item in readiness['env_checks']
         if item['key'] in {'REDIS_URL', 'CELERY_BROKER_URL', 'CELERY_RESULT_BACKEND', 'SECRET_KEY'}
     )
-    image_real_provider_ready = bool(capability.get('image_provider_configured')) and not bool(capability.get('fallback_mode'))
 
     modules = [
         {
@@ -2697,8 +2995,8 @@ def _build_project_status_payload():
             'name': '图片库与文生图中心',
             'phase': 'P1',
             'status': 'in_progress',
-            'progress': 60 if image_real_provider_ready else 52,
-            'summary': '图片任务流、素材库和样式系统已做完基础版，但默认还是 SVG 兜底。',
+            'progress': 72 if image_real_provider_ready else 62,
+            'summary': '图片任务流、素材库、调试沙盒、Provider 预设和联调工具都已具备，但真实出图接口还没最终接入。',
             'evidence': f'图片任务 {counts["asset_generation_tasks"]} 条，素材库 {counts["asset_library_items"]} 条，当前 provider {capability.get("image_provider_name") or "-"}。',
             'next_step': '接入真实图片模型服务，替换 fallback 路径。',
         },
@@ -2747,11 +3045,11 @@ def _build_project_status_payload():
             'name': '报名人账号数据看板',
             'phase': 'P1',
             'status': 'in_progress',
-            'progress': 58 if counts['creator_accounts'] > 0 else 48,
+            'progress': 64 if counts['creator_accounts'] > 0 else 54,
             'summary': (
-                '账号、笔记、快照、统计接口和后台看板都在，已开始有样本回流，但覆盖面还不够。'
+                '账号、笔记、快照、统计接口、账号同步运行卡和联调验收都在，已开始有样本回流，但覆盖面还不够。'
                 if counts['creator_accounts'] > 0 else
-                '账号、笔记、快照、统计接口和后台看板都在，但当前库里还没有运营样本。'
+                '账号、笔记、快照、统计接口、账号同步联调工具和后台看板都在，但当前库里还没有运营样本。'
             ),
             'evidence': f'账号 {counts["creator_accounts"]} 个，笔记 {counts["creator_posts"]} 条。',
             'next_step': (
@@ -2759,6 +3057,26 @@ def _build_project_status_payload():
                 if counts['creator_accounts'] > 0 else
                 '先导入一批演示或真实账号数据，验证排行和趋势是否符合预期。'
             ),
+        },
+        {
+            'key': 'M14',
+            'name': '语料模板分析中心',
+            'phase': 'P1',
+            'status': 'done' if counts['corpus_entries'] > 0 and corpus_insight_ready else 'in_progress',
+            'progress': 84 if counts['corpus_entries'] > 0 and corpus_insight_ready else 72,
+            'summary': '语料库已新增模板类型识别、分类/标签分析、高复用语料和缺口分析，P1 里的语料增强能力已基本落地。',
+            'evidence': f'语料 {counts["corpus_entries"]} 条，可识别模板类型并输出缺口建议。',
+            'next_step': '后续继续靠真实运营样本提升模板识别和复用建议的准确度。',
+        },
+        {
+            'key': 'M15',
+            'name': '第三方对接与联调交付中台',
+            'phase': 'P1',
+            'status': 'done' if integration_delivery_ready else 'in_progress',
+            'progress': 86 if integration_delivery_ready else 74,
+            'summary': '已具备接口合同样例、运行卡、联调记录、验收结果、上线判断和第三方交付包，内部对接工具链已基本完整。',
+            'evidence': '自动化中心已提供合同样例、运行卡、验收结果、上线清单和对接交付包。',
+            'next_step': '下一步主要是拿真实 API 做最终联调，不再需要继续补内部对接工具。',
         },
         {
             'key': 'M12',
@@ -2800,8 +3118,8 @@ def _build_project_status_payload():
             'key': 'P1',
             'name': '增强版本',
             'status': 'in_progress',
-            'progress': avg_progress(['M06', 'M11', 'M13']),
-            'summary': '图片中心、账号看板、权限体系已经有基础，但离完整增强版还有一段距离。',
+            'progress': avg_progress(['M06', 'M11', 'M13', 'M14', 'M15']),
+            'summary': '增强版内部工具和内容资产中台已基本成型，剩余主要是接入真实外部服务做最终验收。',
         },
         {
             'key': 'P2',
@@ -2828,6 +3146,11 @@ def _build_project_status_payload():
         blockers.append({
             'title': '候选话题池暂无记录',
             'detail': '审核发布流代码已经在，但还没有看到首批真实候选话题数据。',
+        })
+    if counts['creator_accounts'] == 0 and counts['creator_posts'] == 0:
+        blockers.append({
+            'title': '账号看板样本不足',
+            'detail': '账号同步链路和看板已经在，但还缺真实账号/笔记样本支撑分析。',
         })
     if not image_real_provider_ready:
         blockers.append({
@@ -2873,18 +3196,28 @@ def _build_project_status_payload():
         })
 
     overall_progress = round(sum(item['progress'] for item in modules) / len(modules)) if modules else 0
+    external_dependencies = []
+    if counts['trend_notes'] == 0:
+        external_dependencies.append('真实热点 API')
+    if not image_real_provider_ready:
+        external_dependencies.append('真实图片 API')
+    if counts['creator_accounts'] == 0 and counts['creator_posts'] == 0:
+        external_dependencies.append('真实账号同步接口 / 样本')
     return {
         'success': True,
         'updated_at': _format_datetime(datetime.now()),
         'summary': {
             'estimated_completion': overall_progress,
-            'current_stage': 'P0 收尾 + P1 推进',
-            'delivery_status': '可运营骨架已成型',
+            'current_stage': 'P0 收尾 + P1 内部能力收口',
+            'delivery_status': '内部中台能力已接近完成',
             'readiness_rate': readiness_rate,
             'codebase_size_lines': 7702,
             'demo_data_present': demo_total > 0,
             'demo_data_count': demo_total,
-            'key_message': '当前最值得继续投入的是“真实数据源接入 + 异步链路联通 + 样本数据灌入”。',
+            'internal_finishable_today': True,
+            'external_dependency_count': len(external_dependencies),
+            'external_dependencies': external_dependencies,
+            'key_message': '今天还能继续完成内部能力收口，但真正 100% 验收仍取决于真实热点、图片和账号同步接口。',
         },
         'milestones': milestones,
         'modules': modules,
@@ -7483,6 +7816,17 @@ def corpus_entries():
     })
 
 
+@app.route('/api/corpus/insights')
+def corpus_insights():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    pool_status = (request.args.get('pool_status') or '').strip()
+    category = (request.args.get('category') or '').strip()
+    return jsonify(_build_corpus_insights_payload(pool_status=pool_status, category=category))
+
+
 @app.route('/api/corpus/<int:entry_id>/pool_status', methods=['POST'])
 def update_corpus_pool_status(entry_id):
     guard = _admin_json_guard()
@@ -8297,6 +8641,7 @@ register_automation_dashboard_routes(app, {
     'build_go_live_readiness_payload': _build_go_live_readiness_payload,
     'build_go_live_checklist_payload': _build_go_live_checklist_payload,
     'build_post_launch_watchlist_payload': _build_post_launch_watchlist_payload,
+    'build_integration_handoff_pack_payload': _build_integration_handoff_pack_payload,
     'build_capacity_readiness_payload': _build_capacity_readiness_payload,
     'build_recent_failed_jobs_payload': _build_recent_failed_jobs_payload,
     'build_service_matrix_payload': _build_service_matrix_payload,
