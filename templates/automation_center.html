@@ -1020,11 +1020,13 @@
                         </div>
                     </div>
                     <div class="col-12 d-flex gap-2 flex-wrap">
+                        <button class="btn btn-outline-primary" onclick="previewAssetGenerationPlan()">预览图片方案</button>
                         <button class="btn btn-accent" onclick="runAssetGenerationJob()">创建图片任务</button>
                         <div id="assetJobMsg" class="subtle d-flex align-items-center"></div>
                     </div>
                 </div>
             </div>
+            <div id="assetJobPlanPreview" class="detail-card mt-3 text-muted">预览图片方案后，这里会显示文案拆解、产品上下文、参考图和请求预览。</div>
             <div class="row g-3 mb-3">
                 <div class="col-md-3">
                     <label class="form-label subtle">状态筛选</label>
@@ -2086,6 +2088,81 @@
                 loadAssetTasks();
                 loadJobHistory();
             }
+        }
+
+        async function previewAssetGenerationPlan() {
+            const payload = {
+                registration_id: parseInt(document.getElementById('assetJobRegistrationId').value || '0', 10),
+                image_count: parseInt(document.getElementById('assetJobImageCount').value || '1', 10),
+                style_type: document.getElementById('assetJobStyleType').value,
+                title_hint: document.getElementById('assetJobTitleHint').value.trim(),
+                product_profile: document.getElementById('assetJobProductProfile').value,
+                reference_asset_ids: document.getElementById('assetJobReferenceAssetIds').value.trim(),
+                selected_content: [document.getElementById('assetJobSelectedContent').value.trim(), document.getElementById('assetJobNote').value.trim()].filter(Boolean).join('\n'),
+            };
+            const res = await fetch('/api/admin/assets/plan-preview', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            const wrap = document.getElementById('assetJobPlanPreview');
+            if (!data.success) {
+                document.getElementById('assetJobMsg').textContent = data.message || '图片方案预览失败';
+                return;
+            }
+            const plan = data.plan || {};
+            document.getElementById('assetJobMsg').textContent = `已生成图片方案预览：${plan.style_label || '-'} ｜ ${plan.generation_mode || '-'}`;
+            wrap.innerHTML = `
+                <div class="row g-3">
+                    <div class="col-lg-4">
+                        <strong>方案概览</strong>
+                        <div class="subtle mt-2">报名人：${escapeHtml(plan.registration_name || '-')}</div>
+                        <div class="subtle">话题：${escapeHtml(plan.topic_name || '-')}</div>
+                        <div class="subtle">图片类型：${escapeHtml(plan.style_label || '-')}</div>
+                        <div class="subtle">生成模式：${escapeHtml(plan.generation_mode || '-')}</div>
+                        <div class="subtle">标题：${escapeHtml(plan.title_hint || '-')}</div>
+                    </div>
+                    <div class="col-lg-4">
+                        <strong>产品上下文</strong>
+                        <div class="subtle mt-2">产品：${escapeHtml(plan.product_context?.product_name || '-')}</div>
+                        <div class="subtle">分类：${escapeHtml(plan.product_context?.product_category || '-')}</div>
+                        <div class="subtle">适应方向：${escapeHtml(plan.product_context?.product_indication || '-')}</div>
+                        <div class="subtle">预设：${escapeHtml(plan.product_context?.product_profile || '-')}</div>
+                    </div>
+                    <div class="col-lg-4">
+                        <strong>后处理方案</strong>
+                        <div class="subtle mt-2">主标题：${escapeHtml(plan.overlay_plan?.headline || '-')}</div>
+                        <div class="subtle">副标题：${escapeHtml(plan.overlay_plan?.subheadline || '-')}</div>
+                        <div class="subtle">要点：${escapeHtml((plan.overlay_plan?.bullet_points || []).join(' ｜ ') || '-')}</div>
+                        <div class="subtle mt-2">${escapeHtml(plan.overlay_plan?.postprocess || '-')}</div>
+                    </div>
+                    <div class="col-lg-6">
+                        <strong>参考图</strong>
+                        <div class="mt-2 d-flex gap-3 flex-wrap">
+                            ${(plan.reference_assets || []).map((asset) => `
+                                <div style="max-width:140px;">
+                                    ${asset.preview_url ? `<img class="asset-preview" src="${asset.preview_url}" alt="${escapeHtml(asset.title || '')}">` : '<div class="subtle">无预览</div>'}
+                                    <div class="subtle mt-1">${escapeHtml(asset.title || '-')}</div>
+                                    <div class="subtle">${escapeHtml(asset.product_name || '-')}</div>
+                                </div>
+                            `).join('') || '<div class="subtle">未选择参考图</div>'}
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <strong>文案拆解要点</strong>
+                        <div class="json-box mt-2">${escapeHtml(JSON.stringify(plan.content_points || [], null, 2))}</div>
+                    </div>
+                    <div class="col-lg-6">
+                        <strong>提示词</strong>
+                        <div class="json-box mt-2">${escapeHtml(plan.prompt_text || '')}</div>
+                    </div>
+                    <div class="col-lg-6">
+                        <strong>请求预览</strong>
+                        <div class="json-box mt-2">${escapeHtml(JSON.stringify(plan.request_preview || {}, null, 2))}</div>
+                    </div>
+                </div>
+            `;
         }
 
         function getAssetJobReferenceIds() {

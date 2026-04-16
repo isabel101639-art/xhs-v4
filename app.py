@@ -8710,6 +8710,95 @@ def _dispatch_asset_generation(payload, actor='system'):
     }
 
 
+def _build_asset_generation_plan_payload(payload):
+    runtime_config = _automation_runtime_config()
+    registration_id = _safe_int(payload.get('registration_id'), 0)
+    reg = Registration.query.get(registration_id) if registration_id else None
+    style_value = (payload.get('style_type') or runtime_config.get('image_default_style_type') or 'medical_science')
+    style_meta = _asset_style_meta(style_value)
+    selected_content = (payload.get('selected_content') or '').strip()
+    title_hint = (payload.get('title_hint') or _extract_title_from_version(selected_content) or (reg.topic.topic_name if reg and reg.topic else '') or style_meta.get('label') or '图片方案').strip()[:200]
+    product_meta = _product_profile_meta(payload.get('product_profile') or '')
+    product_profile = (payload.get('product_profile') or '').strip()[:80]
+    product_category = (payload.get('product_category') or product_meta.get('product_category') or '').strip()[:30]
+    product_name = (payload.get('product_name') or product_meta.get('product_name') or '').strip()[:200]
+    product_indication = (payload.get('product_indication') or product_meta.get('product_indication') or '').strip()[:200]
+    reference_asset_ids = _parse_int_list(payload.get('reference_asset_ids') or '', limit=20)
+    reference_rows = _resolve_reference_asset_rows(reference_asset_ids, limit=20)
+    reference_assets = [{
+        'id': item.id,
+        'title': item.title or '',
+        'preview_url': item.preview_url or '',
+        'product_name': item.product_name or '',
+        'library_type': item.library_type or '',
+    } for item in reference_rows]
+    topic = reg.topic if reg else None
+
+    prompt_text = _build_asset_generation_prompt(
+        topic or type('TopicLike', (), {
+            'topic_name': product_indication or '肝病管理',
+            'keywords': product_indication or '肝病管理',
+        })(),
+        selected_content=selected_content,
+        style_preset=style_meta['key'],
+        title_hint=title_hint,
+    )
+    if product_name:
+        prompt_text = f"{prompt_text} 产品信息：{product_name}；适应方向：{product_indication or '未标记'}。"
+    if reference_assets:
+        reference_titles = []
+        for item in reference_assets[:3]:
+            reference_titles.append(item.get('title') or item.get('product_name') or f"资产{item.get('id')}")
+        prompt_text = f"{prompt_text} 参考图方向：{' / '.join(reference_titles)}。"
+
+    product_context = {
+        'product_profile': product_profile,
+        'product_category': product_category,
+        'product_name': product_name,
+        'product_indication': product_indication,
+    }
+    request_preview = _build_asset_provider_request_preview(
+        (os.environ.get('ASSET_IMAGE_PROVIDER') or str(runtime_config.get('image_provider') or 'svg_fallback')).strip() or 'svg_fallback',
+        (os.environ.get('ASSET_IMAGE_MODEL') or str(runtime_config.get('image_model') or '')).strip()[:100],
+        prompt_text,
+        (os.environ.get('ASSET_IMAGE_SIZE') or str(runtime_config.get('image_size') or '1024x1536')).strip(),
+        style_preset=style_meta['key'],
+        image_count=min(max(_safe_int(payload.get('image_count'), 1), 1), 4),
+        reference_assets=reference_assets,
+        product_context=product_context,
+    )
+
+    points = _extract_content_points(selected_content)
+    generation_mode = style_meta.get('generation_mode') or 'text_to_image'
+    if reference_assets and generation_mode == 'text_to_image':
+        generation_mode = 'reference_guided'
+
+    overlay_plan = {
+        'headline': title_hint,
+        'subheadline': product_name or (style_meta.get('description') or ''),
+        'bullet_points': points[:3] if points else list(style_meta.get('default_bullets') or []),
+        'postprocess': '先出无字底图，再由系统叠加中文标题、说明卡片和标签。',
+    }
+    return {
+        'success': True,
+        'plan': {
+            'registration_id': registration_id,
+            'registration_name': reg.name if reg else '',
+            'topic_name': topic.topic_name if topic else '',
+            'style_type': style_meta.get('key') or '',
+            'style_label': style_meta.get('label') or '',
+            'generation_mode': generation_mode,
+            'title_hint': title_hint,
+            'product_context': product_context,
+            'reference_assets': reference_assets,
+            'content_points': points[:5],
+            'prompt_text': prompt_text,
+            'request_preview': request_preview,
+            'overlay_plan': overlay_plan,
+        }
+    }
+
+
 def _dispatch_automation_schedule(schedule, actor='system'):
     params = _load_json_value(schedule.params_payload, {})
     schedule.last_run_at = datetime.now()
@@ -8819,6 +8908,7 @@ register_automation_asset_routes(app, {
     'dispatch_hotword_sync': _dispatch_hotword_sync,
     'dispatch_creator_account_sync': _dispatch_creator_account_sync,
     'dispatch_automation_schedule': _dispatch_automation_schedule,
+    'build_asset_generation_plan_payload': _build_asset_generation_plan_payload,
     'log_operation': _log_operation,
     'db': db,
     'datetime': datetime,
