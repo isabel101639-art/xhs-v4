@@ -5837,6 +5837,154 @@ def _render_svg_card(card_type, title, subtitle, bullets, accent='#ff6b57', bg='
 </svg>'''
 
 
+def _render_svg_poster_card(style_key, title, subtitle, bullets, accent='#18e05e', bg='#fffdfd'):
+    title_lines = _wrap_svg_text(title, line_length=7, max_lines=4)
+    title_svg = ''
+    base_y = 180 if len(title_lines) <= 3 else 150
+    for idx, line in enumerate(title_lines):
+        y = base_y + idx * 86
+        highlight = idx == 0 or (style_key == 'poster_handwritten' and idx == 1)
+        if highlight:
+            width = min(360, 44 + len(line) * 48)
+            title_svg += f'<rect x="60" y="{y - 44}" rx="24" ry="24" width="{width}" height="52" fill="{accent}" opacity="0.75" />'
+        font_family = '"PingFang SC","Heiti SC","Microsoft YaHei",sans-serif' if style_key == 'poster_bold' else '"Kaiti SC","STKaiti","KaiTi",cursive'
+        title_svg += f'<text x="60" y="{y}" font-size="54" font-weight="800" font-family={font_family} fill="#202020">{html.escape(line)}</text>'
+
+    subtitle_svg = ''
+    if subtitle:
+        subtitle_lines = _wrap_svg_text(subtitle, line_length=12, max_lines=2)
+        for idx, line in enumerate(subtitle_lines):
+            subtitle_svg += f'<text x="66" y="{base_y + len(title_lines) * 86 + 25 + idx * 26}" font-size="22" fill="#555">{html.escape(line)}</text>'
+
+    bullet_svg = ''
+    bullet_y = base_y + len(title_lines) * 86 + 80
+    for idx, bullet in enumerate((bullets or [])[:3]):
+        bullet_svg += f'<text x="70" y="{bullet_y + idx * 34}" font-size="21" fill="#444">{idx + 1}. {html.escape(bullet[:24])}</text>'
+
+    emoji_svg = ''
+    if style_key == 'poster_handwritten':
+        emoji_svg = '<text x="360" y="570" font-size="48">😵</text><text x="410" y="570" font-size="48">😭</text>'
+
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1440" viewBox="0 0 480 640">
+<rect width="480" height="640" fill="{bg}" />
+<g opacity="0.16">
+  <line x1="40" y1="80" x2="440" y2="80" stroke="#d9d9d9" stroke-width="1" />
+  <line x1="40" y1="120" x2="440" y2="120" stroke="#d9d9d9" stroke-width="1" />
+  <line x1="40" y1="160" x2="440" y2="160" stroke="#d9d9d9" stroke-width="1" />
+</g>
+{title_svg}
+{subtitle_svg}
+{bullet_svg}
+{emoji_svg}
+</svg>'''
+
+
+def _render_svg_memo_card(style_key, title, subtitle, bullets, accent='#f4dc62', bg='#fffefe'):
+    title_lines = _wrap_svg_text(title, line_length=10, max_lines=3)
+    ui_header = '''
+<text x="28" y="42" font-size="20" fill="#d6a800">〈 备忘录</text>
+<text x="360" y="42" font-size="18" fill="#d6a800">↶</text>
+<text x="400" y="42" font-size="18" fill="#d6a800">↷</text>
+<text x="440" y="42" font-size="18" fill="#d6a800">⋯</text>
+'''
+    title_svg = ''.join(
+        f'<text x="42" y="{104 + idx * 46}" font-size="38" font-weight="800" fill="#1f1f1f">{html.escape(line)}</text>'
+        for idx, line in enumerate(title_lines)
+    )
+    subtitle_svg = f'<text x="44" y="{126 + len(title_lines) * 46}" font-size="21" fill="#666">{html.escape(subtitle[:36])}</text>' if subtitle else ''
+
+    content_y = 190 + len(title_lines) * 40
+    note_lines = ''
+    if style_key == 'memo_mobile':
+        for idx, bullet in enumerate((bullets or [])[:5], start=1):
+            highlight = idx in {1, 3}
+            y = content_y + idx * 54
+            if highlight:
+                note_lines += f'<rect x="72" y="{y - 18}" rx="12" ry="12" width="250" height="26" fill="{accent}" opacity="0.55" />'
+            note_lines += f'<rect x="40" y="{y - 23}" rx="10" ry="10" width="30" height="30" fill="#5b84d6" opacity="0.9" />'
+            note_lines += f'<text x="50" y="{y - 2}" font-size="16" font-weight="700" fill="white">{idx}</text>'
+            note_lines += f'<text x="82" y="{y}" font-size="24" fill="#2b2b2b">{html.escape(bullet[:26])}</text>'
+    else:
+        for idx, bullet in enumerate((bullets or [])[:5], start=1):
+            y = content_y + idx * 60
+            note_lines += f'<rect x="36" y="{y - 22}" rx="10" ry="10" width="120" height="24" fill="#eef6c8" />'
+            note_lines += f'<text x="44" y="{y - 4}" font-size="18" font-weight="700" fill="#49631f">重点{idx}</text>'
+            note_lines += f'<text x="42" y="{y + 24}" font-size="23" fill="#2b2b2b">{html.escape(bullet[:26])}</text>'
+            note_lines += f'<line x1="42" y1="{y + 30}" x2="{42 + min(260, len(bullet) * 18)}" y2="{y + 30}" stroke="#b2d66b" stroke-width="4" opacity="0.7" />'
+
+    paper_lines = ''.join(
+        f'<line x1="36" y1="{160 + idx * 56}" x2="444" y2="{160 + idx * 56}" stroke="#ececec" stroke-width="1" />'
+        for idx in range(8)
+    )
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1440" viewBox="0 0 480 640">
+<rect width="480" height="640" fill="{bg}" />
+{paper_lines}
+{ui_header}
+{title_svg}
+{subtitle_svg}
+{note_lines}
+</svg>'''
+
+
+def _render_svg_checklist_card(style_key, title, subtitle, bullets, accent='#f1c24b', bg='#fff9ea'):
+    title_lines = _wrap_svg_text(title, line_length=9, max_lines=2)
+    title_svg = ''.join(
+        f'<text x="42" y="{84 + idx * 42}" font-size="40" font-weight="800" fill="#242424">{html.escape(line)}</text>'
+        for idx, line in enumerate(title_lines)
+    )
+    subtitle_svg = f'<text x="44" y="{140 + len(title_lines) * 36}" font-size="20" fill="#666">{html.escape(subtitle[:32])}</text>' if subtitle else ''
+    body_svg = ''
+    if style_key == 'checklist_table':
+        cols = ['项目', '图片', '指标', '结论']
+        x_positions = [40, 130, 250, 360]
+        for idx, col in enumerate(cols):
+            body_svg += f'<rect x="{x_positions[idx]}" y="190" width="85" height="42" fill="{accent}" opacity="0.35" stroke="#c9b06b" />'
+            body_svg += f'<text x="{x_positions[idx] + 18}" y="217" font-size="18" font-weight="700" fill="#47391d">{col}</text>'
+        for row in range(3):
+            y = 232 + row * 92
+            bullet_text = ((bullets or ['']) + [''] * 3)[row][:8]
+            for x in x_positions:
+                body_svg += f'<rect x="{x}" y="{y}" width="85" height="92" fill="white" stroke="#d9cfb3" />'
+            body_svg += f'<text x="56" y="{y + 38}" font-size="20" fill="#333">{row + 1}</text>'
+            body_svg += f'<text x="140" y="{y + 50}" font-size="18" fill="#777">图片</text>'
+            body_svg += f'<text x="262" y="{y + 50}" font-size="18" fill="#333">{html.escape(bullet_text)}</text>'
+            body_svg += f'<text x="382" y="{y + 50}" font-size="18" fill="#2d8f5a">推荐</text>'
+    elif style_key == 'checklist_timeline':
+        days = ['Day1', 'Day2', 'Day3']
+        for idx, day in enumerate(days):
+            body_svg += f'<rect x="{44 + idx * 126}" y="188" rx="18" ry="18" width="112" height="36" fill="{accent if idx == 0 else "#f1f1f1"}" opacity="0.8" />'
+            body_svg += f'<text x="{68 + idx * 126}" y="212" font-size="20" font-weight="700" fill="#333">{day}</text>'
+        slots = [('早餐', '7:00-8:00'), ('午餐', '12:00-13:00'), ('晚餐', '18:00-20:00')]
+        for idx, (slot, tm) in enumerate(slots):
+            y = 250 + idx * 112
+            body_svg += f'<rect x="40" y="{y}" rx="26" ry="26" width="400" height="92" fill="white" stroke="#e8d9d0" stroke-width="2" />'
+            body_svg += f'<text x="56" y="{y + 36}" font-size="28" font-weight="800" fill="#222">{slot}</text>'
+            body_svg += f'<rect x="56" y="{y + 48}" rx="10" ry="10" width="110" height="26" fill="#f4f4f4" />'
+            body_svg += f'<text x="68" y="{y + 67}" font-size="16" fill="#666">{tm}</text>'
+            body_svg += f'<text x="190" y="{y + 42}" font-size="26" fill="#333">{html.escape((bullets or [""])[idx % max(1, len(bullets))][:10] or "主食")}</text>'
+            body_svg += f'<text x="305" y="{y + 42}" font-size="30" fill="#999">+</text>'
+            body_svg += f'<text x="340" y="{y + 42}" font-size="22" fill="#333">搭配项</text>'
+    else:
+        for idx, bullet in enumerate((bullets or [])[:4], start=1):
+            y = 210 + (idx - 1) * 98
+            body_svg += f'<rect x="40" y="{y}" rx="22" ry="22" width="400" height="78" fill="white" stroke="#d7e5ca" stroke-width="2" />'
+            body_svg += f'<rect x="54" y="{y + 18}" rx="12" ry="12" width="86" height="24" fill="#e7f2d1" />'
+            body_svg += f'<text x="66" y="{y + 35}" font-size="18" font-weight="700" fill="#6a8d37">项目 {idx}</text>'
+            body_svg += f'<text x="54" y="{y + 62}" font-size="21" fill="#333">{html.escape(bullet[:24])}</text>'
+            body_svg += f'<circle cx="410" cy="{y + 38}" r="14" fill="#f6c24a" opacity="0.75" />'
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1440" viewBox="0 0 480 640">
+<rect width="480" height="640" fill="{bg}" />
+<g opacity="0.22">
+  <path d="M32 0 L32 640" stroke="#cfd6dc" stroke-width="2" />
+  <path d="M0 48 L480 48" stroke="#dce4ea" stroke-width="1" />
+  <path d="M0 88 L480 88" stroke="#dce4ea" stroke-width="1" />
+</g>
+{title_svg}
+{subtitle_svg}
+{body_svg}
+</svg>'''
+
+
 def _extract_content_points(content):
     text = re.sub(r'(标题|钩子|正文|内文|结尾互动)\s*[：:]', ' ', content or '')
     parts = [part.strip() for part in re.split(r'[。！？\n]+', text) if part and part.strip()]
@@ -6249,12 +6397,23 @@ def _build_asset_generation_fallback_results(topic, selected_content='', image_c
         points = _extract_content_points(selected_content) or list(style_meta.get('default_bullets') or [])
         accent = style_meta.get('accent') or '#ff7a59'
         bg = style_meta.get('bg') or '#fff4ee'
+        style_key = style_meta.get('key') or ''
         custom_results = []
         for idx in range(1, max(image_count, 1) + 1):
             title = base_title[:18] if idx == 1 else f'{base_title[:14]} {idx}'
             subtitle = style_meta.get('description') or style_meta['label']
             bullets = points[:3] if points else list(style_meta.get('default_bullets') or [])
-            svg = _render_svg_card(style_meta['label'], title, subtitle, bullets, accent=accent, bg=bg)
+            if style_key in {'poster', 'poster_bold', 'poster_handwritten'}:
+                render_key = style_key if style_key != 'poster' else _infer_asset_layout_variant(style_key, title, selected_content, bullets)
+                svg = _render_svg_poster_card(render_key, title, subtitle, bullets, accent=accent, bg=bg)
+            elif style_key in {'memo', 'memo_mobile', 'memo_classroom'}:
+                render_key = style_key if style_key != 'memo' else _infer_asset_layout_variant(style_key, title, selected_content, bullets)
+                svg = _render_svg_memo_card(render_key, title, subtitle, bullets, accent=accent, bg=bg)
+            elif style_key in {'checklist', 'checklist_table', 'checklist_timeline', 'checklist_report'}:
+                render_key = style_key if style_key != 'checklist' else _infer_asset_layout_variant(style_key, title, selected_content, bullets)
+                svg = _render_svg_checklist_card(render_key, title, subtitle, bullets, accent=accent, bg=bg)
+            else:
+                svg = _render_svg_card(style_meta['label'], title, subtitle, bullets, accent=accent, bg=bg)
             custom_results.append({
                 'index': idx,
                 'type': style_meta['label'],
@@ -8956,6 +9115,65 @@ def _build_asset_generation_plan_payload(payload):
     }
 
 
+def _build_asset_style_recommendation_payload(payload):
+    selected_content = (payload.get('selected_content') or '').strip()
+    title_hint = (payload.get('title_hint') or '').strip()
+    merged = ' '.join(filter(None, [title_hint, selected_content]))
+    lowered = merged.lower()
+    product_meta = _product_profile_meta(payload.get('product_profile') or '')
+    product_name = (payload.get('product_name') or product_meta.get('product_name') or '').strip()
+    product_category = (payload.get('product_category') or product_meta.get('product_category') or '').strip()
+    suggestions = []
+
+    def add_style(style_key, reason):
+        meta = _asset_style_meta(style_key)
+        suggestions.append({
+            'style_key': meta.get('key') or style_key,
+            'style_label': meta.get('label') or style_key,
+            'reason': reason,
+            'generation_mode': meta.get('generation_mode') or 'text_to_image',
+            'asset_type': meta.get('asset_type') or '',
+        })
+
+    if any(token in lowered for token in ['指南', '版本', '必须看', '警惕', '经验', '总结', 'emo', '崩溃']):
+        add_style('poster_bold' if '经验' not in lowered and '总结' not in lowered else 'poster_handwritten', '文案更像封面结论或经验表达，优先大字报路线。')
+    if any(token in lowered for token in ['备忘录', '提醒', '技巧', '注意事项', '攻略', '补救', '计划']):
+        add_style('memo_mobile', '文案适合做成可收藏的手机备忘录风格。')
+    if any(token in lowered for token in ['病理', '并发症', '生理', '实验室', '检查要点', '代偿', '失代偿']):
+        add_style('memo_classroom', '文案更像课堂重点整理，适合课堂笔记风格。')
+    if any(token in lowered for token in ['怎么选', '白名单', '对比', '参数', '品牌', '哪个好']):
+        add_style('checklist_table', '内容偏产品选择或参数对比，适合表格清单图。')
+    if any(token in lowered for token in ['day', '早餐', '午餐', '晚餐', '7天', '7 天', '食谱', '几点']):
+        add_style('checklist_timeline', '内容有明显时间轴和执行顺序，适合时间轴清单图。')
+    if any(token in lowered for token in ['报告', '彩超', '化验', '指标', 'alt', 'ast', 'ggt', 'alp', '一次看懂']):
+        add_style('checklist_report', '内容偏报告解读和指标说明，适合报告解读图。')
+    if any(token in lowered for token in ['机制', '原理', '对比', '影响', '全身', '伤害']):
+        add_style('knowledge_card', '内容适合做成收藏型知识卡片。')
+    if any(token in lowered for token in ['症状', '信号', '警示', '求救', '发黄', '体检', '检查', '器官']):
+        add_style('medical_science', '内容适合做医学科普信息图。')
+    if product_category == 'device':
+        add_style('medical_science', f'当前产品“{product_name or product_category}”更适合搭配医学科普或设备解读型画面。')
+        add_style('knowledge_card', '器械产品也适合知识卡片式介绍和设备对比。')
+    if product_category == 'medicine':
+        add_style('checklist_table', f'当前产品“{product_name or product_category}”很适合做产品选择/参数清单或白名单风格。')
+        add_style('poster_bold', '药品内容如果做封面，通常适合用大字报先抓注意力。')
+    if not suggestions:
+        add_style('medical_science', '默认推荐医学科普类，适合作为通用科普配图。')
+        add_style('knowledge_card', '也可尝试知识卡片类，适合收藏传播。')
+
+    unique = []
+    seen = set()
+    for item in suggestions:
+        if item['style_key'] in seen:
+            continue
+        unique.append(item)
+        seen.add(item['style_key'])
+    return {
+        'success': True,
+        'items': unique[:4],
+    }
+
+
 def _dispatch_automation_schedule(schedule, actor='system'):
     params = _load_json_value(schedule.params_payload, {})
     schedule.last_run_at = datetime.now()
@@ -9066,6 +9284,7 @@ register_automation_asset_routes(app, {
     'dispatch_creator_account_sync': _dispatch_creator_account_sync,
     'dispatch_automation_schedule': _dispatch_automation_schedule,
     'build_asset_generation_plan_payload': _build_asset_generation_plan_payload,
+    'build_asset_style_recommendation_payload': _build_asset_style_recommendation_payload,
     'log_operation': _log_operation,
     'db': db,
     'datetime': datetime,

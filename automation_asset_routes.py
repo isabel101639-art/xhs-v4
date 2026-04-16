@@ -23,6 +23,7 @@ def register_automation_asset_routes(app, helpers):
     dispatch_creator_account_sync = helpers['dispatch_creator_account_sync']
     dispatch_automation_schedule = helpers['dispatch_automation_schedule']
     build_asset_generation_plan_payload = helpers['build_asset_generation_plan_payload']
+    build_asset_style_recommendation_payload = helpers['build_asset_style_recommendation_payload']
     log_operation = helpers['log_operation']
     db = helpers['db']
     datetime = helpers['datetime']
@@ -79,6 +80,14 @@ def register_automation_asset_routes(app, helpers):
             return guard
         payload = request.json or {}
         return jsonify(build_asset_generation_plan_payload(payload))
+
+    @app.route('/api/admin/assets/style-recommendations', methods=['POST'])
+    def asset_style_recommendations():
+        guard = admin_json_guard()
+        if guard:
+            return guard
+        payload = request.json or {}
+        return jsonify(build_asset_style_recommendation_payload(payload))
 
     @app.route('/api/admin/assets/library')
     def list_asset_library():

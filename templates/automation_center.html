@@ -1006,6 +1006,16 @@
                     </div>
                     <div class="col-md-12">
                         <div class="detail-card">
+                            <div class="section-title mb-2">图片类型推荐</div>
+                            <div class="d-flex gap-2 flex-wrap mb-2">
+                                <button class="btn btn-outline-primary btn-sm" onclick="loadAssetStyleRecommendations()">推荐类型</button>
+                                <div id="assetStyleRecommendationMsg" class="subtle d-flex align-items-center"></div>
+                            </div>
+                            <div id="assetStyleRecommendationWrap" class="mini-note">根据你当前填写的标题和文案，系统会推荐更适合的图片类型。</div>
+                        </div>
+                    </div>
+                    <div class="col-md-12">
+                        <div class="detail-card">
                             <div class="section-title mb-2">产品与参考图辅助</div>
                             <div id="assetJobProductHint" class="subtle mb-3">未选择产品预设时，可直接用文案和参考图生成。</div>
                             <div class="row g-3">
@@ -2178,6 +2188,38 @@
                     </div>
                 </div>
             `;
+        }
+
+        async function loadAssetStyleRecommendations() {
+            const payload = {
+                title_hint: document.getElementById('assetJobTitleHint').value.trim(),
+                product_profile: document.getElementById('assetJobProductProfile').value,
+                selected_content: [document.getElementById('assetJobSelectedContent').value.trim(), document.getElementById('assetJobNote').value.trim()].filter(Boolean).join('\n'),
+            };
+            const res = await fetch('/api/admin/assets/style-recommendations', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            const wrap = document.getElementById('assetStyleRecommendationWrap');
+            if (!data.success) {
+                document.getElementById('assetStyleRecommendationMsg').textContent = data.message || '图片类型推荐失败';
+                return;
+            }
+            document.getElementById('assetStyleRecommendationMsg').textContent = `已推荐 ${((data.items || []).length)} 种图片类型`;
+            wrap.innerHTML = (data.items || []).map((item) => `
+                <div class="mini-note mb-2">
+                    <div class="d-flex justify-content-between align-items-center gap-2">
+                        <strong>${escapeHtml(item.style_label || item.style_key || '-')}</strong>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('assetJobStyleType').value='${escapeHtml(item.style_key || '')}'; loadAssetJobReferenceSuggestions(); loadAssetJobProductAssets();">
+                            使用这个类型
+                        </button>
+                    </div>
+                    <div class="subtle mt-2">${escapeHtml(item.reason || '-')}</div>
+                    <div class="subtle mt-2">模式：${escapeHtml(item.generation_mode || '-')} ｜ 资产类型：${escapeHtml(item.asset_type || '-')}</div>
+                </div>
+            `).join('') || '<div class="text-muted">暂无推荐结果</div>';
         }
 
         function getAssetJobReferenceIds() {
@@ -4590,6 +4632,7 @@
         loadAssetTasks();
         loadAssetLibrary();
         loadAssetLibraryInsights();
+        loadAssetStyleRecommendations();
         loadSchedules();
         loadDeploymentHelper();
         loadIntegrationChecklist();
