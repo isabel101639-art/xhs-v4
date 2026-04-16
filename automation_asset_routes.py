@@ -97,6 +97,7 @@ def register_automation_asset_routes(app, helpers):
             return guard
 
         library_type = (request.args.get('library_type') or '').strip()
+        style_type_key_raw = (request.args.get('style_type_key') or '').strip()
         pool_status = (request.args.get('pool_status') or '').strip()
         source_provider = (request.args.get('source_provider') or '').strip()
         product_category = (request.args.get('product_category') or '').strip()
@@ -108,6 +109,12 @@ def register_automation_asset_routes(app, helpers):
         query = AssetLibrary.query
         if library_type:
             query = query.filter_by(library_type=library_type)
+        if style_type_key_raw:
+            style_type_keys = [item.strip() for item in style_type_key_raw.split(',') if item.strip()]
+            if len(style_type_keys) == 1:
+                query = query.filter_by(style_type_key=style_type_keys[0])
+            elif style_type_keys:
+                query = query.filter(AssetLibrary.style_type_key.in_(style_type_keys))
         if pool_status:
             query = query.filter_by(pool_status=pool_status)
         if source_provider:
@@ -150,6 +157,7 @@ def register_automation_asset_routes(app, helpers):
             return jsonify({'success': False, 'message': '资产标题不能为空'})
         if not preview_url:
             return jsonify({'success': False, 'message': '预览链接不能为空'})
+        style_type_key = (data.get('style_type_key') or '').strip()[:50]
         profile_meta = product_profile_meta(data.get('product_profile') or '')
         product_category = (data.get('product_category') or profile_meta.get('product_category') or '').strip()[:30]
         product_name = (data.get('product_name') or profile_meta.get('product_name') or '').strip()[:200]
@@ -162,6 +170,7 @@ def register_automation_asset_routes(app, helpers):
 
         item = AssetLibrary(
             library_type=library_type,
+            style_type_key=style_type_key,
             asset_type=(data.get('asset_type') or '知识卡片').strip()[:50],
             title=title[:200],
             subtitle=(data.get('subtitle') or '').strip()[:300],
@@ -180,6 +189,7 @@ def register_automation_asset_routes(app, helpers):
             raw_payload=json.dumps({
                 'manual': True,
                 'library_type': library_type,
+                'style_type_key': style_type_key,
                 'preview_url': preview_url,
                 'product_profile': (data.get('product_profile') or '').strip(),
                 'product_category': product_category,
@@ -193,6 +203,7 @@ def register_automation_asset_routes(app, helpers):
         log_operation('create', 'asset_library', target_id=item.id, message='手工新增图片资产', detail={
             'title': item.title,
             'library_type': item.library_type,
+            'style_type_key': item.style_type_key,
             'asset_type': item.asset_type,
             'pool_status': item.pool_status,
             'product_category': item.product_category,
@@ -223,6 +234,7 @@ def register_automation_asset_routes(app, helpers):
         title = (request.form.get('title') or '').strip()
         if not title:
             return jsonify({'success': False, 'message': '资产标题不能为空'})
+        style_type_key = (request.form.get('style_type_key') or '').strip()[:50]
         profile_meta = product_profile_meta(request.form.get('product_profile') or '')
         product_category = (request.form.get('product_category') or profile_meta.get('product_category') or '').strip()[:30]
         product_name = (request.form.get('product_name') or profile_meta.get('product_name') or '').strip()[:200]
@@ -240,6 +252,7 @@ def register_automation_asset_routes(app, helpers):
 
         item = AssetLibrary(
             library_type=library_type,
+            style_type_key=style_type_key,
             asset_type=(request.form.get('asset_type') or '知识卡片').strip()[:50],
             title=title[:200],
             subtitle=(request.form.get('subtitle') or '').strip()[:300],
@@ -258,6 +271,7 @@ def register_automation_asset_routes(app, helpers):
             raw_payload=json.dumps({
                 'manual': True,
                 'upload_type': 'local_file',
+                'style_type_key': style_type_key,
                 'original_filename': file_storage.filename,
                 'stored_path': upload_result['preview_url'],
                 'product_profile': (request.form.get('product_profile') or '').strip(),
@@ -272,6 +286,7 @@ def register_automation_asset_routes(app, helpers):
         log_operation('create', 'asset_library', target_id=item.id, message='上传图片资产到资产库', detail={
             'title': item.title,
             'library_type': item.library_type,
+            'style_type_key': item.style_type_key,
             'asset_type': item.asset_type,
             'pool_status': item.pool_status,
             'preview_url': item.preview_url,
@@ -293,6 +308,7 @@ def register_automation_asset_routes(app, helpers):
             return guard
 
         library_type = (request.args.get('library_type') or '').strip()
+        style_type_key_raw = (request.args.get('style_type_key') or '').strip()
         pool_status = (request.args.get('pool_status') or '').strip()
         source_provider = (request.args.get('source_provider') or '').strip()
         product_category = (request.args.get('product_category') or '').strip()
@@ -303,6 +319,12 @@ def register_automation_asset_routes(app, helpers):
         query = AssetLibrary.query
         if library_type:
             query = query.filter_by(library_type=library_type)
+        if style_type_key_raw:
+            style_type_keys = [item.strip() for item in style_type_key_raw.split(',') if item.strip()]
+            if len(style_type_keys) == 1:
+                query = query.filter_by(style_type_key=style_type_keys[0])
+            elif style_type_keys:
+                query = query.filter(AssetLibrary.style_type_key.in_(style_type_keys))
         if pool_status:
             query = query.filter_by(pool_status=pool_status)
         if source_provider:
@@ -323,11 +345,12 @@ def register_automation_asset_routes(app, helpers):
             )
 
         items = query.order_by(AssetLibrary.created_at.desc(), AssetLibrary.id.desc()).all()
-        rows = ['图库类型,产品分类,产品名称,适应方向,视觉角色,资产类型,标题,副标题,来源提供方,模型,池状态,标签,预览链接,创建时间']
+        rows = ['图库类型,参考风格,产品分类,产品名称,适应方向,视觉角色,资产类型,标题,副标题,来源提供方,模型,池状态,标签,预览链接,创建时间']
         for item in items:
             serialized = serialize_asset_library_item(item)
             rows.append(','.join([
                 (serialized.get('library_type_label') or '').replace(',', ' '),
+                (serialized.get('style_type_label') or serialized.get('style_type_key') or '').replace(',', ' '),
                 (serialized.get('product_category_label') or '').replace(',', ' '),
                 (serialized.get('product_name') or '').replace(',', ' '),
                 (serialized.get('product_indication') or '').replace(',', ' '),
@@ -345,6 +368,7 @@ def register_automation_asset_routes(app, helpers):
 
         log_operation('export', 'asset_library', message='导出图片资产库', detail={
             'library_type': library_type,
+            'style_type_key': style_type_key_raw,
             'pool_status': pool_status,
             'source_provider': source_provider,
             'product_category': product_category,
@@ -371,8 +395,10 @@ def register_automation_asset_routes(app, helpers):
         category_counter = Counter()
         role_counter = Counter()
         product_counter = Counter()
+        style_counter = Counter()
         category_rows = defaultdict(lambda: {'count': 0, 'products': set()})
         role_map_by_product = defaultdict(set)
+        source_map_by_product = defaultdict(lambda: {'product_assets': 0, 'generated_assets': 0, 'reference_assets': 0})
         for item in items:
             library_counter[item.library_type or 'generated'] += 1
             category_key = (item.product_category or '未分类').strip() or '未分类'
@@ -381,14 +407,20 @@ def register_automation_asset_routes(app, helpers):
             category_counter[category_key] += 1
             role_counter[role_key] += 1
             product_counter[product_key] += 1
+            if (item.style_type_key or '').strip():
+                style_counter[item.style_type_key.strip()] += 1
             category_rows[category_key]['count'] += 1
             category_rows[category_key]['products'].add(product_key)
             role_map_by_product[product_key].add(role_key)
+            bucket_key = f"{(item.library_type or 'generated')}_assets"
+            if bucket_key in source_map_by_product[product_key]:
+                source_map_by_product[product_key][bucket_key] += 1
 
         coverage_rows = []
         for profile in product_profile_options():
             product_name = (profile.get('product_name') or '').strip() or profile.get('label') or '未命名产品'
             existing_roles = role_map_by_product.get(product_name, set())
+            source_stats = source_map_by_product.get(product_name, {'product_assets': 0, 'generated_assets': 0, 'reference_assets': 0})
             if profile.get('product_category') == 'device':
                 expected_roles = {'hero', 'detail', 'scene'}
             else:
@@ -403,6 +435,9 @@ def register_automation_asset_routes(app, helpers):
                 'existing_roles': sorted([role for role in existing_roles if role and role != '未标记']),
                 'missing_roles': missing_roles,
                 'asset_count': product_counter.get(product_name, 0),
+                'product_asset_count': source_stats.get('product_assets', 0),
+                'generated_asset_count': source_stats.get('generated_assets', 0),
+                'reference_asset_count': source_stats.get('reference_assets', 0),
             })
 
         return jsonify({
@@ -420,6 +455,7 @@ def register_automation_asset_routes(app, helpers):
                 'product_count': len([name for name in value['products'] if name != '未指定产品']),
             } for key, value in category_rows.items()],
             'visual_roles': [{'key': key, 'count': count} for key, count in role_counter.most_common(10)],
+            'style_types': [{'key': key, 'count': count} for key, count in style_counter.most_common(12)],
             'products': [{'name': key, 'count': count} for key, count in product_counter.most_common(12)],
             'coverage': coverage_rows,
         })

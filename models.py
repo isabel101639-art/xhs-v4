@@ -282,6 +282,7 @@ class AssetLibrary(db.Model):
     registration_id = db.Column(db.Integer)
     topic_id = db.Column(db.Integer)
     library_type = db.Column(db.String(30), default='generated')
+    style_type_key = db.Column(db.String(50))
     asset_type = db.Column(db.String(50), default='知识卡片')
     title = db.Column(db.String(200))
     subtitle = db.Column(db.String(300))

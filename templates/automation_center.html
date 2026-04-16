@@ -1117,6 +1117,15 @@
                     </select>
                 </div>
                 <div class="col-md-2">
+                    <label class="form-label subtle">参考风格</label>
+                    <select id="assetLibraryStyleTypeFilter" class="form-select" onchange="loadAssetLibrary()">
+                        <option value="">全部</option>
+                        {% for item in asset_style_types %}
+                        <option value="{{ item.key }}">{{ item.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
                     <label class="form-label subtle">提供方筛选</label>
                     <select id="assetLibraryProviderFilter" class="form-select" onchange="loadAssetLibrary()">
                         <option value="">全部</option>
@@ -1164,6 +1173,15 @@
                         <select id="assetLibraryFormProductProfile" class="form-select" onchange="applyAssetProductProfile()">
                             <option value="">手动填写</option>
                             {% for item in product_profile_options %}
+                            <option value="{{ item.key }}">{{ item.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label subtle">参考风格类型</label>
+                        <select id="assetLibraryFormStyleTypeKey" class="form-select">
+                            <option value="">未指定</option>
+                            {% for item in asset_style_types %}
                             <option value="{{ item.key }}">{{ item.label }}</option>
                             {% endfor %}
                         </select>
@@ -2135,6 +2153,7 @@
                         <div class="subtle">图片类型：${escapeHtml(plan.style_label || '-')}</div>
                         <div class="subtle">生成模式：${escapeHtml(plan.generation_mode || '-')}</div>
                         <div class="subtle">标题：${escapeHtml(plan.title_hint || '-')}</div>
+                        <div class="subtle mt-2">策略判断：${escapeHtml(plan.strategy_reason || '-')}</div>
                     </div>
                     <div class="col-lg-4">
                         <strong>产品上下文</strong>
@@ -2218,6 +2237,7 @@
                     </div>
                     <div class="subtle mt-2">${escapeHtml(item.reason || '-')}</div>
                     <div class="subtle mt-2">模式：${escapeHtml(item.generation_mode || '-')} ｜ 资产类型：${escapeHtml(item.asset_type || '-')}</div>
+                    ${item.coverage_hint ? `<div class="subtle mt-2">素材判断：${escapeHtml(item.coverage_hint)}</div>` : ''}
                 </div>
             `).join('') || '<div class="text-muted">暂无推荐结果</div>';
         }
@@ -2481,21 +2501,21 @@
                                             <th>分类</th>
                                             <th>已有角色</th>
                                             <th>缺失角色</th>
-                                            <th>资产数</th>
+                                            <th>产品图 / 生成图</th>
                                             <th>操作</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         ${(data.coverage || []).map((item) => `
-                                        <tr>
-                                            <td>${escapeHtml(item.product_name || '-')}</td>
-                                            <td>${escapeHtml(item.product_category || '-')}</td>
-                                            <td>${escapeHtml((item.existing_roles || []).join('、') || '暂无')}</td>
-                                            <td>${escapeHtml((item.missing_roles || []).join('、') || '已齐')}</td>
-                                            <td>${item.asset_count || 0}</td>
-                                            <td>
-                                                <div class="d-flex gap-2 flex-wrap">
-                                                    ${(item.missing_roles || []).slice(0, 2).map((role) => `
+                                            <tr>
+                                                <td>${escapeHtml(item.product_name || '-')}</td>
+                                                <td>${escapeHtml(item.product_category || '-')}</td>
+                                                <td>${escapeHtml((item.existing_roles || []).join('、') || '暂无')}</td>
+                                                <td>${escapeHtml((item.missing_roles || []).join('、') || '已齐')}</td>
+                                                <td>${item.product_asset_count || 0} / ${item.generated_asset_count || 0}</td>
+                                                <td>
+                                                    <div class="d-flex gap-2 flex-wrap">
+                                                        ${(item.missing_roles || []).slice(0, 2).map((role) => `
                                                         <button type="button" class="btn btn-sm btn-outline-primary" onclick="prefillAssetFormFromCoverage('${escapeHtml(item.profile_key || '')}', '${escapeHtml(role)}')">
                                                             补${escapeHtml(role)}
                                                         </button>

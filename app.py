@@ -849,6 +849,8 @@ def _serialize_asset_library_item(item, detail=False):
         'topic_name': topic.topic_name if topic else '',
         'library_type': item.library_type or 'generated',
         'library_type_label': type_label_map.get(item.library_type or 'generated', item.library_type or 'generated'),
+        'style_type_key': item.style_type_key or '',
+        'style_type_label': _asset_style_meta(item.style_type_key or '').get('label') if (item.style_type_key or '').strip() else '',
         'asset_type': item.asset_type or '',
         'title': item.title or '',
         'subtitle': item.subtitle or '',
@@ -9087,6 +9089,15 @@ def _build_asset_generation_plan_payload(payload):
     generation_mode = style_meta.get('generation_mode') or 'text_to_image'
     if reference_assets and generation_mode == 'text_to_image':
         generation_mode = 'reference_guided'
+    strategy_reason = ''
+    if generation_mode == 'template_first':
+        strategy_reason = '当前类型更适合模板直出，重点在版式和文字层级，不必优先依赖图片模型。'
+    elif reference_assets:
+        strategy_reason = '当前已带参考图，更适合走参考图驱动或 img2img 路线。'
+    elif product_assets:
+        strategy_reason = '当前已带真实产品图，适合做产品图合成或产品主视觉辅助生成。'
+    else:
+        strategy_reason = '当前更适合先用文案驱动生成底图，后续再通过产品图或参考图增强。'
 
     overlay_plan = {
         'headline': title_hint,
@@ -9103,6 +9114,7 @@ def _build_asset_generation_plan_payload(payload):
             'style_type': style_meta.get('key') or '',
             'style_label': style_meta.get('label') or '',
             'generation_mode': generation_mode,
+            'strategy_reason': strategy_reason,
             'title_hint': title_hint,
             'product_context': product_context,
             'product_assets': product_assets,
@@ -9123,6 +9135,18 @@ def _build_asset_style_recommendation_payload(payload):
     product_meta = _product_profile_meta(payload.get('product_profile') or '')
     product_name = (payload.get('product_name') or product_meta.get('product_name') or '').strip()
     product_category = (payload.get('product_category') or product_meta.get('product_category') or '').strip()
+    product_asset_ids = _parse_int_list(payload.get('product_asset_ids') or '', limit=20)
+    selected_product_assets = _resolve_asset_library_rows(product_asset_ids, limit=20, library_type='product')
+    all_product_assets = AssetLibrary.query.filter_by(library_type='product', product_name=product_name).all() if product_name else []
+    product_asset_count = len(all_product_assets)
+    coverage_hint = ''
+    if product_name:
+        if product_asset_count == 0:
+            coverage_hint = f'当前产品“{product_name}”还没有任何真实产品图，优先补主图和说明图。'
+        elif product_asset_count < 3:
+            coverage_hint = f'当前产品“{product_name}”真实产品图还不够多，适合先走模板和产品图轻合成。'
+        else:
+            coverage_hint = f'当前产品“{product_name}”真实产品图覆盖较好，可以更放心做产品图合成。'
     suggestions = []
 
     def add_style(style_key, reason):
@@ -9157,6 +9181,8 @@ def _build_asset_style_recommendation_payload(payload):
     if product_category == 'medicine':
         add_style('checklist_table', f'当前产品“{product_name or product_category}”很适合做产品选择/参数清单或白名单风格。')
         add_style('poster_bold', '药品内容如果做封面，通常适合用大字报先抓注意力。')
+    if selected_product_assets:
+        add_style('reference_based', '你已经手动选中了产品图素材，适合尝试产品图合成或参考图生成路线。')
     if not suggestions:
         add_style('medical_science', '默认推荐医学科普类，适合作为通用科普配图。')
         add_style('knowledge_card', '也可尝试知识卡片类，适合收藏传播。')
@@ -9166,6 +9192,8 @@ def _build_asset_style_recommendation_payload(payload):
     for item in suggestions:
         if item['style_key'] in seen:
             continue
+        if coverage_hint:
+            item['coverage_hint'] = coverage_hint
         unique.append(item)
         seen.add(item['style_key'])
     return {
@@ -11320,6 +11348,7 @@ def init_db():
                 'reference_asset_ids': 'VARCHAR(500)',
             },
             'asset_library': {
+                'style_type_key': 'VARCHAR(50)',
                 'product_category': 'VARCHAR(30)',
                 'product_name': 'VARCHAR(200)',
                 'product_indication': 'VARCHAR(200)',
