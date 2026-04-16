@@ -2470,8 +2470,58 @@
                             </div>
                         </div>
                     </div>
+                    <div class="col-12">
+                        <div class="detail-card">
+                            <strong>产品覆盖度缺口</strong>
+                            <div class="table-wrap mt-3">
+                                <table class="table data-table align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>产品</th>
+                                            <th>分类</th>
+                                            <th>已有角色</th>
+                                            <th>缺失角色</th>
+                                            <th>资产数</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${(data.coverage || []).map((item) => `
+                                        <tr>
+                                            <td>${escapeHtml(item.product_name || '-')}</td>
+                                            <td>${escapeHtml(item.product_category || '-')}</td>
+                                            <td>${escapeHtml((item.existing_roles || []).join('、') || '暂无')}</td>
+                                            <td>${escapeHtml((item.missing_roles || []).join('、') || '已齐')}</td>
+                                            <td>${item.asset_count || 0}</td>
+                                            <td>
+                                                <div class="d-flex gap-2 flex-wrap">
+                                                    ${(item.missing_roles || []).slice(0, 2).map((role) => `
+                                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="prefillAssetFormFromCoverage('${escapeHtml(item.profile_key || '')}', '${escapeHtml(role)}')">
+                                                            补${escapeHtml(role)}
+                                                        </button>
+                                                    `).join('') || '<span class="text-muted">已齐</span>'}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        `).join('') || '<tr><td colspan="6" class="text-center text-muted">暂无覆盖度数据</td></tr>'}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             `;
+        }
+
+        function prefillAssetFormFromCoverage(profileKey, roleKey) {
+            const profile = (productProfiles || []).find((item) => item.key === profileKey);
+            if (!profile) return;
+            document.getElementById('assetLibraryFormType').value = 'product';
+            document.getElementById('assetLibraryFormProductProfile').value = profile.key || '';
+            applyAssetProductProfile();
+            document.getElementById('assetLibraryFormVisualRole').value = roleKey || '';
+            document.getElementById('assetLibraryFormTitle').focus();
+            document.getElementById('assetLibraryMsg').textContent = `已带入 ${profile.label || profile.product_name || '-'} 的 ${roleKey || '-'} 缺口，可直接补图。`;
         }
 
         async function saveAssetLibraryItem() {

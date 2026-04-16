@@ -29,6 +29,7 @@ def register_automation_asset_routes(app, helpers):
     datetime = helpers['datetime']
     normalize_quota = helpers['normalize_quota']
     product_profile_meta = helpers['product_profile_meta']
+    product_profile_options = helpers['product_profile_options']
     allowed_upload_exts = {'.png', '.jpg', '.jpeg', '.webp', '.gif'}
 
     def _asset_upload_dir():
@@ -371,6 +372,7 @@ def register_automation_asset_routes(app, helpers):
         role_counter = Counter()
         product_counter = Counter()
         category_rows = defaultdict(lambda: {'count': 0, 'products': set()})
+        role_map_by_product = defaultdict(set)
         for item in items:
             library_counter[item.library_type or 'generated'] += 1
             category_key = (item.product_category or '未分类').strip() or '未分类'
@@ -381,6 +383,27 @@ def register_automation_asset_routes(app, helpers):
             product_counter[product_key] += 1
             category_rows[category_key]['count'] += 1
             category_rows[category_key]['products'].add(product_key)
+            role_map_by_product[product_key].add(role_key)
+
+        coverage_rows = []
+        for profile in product_profile_options():
+            product_name = (profile.get('product_name') or '').strip() or profile.get('label') or '未命名产品'
+            existing_roles = role_map_by_product.get(product_name, set())
+            if profile.get('product_category') == 'device':
+                expected_roles = {'hero', 'detail', 'scene'}
+            else:
+                expected_roles = {'standard_pack', 'detail', 'instruction'}
+            if profile.get('default_visual_role'):
+                expected_roles.add(profile['default_visual_role'])
+            missing_roles = sorted([role for role in expected_roles if role not in existing_roles])
+            coverage_rows.append({
+                'profile_key': profile.get('key') or '',
+                'product_name': product_name,
+                'product_category': profile.get('product_category') or '',
+                'existing_roles': sorted([role for role in existing_roles if role and role != '未标记']),
+                'missing_roles': missing_roles,
+                'asset_count': product_counter.get(product_name, 0),
+            })
 
         return jsonify({
             'success': True,
@@ -398,6 +421,7 @@ def register_automation_asset_routes(app, helpers):
             } for key, value in category_rows.items()],
             'visual_roles': [{'key': key, 'count': count} for key, count in role_counter.most_common(10)],
             'products': [{'name': key, 'count': count} for key, count in product_counter.most_common(12)],
+            'coverage': coverage_rows,
         })
 
     @app.route('/api/admin/assets/library/<int:item_id>')

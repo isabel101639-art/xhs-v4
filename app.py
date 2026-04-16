@@ -9290,6 +9290,7 @@ register_automation_asset_routes(app, {
     'datetime': datetime,
     'normalize_quota': _normalize_quota,
     'product_profile_meta': _product_profile_meta,
+    'product_profile_options': _product_profile_options,
     'coerce_bool': _coerce_bool,
     'next_schedule_time': _next_schedule_time,
 })
