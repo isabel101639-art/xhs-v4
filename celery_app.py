@@ -434,6 +434,7 @@ def generate_asset_images_job(asset_task_id):
         _build_asset_provider_request_preview,
         _build_asset_generation_fallback_results,
         _log_operation,
+        _resolve_asset_library_rows,
         _resolve_reference_asset_rows,
         AssetLibrary,
         AssetGenerationTask,
@@ -591,6 +592,14 @@ def generate_asset_images_job(asset_task_id):
     results = []
     message = ''
     actual_provider = provider
+    product_rows = _resolve_asset_library_rows(task.product_asset_ids or '', limit=20, library_type='product')
+    product_assets = [{
+        'id': item.id,
+        'title': item.title or '',
+        'preview_url': item.preview_url or '',
+        'product_name': item.product_name or '',
+        'visual_role': item.visual_role or '',
+    } for item in product_rows]
     reference_rows = _resolve_reference_asset_rows(task.reference_asset_ids or '', limit=20)
     reference_assets = [{
         'id': item.id,
@@ -618,6 +627,7 @@ def generate_asset_images_job(asset_task_id):
                 image_size,
                 task.style_preset or '小红书图文',
                 image_count=task.image_count or 3,
+                product_assets=product_assets,
                 reference_assets=reference_assets,
                 product_context=product_context,
             )
@@ -673,6 +683,7 @@ def generate_asset_images_job(asset_task_id):
                 'product_category': task.product_category or '',
                 'product_name': task.product_name or '',
                 'product_indication': task.product_indication or '',
+                'product_asset_ids': task.product_asset_ids or '',
                 'reference_asset_ids': task.reference_asset_ids or '',
             }, ensure_ascii=False),
         ))
@@ -691,6 +702,7 @@ def generate_asset_images_job(asset_task_id):
         'registration_id': task.registration_id,
         'topic_id': task.topic_id,
         'product_name': task.product_name or '',
+        'product_asset_ids': task.product_asset_ids or '',
         'reference_asset_ids': task.reference_asset_ids or '',
     })
     db.session.commit()

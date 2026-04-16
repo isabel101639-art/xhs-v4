@@ -999,6 +999,7 @@
                         <label class="form-label subtle">说明</label>
                         <input id="assetJobNote" class="form-control" placeholder="如 参考知识卡片风格、突出产品主体">
                     </div>
+                    <input id="assetJobProductAssetIds" type="hidden">
                     <div class="col-md-12">
                         <label class="form-label subtle">文案 / 内容拆解输入</label>
                         <textarea id="assetJobSelectedContent" rows="4" class="form-control" placeholder="可粘贴文案、重点信息、结构化要点"></textarea>
@@ -2070,6 +2071,7 @@
                 style_type: document.getElementById('assetJobStyleType').value,
                 title_hint: document.getElementById('assetJobTitleHint').value.trim(),
                 product_profile: document.getElementById('assetJobProductProfile').value,
+                product_asset_ids: document.getElementById('assetJobProductAssetIds')?.value?.trim() || '',
                 reference_asset_ids: document.getElementById('assetJobReferenceAssetIds').value.trim(),
                 selected_content: [document.getElementById('assetJobSelectedContent').value.trim(), document.getElementById('assetJobNote').value.trim()].filter(Boolean).join('\n'),
             };
@@ -2097,6 +2099,7 @@
                 style_type: document.getElementById('assetJobStyleType').value,
                 title_hint: document.getElementById('assetJobTitleHint').value.trim(),
                 product_profile: document.getElementById('assetJobProductProfile').value,
+                product_asset_ids: document.getElementById('assetJobProductAssetIds')?.value?.trim() || '',
                 reference_asset_ids: document.getElementById('assetJobReferenceAssetIds').value.trim(),
                 selected_content: [document.getElementById('assetJobSelectedContent').value.trim(), document.getElementById('assetJobNote').value.trim()].filter(Boolean).join('\n'),
             };
@@ -2138,6 +2141,18 @@
                         <div class="subtle mt-2">${escapeHtml(plan.overlay_plan?.postprocess || '-')}</div>
                     </div>
                     <div class="col-lg-6">
+                        <strong>产品图素材</strong>
+                        <div class="mt-2 d-flex gap-3 flex-wrap">
+                            ${(plan.product_assets || []).map((asset) => `
+                                <div style="max-width:140px;">
+                                    ${asset.preview_url ? `<img class="asset-preview" src="${asset.preview_url}" alt="${escapeHtml(asset.title || '')}">` : '<div class="subtle">无预览</div>'}
+                                    <div class="subtle mt-1">${escapeHtml(asset.title || '-')}</div>
+                                    <div class="subtle">${escapeHtml(asset.visual_role || '-')}</div>
+                                </div>
+                            `).join('') || '<div class="subtle">未选择产品图</div>'}
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
                         <strong>参考图</strong>
                         <div class="mt-2 d-flex gap-3 flex-wrap">
                             ${(plan.reference_assets || []).map((asset) => `
@@ -2170,8 +2185,17 @@
             return raw.split(/[\s,，;；]+/).map((item) => parseInt(item, 10)).filter((item, index, arr) => item > 0 && arr.indexOf(item) === index);
         }
 
+        function getAssetJobProductAssetIds() {
+            const raw = document.getElementById('assetJobProductAssetIds')?.value || '';
+            return raw.split(/[\s,，;；]+/).map((item) => parseInt(item, 10)).filter((item, index, arr) => item > 0 && arr.indexOf(item) === index);
+        }
+
         function setAssetJobReferenceIds(ids) {
             document.getElementById('assetJobReferenceAssetIds').value = (ids || []).join(',');
+        }
+
+        function setAssetJobProductAssetIds(ids) {
+            document.getElementById('assetJobProductAssetIds').value = (ids || []).join(',');
         }
 
         function toggleAssetJobReferenceId(id) {
@@ -2179,6 +2203,33 @@
             const next = current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
             setAssetJobReferenceIds(next);
             loadAssetJobReferenceSuggestions();
+        }
+
+        function toggleAssetJobProductAssetId(id) {
+            const current = getAssetJobProductAssetIds();
+            const next = current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
+            setAssetJobProductAssetIds(next);
+            loadAssetJobProductAssets();
+        }
+
+        function recommendedVisualRolesForStyle(styleType) {
+            const key = (styleType || '').trim();
+            if (key === 'poster') {
+                return ['hero', 'standard_pack', 'scene'];
+            }
+            if (key === 'reference_based') {
+                return ['hero', 'scene', 'family_lineup', 'standard_pack'];
+            }
+            if (key === 'medical_science') {
+                return ['hero', 'device_ui', 'standard_pack', 'scene'];
+            }
+            if (key === 'knowledge_card') {
+                return ['detail', 'standard_pack', 'instruction', 'device_ui', 'hero'];
+            }
+            if (key === 'checklist' || key === 'memo') {
+                return ['standard_pack', 'detail', 'instruction', 'hero'];
+            }
+            return ['hero', 'standard_pack', 'detail', 'scene'];
         }
 
         async function loadAssetJobReferenceSuggestions() {
@@ -2224,9 +2275,13 @@
             if (!profile) {
                 wrap.textContent = '未选择产品预设时，这里不展示产品图库候选。';
                 document.getElementById('assetJobProductHint').textContent = '未选择产品预设时，可直接用文案和参考图生成。';
+                setAssetJobProductAssetIds([]);
                 return;
             }
             document.getElementById('assetJobProductHint').textContent = `当前产品：${profile.product_name || profile.label || '-'} ｜ 分类：${profile.product_category || '-'} ｜ 适应方向：${profile.product_indication || '-'}`;
+            const selectedIds = getAssetJobProductAssetIds();
+            const styleType = document.getElementById('assetJobStyleType')?.value || '';
+            const preferredRoles = recommendedVisualRolesForStyle(styleType);
             const params = new URLSearchParams({
                 library_type: 'product',
                 product_name: profile.product_name || '',
@@ -2238,7 +2293,18 @@
                 wrap.textContent = data.message || '产品图库候选加载失败';
                 return;
             }
-            const items = data.items || [];
+            const items = (data.items || []).slice().sort((a, b) => {
+                const aIdx = preferredRoles.indexOf(a.visual_role || '');
+                const bIdx = preferredRoles.indexOf(b.visual_role || '');
+                const safeA = aIdx >= 0 ? aIdx : 999;
+                const safeB = bIdx >= 0 ? bIdx : 999;
+                return safeA - safeB;
+            });
+            if (!selectedIds.length && items.length) {
+                const autoPick = items.slice(0, Math.min(styleType === 'reference_based' ? 2 : 1, items.length)).map((item) => item.id);
+                setAssetJobProductAssetIds(autoPick);
+            }
+            const effectiveSelectedIds = getAssetJobProductAssetIds();
             wrap.innerHTML = items.length ? `
                 <div class="d-flex gap-3 flex-wrap">
                     ${items.map((item) => `
@@ -2248,6 +2314,9 @@
                             </div>
                             <div class="subtle fw-semibold">${escapeHtml(item.title || '-')}</div>
                             <div class="subtle">${escapeHtml(item.visual_role || '-')}</div>
+                            <button type="button" class="btn btn-sm ${effectiveSelectedIds.includes(item.id) ? 'btn-secondary' : 'btn-outline-primary'} mt-2" onclick="toggleAssetJobProductAssetId(${item.id})">
+                                ${effectiveSelectedIds.includes(item.id) ? '移除产品图' : '加入产品图'}
+                            </button>
                         </div>
                     `).join('')}
                 </div>
@@ -3296,6 +3365,7 @@
                             <div class="subtle">适应方向：${escapeHtml(cached.product_indication || '-')}</div>
                             <div class="subtle">Provider：${escapeHtml(cached.source_provider || '-')}</div>
                             <div class="subtle">状态：${escapeHtml(cached.status || '-')}</div>
+                            <div class="subtle">产品图资产：${escapeHtml((cached.product_asset_ids || []).join(', ') || '-')}</div>
                             <div class="subtle">参考资产：${escapeHtml((cached.reference_asset_ids || []).join(', ') || '-')}</div>
                         </div>
                         <div class="col-lg-4">
@@ -3311,6 +3381,18 @@
                                         ${asset.preview_url ? `<img class="asset-preview" src="${asset.preview_url}" alt="${escapeHtml(asset.title || '')}">` : '<div class="subtle">无预览</div>'}
                                     </div>
                                 `).join('') || '<div class="subtle">暂无结果</div>'}
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <strong>产品图素材</strong>
+                            <div class="mt-2 d-flex gap-3 flex-wrap">
+                                ${(cached.product_assets || []).map((asset) => `
+                                    <div style="max-width:140px;">
+                                        ${asset.preview_url ? `<img class="asset-preview" src="${asset.preview_url}" alt="${escapeHtml(asset.title || '')}">` : '<div class="subtle">无预览</div>'}
+                                        <div class="subtle mt-1">${escapeHtml(asset.title || '-')}</div>
+                                        <div class="subtle">${escapeHtml(asset.visual_role || '-')}</div>
+                                    </div>
+                                `).join('') || '<div class="subtle">未选择产品图</div>'}
                             </div>
                         </div>
                         <div class="col-12">
@@ -4530,6 +4612,7 @@
         });
         document.getElementById('assetJobStyleType')?.addEventListener('change', () => {
             loadAssetJobReferenceSuggestions();
+            loadAssetJobProductAssets();
         });
         document.getElementById('assetJobTitleHint')?.addEventListener('input', () => {
             if ((document.getElementById('assetJobStyleType')?.value || '') === 'reference_based') {

@@ -776,6 +776,16 @@ def _serialize_data_source_task(task, detail=False):
 def _serialize_asset_generation_task(task, detail=False):
     reg = Registration.query.get(task.registration_id) if task.registration_id else None
     topic = Topic.query.get(task.topic_id) if task.topic_id else None
+    product_rows = _resolve_asset_library_rows(task.product_asset_ids or '', limit=20, library_type='product')
+    product_asset_ids = [item.id for item in product_rows]
+    product_assets = [{
+        'id': item.id,
+        'title': item.title or '',
+        'preview_url': item.preview_url or '',
+        'library_type': item.library_type or '',
+        'visual_role': item.visual_role or '',
+        'product_name': item.product_name or '',
+    } for item in product_rows]
     reference_rows = _resolve_reference_asset_rows(task.reference_asset_ids or '', limit=20)
     reference_ids = [item.id for item in reference_rows]
     reference_assets = [{
@@ -800,6 +810,8 @@ def _serialize_asset_generation_task(task, detail=False):
         'product_category': task.product_category or '',
         'product_name': task.product_name or '',
         'product_indication': task.product_indication or '',
+        'product_asset_ids': product_asset_ids,
+        'product_assets': product_assets if detail else product_assets[:3],
         'reference_asset_ids': reference_ids,
         'reference_assets': reference_assets if detail else reference_assets[:3],
         'image_count': task.image_count or 0,
@@ -917,18 +929,25 @@ def _parse_int_list(value, limit=20):
     return results
 
 
-def _resolve_reference_asset_rows(reference_ids, limit=20):
-    normalized_ids = _parse_int_list(reference_ids, limit=limit)
+def _resolve_asset_library_rows(asset_ids, limit=20, library_type=''):
+    normalized_ids = _parse_int_list(asset_ids, limit=limit)
     if not normalized_ids:
         return []
-    rows = AssetLibrary.query.filter(AssetLibrary.id.in_(normalized_ids)).all()
+    query = AssetLibrary.query.filter(AssetLibrary.id.in_(normalized_ids))
+    if library_type:
+        query = query.filter_by(library_type=library_type)
+    rows = query.all()
     row_map = {item.id: item for item in rows}
     ordered = []
-    for ref_id in normalized_ids:
-        item = row_map.get(ref_id)
+    for asset_id in normalized_ids:
+        item = row_map.get(asset_id)
         if item:
             ordered.append(item)
     return ordered
+
+
+def _resolve_reference_asset_rows(reference_ids, limit=20):
+    return _resolve_asset_library_rows(reference_ids, limit=limit)
 
 
 INTEGRATION_PING_META = {
@@ -5839,6 +5858,9 @@ def _infer_asset_layout_variant(style_key, title_text='', body_text='', support_
     merged = ' '.join(filter(None, [title_text or '', body_text or '', ' '.join(support_points or [])]))
     source = merged.lower()
 
+    if style_key in {'poster_bold', 'poster_handwritten', 'memo_mobile', 'memo_classroom', 'checklist_table', 'checklist_timeline', 'checklist_report'}:
+        return style_key
+
     if style_key == 'medical_science':
         if any(token in source for token in ['对比', 'vs', '真相', '误区', '区别', '熬夜', '伤害', '危害', '全面', '好处', '坏处']):
             return 'impact_compare'
@@ -5856,6 +5878,23 @@ def _infer_asset_layout_variant(style_key, title_text='', body_text='', support_
         if any(token in source for token in ['全面', '伤害', '影响', '症状', '信号', '系统', '全身']):
             return 'body_map'
         return 'knowledge_breakdown'
+
+    if style_key == 'poster':
+        if any(token in source for token in ['经验', '总结', 'emo', '崩溃', '照顾', '踩坑', '分享', '父亲', '我']):
+            return 'poster_handwritten'
+        return 'poster_bold'
+
+    if style_key == 'memo':
+        if any(token in source for token in ['并发症', '病理', '生理', '检查', '代偿', '失代偿', '表现', '治疗要点', '实验室']):
+            return 'memo_classroom'
+        return 'memo_mobile'
+
+    if style_key == 'checklist':
+        if any(token in source for token in ['早餐', '午餐', '晚餐', 'day', '食谱', '7天', '7 天', '加餐', '几点', '时间']):
+            return 'checklist_timeline'
+        if any(token in source for token in ['报告', '彩超', '化验', '指标', '一次看懂', '检查结果', 'ast', 'alt', 'ggt', 'alp']):
+            return 'checklist_report'
+        return 'checklist_table'
 
     return 'standard'
 
@@ -5901,6 +5940,44 @@ def _build_variant_alignment_lines(style_key, layout_variant):
         return [
             '版面贴近“结构拆解卡”样例：大标题下面是核心结构图，四周加简短标签框和局部放大图，底部再补一条结论区。',
             '适合解释定义、成因、检查指标、器官结构和高频误区。',
+        ]
+
+    if style_key == 'poster':
+        if layout_variant == 'poster_handwritten':
+            return [
+                '版面贴近“手写经验大字报”样例：大标题竖向堆叠，关键词加荧光涂抹底色，整体留白很多。',
+                '适合第一人称经验分享、情绪表达、总结踩坑点这类封面。',
+            ]
+        return [
+            '版面贴近“黑体警示大字报”样例：标题像重磅警示牌，几乎全靠文字冲击力抓住注意力。',
+            '适合指南、版本说明、结论型封面，背景保持极简。',
+        ]
+
+    if style_key == 'memo':
+        if layout_variant == 'memo_classroom':
+            return [
+                '版面贴近“课堂笔记/复习资料”样例：分点、下划线、圈注、荧光笔和箭头很多，像老师划重点。',
+                '适合病理、生理、并发症、检查要点这类需要整理重点的内容。',
+            ]
+        return [
+            '版面贴近“手机备忘录”样例：顶部像原生备忘录 UI，白底、大留白、3-5 条清单式短句。',
+            '适合补救指南、生活方式建议、注意事项和高收藏攻略。',
+        ]
+
+    if style_key == 'checklist':
+        if layout_variant == 'checklist_timeline':
+            return [
+                '版面贴近“7天食谱/时间轴计划”样例：按 Day 或时间点切块，早餐/午餐/晚餐/加餐等模块清楚。',
+                '适合用户照着执行，不只是看概念。',
+            ]
+        if layout_variant == 'checklist_report':
+            return [
+                '版面贴近“彩超/化验报告解读”样例：一个项目对应一个解释块，旁边辅以示意图和圈注说明。',
+                '适合把专业报告翻译成普通人能看懂的结构化答案。',
+            ]
+        return [
+            '版面贴近“白名单/产品怎么选/参数对比”样例：标准表格或矩阵结构，真实产品或食物图可作为格子里的素材。',
+            '每一行或每一列都对应一个维度，最后必须给出推荐语或结论。',
         ]
 
     return []
@@ -5980,6 +6057,49 @@ def _build_style_specific_prompt(style_meta, clean_title='', primary_keyword='',
             lines.extend([
                 '强调“风格靠近而不是照抄”：保留视觉语言，不复制原图中的具体文案、水印或品牌元素。',
                 '底图要给后续标题、说明卡片和标签框预留足够留白，方便系统后处理排版。',
+            ])
+        return ' '.join(shared_lines + lines)
+
+    if style_key == 'poster':
+        lines = [
+            '核心视觉是大标题本身，文字至少占据画面 60% 以上面积。',
+            '关键词要用荧光底块高亮，背景尽量极简，保证缩略图下也能看清。',
+            f'信息重点：{focus_text}。',
+            '这类图优先走模板排版，不依赖复杂插画。',
+        ]
+        if prompt_mode != 'fast':
+            lines.extend([
+                *_build_variant_alignment_lines(style_key, layout_variant),
+                '黑体警示版偏重结论和警告；手写经验版偏重第一人称情绪表达和总结感。',
+                '文字要有压迫感和冲击力，像流量封面，不像普通知识卡片。',
+            ])
+        return ' '.join(shared_lines + lines)
+
+    if style_key == 'memo':
+        lines = [
+            '整体像私人收藏的备忘录或课堂笔记，文字是主体，插画只是少量点缀。',
+            '重点内容必须短句化，并用高亮、emoji、圈注或下划线强化阅读路径。',
+            f'信息重点：{focus_text}。',
+            '这类图也优先走模板排版和后处理叠字。',
+        ]
+        if prompt_mode != 'fast':
+            lines.extend([
+                *_build_variant_alignment_lines(style_key, layout_variant),
+                '手机备忘录版更生活化、更口语化；课堂笔记版更像老师划重点和复习资料。',
+            ])
+        return ' '.join(shared_lines + lines)
+
+    if style_key == 'checklist':
+        lines = [
+            '这类图要帮助用户完成筛选、对比和执行，所以结构要比装饰更重要。',
+            '表格、时间轴、模块卡、报告说明框都比纯插画更优先。',
+            f'信息重点：{focus_text}。',
+            '真实产品图、食物图或示意图可以作为辅助素材，但不应盖过结构本身。',
+        ]
+        if prompt_mode != 'fast':
+            lines.extend([
+                *_build_variant_alignment_lines(style_key, layout_variant),
+                '表格对比版要明确横纵表头；时间轴版要明确早中晚或 Day1-Day7；报告解读版要做到一项一解释。',
             ])
         return ' '.join(shared_lines + lines)
 
@@ -6173,6 +6293,7 @@ def _build_asset_provider_request_preview(
     image_size,
     style_preset='小红书图文',
     image_count=3,
+    product_assets=None,
     reference_assets=None,
     product_context=None,
 ):
@@ -6182,6 +6303,8 @@ def _build_asset_provider_request_preview(
     safe_size = (image_size or '1024x1536').strip() or '1024x1536'
     safe_style = (style_preset or '小红书图文').strip() or '小红书图文'
     safe_count = min(max(_safe_int(image_count, 3), 1), 4)
+    product_assets = product_assets or []
+    product_urls = [item.get('preview_url') for item in product_assets if item.get('preview_url')]
     reference_assets = reference_assets or []
     reference_urls = [item.get('preview_url') for item in reference_assets if item.get('preview_url')]
     product_context = product_context or {}
@@ -6194,6 +6317,8 @@ def _build_asset_provider_request_preview(
             'response_format': 'url',
             'n': safe_count,
         }
+        if product_urls:
+            payload['product_images'] = product_urls[:3]
         if reference_urls:
             payload['reference_images'] = reference_urls[:3]
         if product_context:
@@ -6207,6 +6332,8 @@ def _build_asset_provider_request_preview(
             'response_format': 'url',
             'watermark': True,
         }
+        if product_urls:
+            payload['product_images'] = product_urls[:3]
         if reference_urls:
             payload['reference_images'] = reference_urls[:3]
         if product_context:
@@ -6220,6 +6347,8 @@ def _build_asset_provider_request_preview(
             'size': safe_size,
             'response_format': 'b64_json',
         }
+        if product_urls:
+            payload['product_images'] = product_urls[:3]
         if reference_urls:
             payload['reference_images'] = reference_urls[:3]
         if product_context:
@@ -6233,6 +6362,7 @@ def _build_asset_provider_request_preview(
             'size': safe_size,
             'style': safe_style,
             'response_format': 'b64_json',
+            'product_images': product_urls[:5],
             'reference_images': reference_urls[:5],
             'product_context': product_context,
         }
@@ -6242,6 +6372,7 @@ def _build_asset_provider_request_preview(
         'image_count': safe_count,
         'style': safe_style,
         'size': safe_size,
+        'product_images': product_urls[:5],
         'reference_images': reference_urls[:5],
         'product_context': product_context,
     }
@@ -8636,9 +8767,15 @@ def _dispatch_asset_generation(payload, actor='system'):
     product_category = (payload.get('product_category') or product_meta.get('product_category') or '').strip()[:30]
     product_name = (payload.get('product_name') or product_meta.get('product_name') or '').strip()[:200]
     product_indication = (payload.get('product_indication') or product_meta.get('product_indication') or '').strip()[:200]
+    product_asset_ids = _parse_int_list(payload.get('product_asset_ids') or '', limit=20)
+    product_assets = _resolve_asset_library_rows(product_asset_ids, limit=20, library_type='product')
     reference_asset_ids = _parse_int_list(payload.get('reference_asset_ids') or '', limit=20)
     reference_assets = _resolve_reference_asset_rows(reference_asset_ids, limit=20)
     reference_text = ''
+    product_asset_text = ''
+    if product_assets:
+        product_titles = [item.title or item.product_name or f'产品资产{item.id}' for item in product_assets[:3]]
+        product_asset_text = f" 产品图素材：{(' / '.join(product_titles))}。"
     if reference_assets:
         ref_titles = [item.title or item.product_name or f'资产{item.id}' for item in reference_assets[:3]]
         reference_text = f" 参考图方向：{(' / '.join(ref_titles))}。"
@@ -8655,6 +8792,8 @@ def _dispatch_asset_generation(payload, actor='system'):
     )
     if product_name:
         prompt_text = f"{prompt_text} 产品信息：{product_name}；适应方向：{product_indication or '未标记'}。"
+    if product_asset_text:
+        prompt_text = f"{prompt_text}{product_asset_text}"
     if reference_text:
         prompt_text = f"{prompt_text}{reference_text}"
 
@@ -8668,6 +8807,7 @@ def _dispatch_asset_generation(payload, actor='system'):
         product_category=product_category,
         product_name=product_name,
         product_indication=product_indication,
+        product_asset_ids=','.join(str(item) for item in product_asset_ids),
         reference_asset_ids=','.join(str(item) for item in reference_asset_ids),
         image_count=image_count,
         status='queued',
@@ -8687,6 +8827,7 @@ def _dispatch_asset_generation(payload, actor='system'):
         'source_provider': task.source_provider,
         'product_name': product_name,
         'product_category': product_category,
+        'product_asset_ids': product_asset_ids,
         'reference_asset_ids': reference_asset_ids,
         'actor': actor,
     })
@@ -8723,6 +8864,15 @@ def _build_asset_generation_plan_payload(payload):
     product_category = (payload.get('product_category') or product_meta.get('product_category') or '').strip()[:30]
     product_name = (payload.get('product_name') or product_meta.get('product_name') or '').strip()[:200]
     product_indication = (payload.get('product_indication') or product_meta.get('product_indication') or '').strip()[:200]
+    product_asset_ids = _parse_int_list(payload.get('product_asset_ids') or '', limit=20)
+    product_rows = _resolve_asset_library_rows(product_asset_ids, limit=20, library_type='product')
+    product_assets = [{
+        'id': item.id,
+        'title': item.title or '',
+        'preview_url': item.preview_url or '',
+        'visual_role': item.visual_role or '',
+        'product_name': item.product_name or '',
+    } for item in product_rows]
     reference_asset_ids = _parse_int_list(payload.get('reference_asset_ids') or '', limit=20)
     reference_rows = _resolve_reference_asset_rows(reference_asset_ids, limit=20)
     reference_assets = [{
@@ -8745,6 +8895,11 @@ def _build_asset_generation_plan_payload(payload):
     )
     if product_name:
         prompt_text = f"{prompt_text} 产品信息：{product_name}；适应方向：{product_indication or '未标记'}。"
+    if product_assets:
+        product_titles = []
+        for item in product_assets[:3]:
+            product_titles.append(item.get('title') or item.get('product_name') or f"产品资产{item.get('id')}")
+        prompt_text = f"{prompt_text} 产品图素材：{' / '.join(product_titles)}。"
     if reference_assets:
         reference_titles = []
         for item in reference_assets[:3]:
@@ -8764,6 +8919,7 @@ def _build_asset_generation_plan_payload(payload):
         (os.environ.get('ASSET_IMAGE_SIZE') or str(runtime_config.get('image_size') or '1024x1536')).strip(),
         style_preset=style_meta['key'],
         image_count=min(max(_safe_int(payload.get('image_count'), 1), 1), 4),
+        product_assets=product_assets,
         reference_assets=reference_assets,
         product_context=product_context,
     )
@@ -8790,6 +8946,7 @@ def _build_asset_generation_plan_payload(payload):
             'generation_mode': generation_mode,
             'title_hint': title_hint,
             'product_context': product_context,
+            'product_assets': product_assets,
             'reference_assets': reference_assets,
             'content_points': points[:5],
             'prompt_text': prompt_text,

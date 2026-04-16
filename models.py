@@ -260,6 +260,7 @@ class AssetGenerationTask(db.Model):
     product_category = db.Column(db.String(30))
     product_name = db.Column(db.String(200))
     product_indication = db.Column(db.String(200))
+    product_asset_ids = db.Column(db.String(500))
     reference_asset_ids = db.Column(db.String(500))
     image_count = db.Column(db.Integer, default=3)
     status = db.Column(db.String(20), default='queued')
