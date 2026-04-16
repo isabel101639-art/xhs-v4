@@ -434,6 +434,7 @@ def generate_asset_images_job(asset_task_id):
         _build_asset_provider_request_preview,
         _build_asset_generation_fallback_results,
         _log_operation,
+        _resolve_reference_asset_rows,
         AssetLibrary,
         AssetGenerationTask,
         Topic,
@@ -590,6 +591,19 @@ def generate_asset_images_job(asset_task_id):
     results = []
     message = ''
     actual_provider = provider
+    reference_rows = _resolve_reference_asset_rows(task.reference_asset_ids or '', limit=20)
+    reference_assets = [{
+        'id': item.id,
+        'title': item.title or '',
+        'preview_url': item.preview_url or '',
+        'product_name': item.product_name or '',
+    } for item in reference_rows]
+    product_context = {
+        'product_profile': task.product_profile or '',
+        'product_category': task.product_category or '',
+        'product_name': task.product_name or '',
+        'product_indication': task.product_indication or '',
+    }
 
     if api_url and api_key:
         try:
@@ -604,6 +618,8 @@ def generate_asset_images_job(asset_task_id):
                 image_size,
                 task.style_preset or '小红书图文',
                 image_count=task.image_count or 3,
+                reference_assets=reference_assets,
+                product_context=product_context,
             )
             response = requests.post(api_url, json=payload, headers=headers, timeout=timeout_seconds)
             response.raise_for_status()
@@ -643,11 +659,22 @@ def generate_asset_images_job(asset_task_id):
             model_name=model_name or task.model_name or '',
             pool_status='reserve',
             status='active',
+            product_category=task.product_category,
+            product_name=task.product_name,
+            product_indication=task.product_indication,
+            visual_role='hero' if task.product_name else '',
             tags=tags[:300],
             prompt_text=item.get('image_prompt') or task.prompt_text or '',
             preview_url=item.get('preview_url') or '',
             download_name=item.get('download_name') or '',
-            raw_payload=json.dumps(item, ensure_ascii=False),
+            raw_payload=json.dumps({
+                **item,
+                'product_profile': task.product_profile or '',
+                'product_category': task.product_category or '',
+                'product_name': task.product_name or '',
+                'product_indication': task.product_indication or '',
+                'reference_asset_ids': task.reference_asset_ids or '',
+            }, ensure_ascii=False),
         ))
 
     task.status = 'success'
@@ -663,6 +690,8 @@ def generate_asset_images_job(asset_task_id):
         'library_items_created': len(results),
         'registration_id': task.registration_id,
         'topic_id': task.topic_id,
+        'product_name': task.product_name or '',
+        'reference_asset_ids': task.reference_asset_ids or '',
     })
     db.session.commit()
     return {

@@ -776,6 +776,16 @@ def _serialize_data_source_task(task, detail=False):
 def _serialize_asset_generation_task(task, detail=False):
     reg = Registration.query.get(task.registration_id) if task.registration_id else None
     topic = Topic.query.get(task.topic_id) if task.topic_id else None
+    reference_rows = _resolve_reference_asset_rows(task.reference_asset_ids or '', limit=20)
+    reference_ids = [item.id for item in reference_rows]
+    reference_assets = [{
+        'id': item.id,
+        'title': item.title or '',
+        'preview_url': item.preview_url or '',
+        'library_type': item.library_type or '',
+        'product_name': item.product_name or '',
+        'visual_role': item.visual_role or '',
+    } for item in reference_rows]
     return {
         'id': task.id,
         'registration_id': task.registration_id,
@@ -786,6 +796,12 @@ def _serialize_asset_generation_task(task, detail=False):
         'source_provider': task.source_provider or 'svg_fallback',
         'model_name': task.model_name or '',
         'style_preset': task.style_preset or '小红书图文',
+        'product_profile': task.product_profile or '',
+        'product_category': task.product_category or '',
+        'product_name': task.product_name or '',
+        'product_indication': task.product_indication or '',
+        'reference_asset_ids': reference_ids,
+        'reference_assets': reference_assets if detail else reference_assets[:3],
         'image_count': task.image_count or 0,
         'status': task.status or 'queued',
         'celery_task_id': task.celery_task_id or '',
@@ -884,6 +900,35 @@ def _deserialize_operation_detail(detail):
         return parsed if isinstance(parsed, dict) else {'raw': parsed}
     except Exception:
         return {'raw': detail}
+
+
+def _parse_int_list(value, limit=20):
+    if isinstance(value, list):
+        raw_items = value
+    else:
+        raw_items = re.split(r'[\s,，;；]+', str(value or ''))
+    results = []
+    for item in raw_items:
+        number = _safe_int(item, 0)
+        if number > 0 and number not in results:
+            results.append(number)
+        if len(results) >= limit:
+            break
+    return results
+
+
+def _resolve_reference_asset_rows(reference_ids, limit=20):
+    normalized_ids = _parse_int_list(reference_ids, limit=limit)
+    if not normalized_ids:
+        return []
+    rows = AssetLibrary.query.filter(AssetLibrary.id.in_(normalized_ids)).all()
+    row_map = {item.id: item for item in rows}
+    ordered = []
+    for ref_id in normalized_ids:
+        item = row_map.get(ref_id)
+        if item:
+            ordered.append(item)
+    return ordered
 
 
 INTEGRATION_PING_META = {
@@ -6121,38 +6166,65 @@ def _build_asset_generation_fallback_results(topic, selected_content='', image_c
     return results
 
 
-def _build_asset_provider_request_preview(provider, model_name, prompt_text, image_size, style_preset='小红书图文', image_count=3):
+def _build_asset_provider_request_preview(
+    provider,
+    model_name,
+    prompt_text,
+    image_size,
+    style_preset='小红书图文',
+    image_count=3,
+    reference_assets=None,
+    product_context=None,
+):
     safe_provider = (provider or 'svg_fallback').strip() or 'svg_fallback'
     safe_model = (model_name or '').strip()
     safe_prompt = (prompt_text or '').strip()
     safe_size = (image_size or '1024x1536').strip() or '1024x1536'
     safe_style = (style_preset or '小红书图文').strip() or '小红书图文'
     safe_count = min(max(_safe_int(image_count, 3), 1), 4)
+    reference_assets = reference_assets or []
+    reference_urls = [item.get('preview_url') for item in reference_assets if item.get('preview_url')]
+    product_context = product_context or {}
 
     if safe_provider == 'volcengine_ark':
-        return {
+        payload = {
             'model': safe_model or 'doubao-seededit-3-0-i2i-250628',
             'prompt': safe_prompt,
             'size': safe_size,
             'response_format': 'url',
             'n': safe_count,
         }
+        if reference_urls:
+            payload['reference_images'] = reference_urls[:3]
+        if product_context:
+            payload['product_context'] = product_context
+        return payload
     if safe_provider == 'volcengine_las':
-        return {
+        payload = {
             'model': safe_model or 'doubao-seedream-5-0-lite-260128',
             'prompt': safe_prompt,
             'size': safe_size,
             'response_format': 'url',
             'watermark': True,
         }
+        if reference_urls:
+            payload['reference_images'] = reference_urls[:3]
+        if product_context:
+            payload['product_context'] = product_context
+        return payload
     if safe_provider in {'openai', 'openai_compatible'}:
-        return {
+        payload = {
             'model': safe_model or 'gpt-image-1',
             'prompt': safe_prompt,
             'n': safe_count,
             'size': safe_size,
             'response_format': 'b64_json',
         }
+        if reference_urls:
+            payload['reference_images'] = reference_urls[:3]
+        if product_context:
+            payload['product_context'] = product_context
+        return payload
     if safe_provider in {'generic_json', 'custom_json'}:
         return {
             'model': safe_model or 'image-default',
@@ -6161,6 +6233,8 @@ def _build_asset_provider_request_preview(provider, model_name, prompt_text, ima
             'size': safe_size,
             'style': safe_style,
             'response_format': 'b64_json',
+            'reference_images': reference_urls[:5],
+            'product_context': product_context,
         }
     return {
         'mode': 'svg_fallback',
@@ -6168,6 +6242,8 @@ def _build_asset_provider_request_preview(provider, model_name, prompt_text, ima
         'image_count': safe_count,
         'style': safe_style,
         'size': safe_size,
+        'reference_images': reference_urls[:5],
+        'product_context': product_context,
     }
 
 
@@ -8555,6 +8631,17 @@ def _dispatch_asset_generation(payload, actor='system'):
         raise ValueError('报名信息不存在')
 
     selected_content = (payload.get('selected_content') or '').strip()
+    product_meta = _product_profile_meta(payload.get('product_profile') or '')
+    product_profile = (payload.get('product_profile') or '').strip()[:80]
+    product_category = (payload.get('product_category') or product_meta.get('product_category') or '').strip()[:30]
+    product_name = (payload.get('product_name') or product_meta.get('product_name') or '').strip()[:200]
+    product_indication = (payload.get('product_indication') or product_meta.get('product_indication') or '').strip()[:200]
+    reference_asset_ids = _parse_int_list(payload.get('reference_asset_ids') or '', limit=20)
+    reference_assets = _resolve_reference_asset_rows(reference_asset_ids, limit=20)
+    reference_text = ''
+    if reference_assets:
+        ref_titles = [item.title or item.product_name or f'资产{item.id}' for item in reference_assets[:3]]
+        reference_text = f" 参考图方向：{(' / '.join(ref_titles))}。"
     raw_style_type = (payload.get('style_type') or runtime_config.get('image_default_style_type') or 'medical_science')
     style_meta = _asset_style_meta(raw_style_type)
     style_preset = style_meta['label'][:50]
@@ -8566,6 +8653,10 @@ def _dispatch_asset_generation(payload, actor='system'):
         style_preset=style_meta['key'],
         title_hint=title_hint,
     )
+    if product_name:
+        prompt_text = f"{prompt_text} 产品信息：{product_name}；适应方向：{product_indication or '未标记'}。"
+    if reference_text:
+        prompt_text = f"{prompt_text}{reference_text}"
 
     task = AssetGenerationTask(
         registration_id=reg.id,
@@ -8573,6 +8664,11 @@ def _dispatch_asset_generation(payload, actor='system'):
         source_provider=(os.environ.get('ASSET_IMAGE_PROVIDER') or str(runtime_config.get('image_provider') or 'svg_fallback')).strip() or 'svg_fallback',
         model_name=(os.environ.get('ASSET_IMAGE_MODEL') or str(runtime_config.get('image_model') or '')).strip()[:100],
         style_preset=style_preset,
+        product_profile=product_profile,
+        product_category=product_category,
+        product_name=product_name,
+        product_indication=product_indication,
+        reference_asset_ids=','.join(str(item) for item in reference_asset_ids),
         image_count=image_count,
         status='queued',
         title_hint=title_hint,
@@ -8589,6 +8685,9 @@ def _dispatch_asset_generation(payload, actor='system'):
         'style_type': style_meta['key'],
         'image_count': image_count,
         'source_provider': task.source_provider,
+        'product_name': product_name,
+        'product_category': product_category,
+        'reference_asset_ids': reference_asset_ids,
         'actor': actor,
     })
 
@@ -10745,6 +10844,13 @@ def init_db():
                 'registration_id': 'INTEGER',
                 'topic_id': 'INTEGER',
                 'submission_id': 'INTEGER',
+            },
+            'asset_generation_task': {
+                'product_profile': 'VARCHAR(80)',
+                'product_category': 'VARCHAR(30)',
+                'product_name': 'VARCHAR(200)',
+                'product_indication': 'VARCHAR(200)',
+                'reference_asset_ids': 'VARCHAR(500)',
             },
             'asset_library': {
                 'product_category': 'VARCHAR(30)',
