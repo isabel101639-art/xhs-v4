@@ -1,6 +1,9 @@
+import csv
 import json
+import os
 from collections import Counter
 from datetime import datetime
+from io import BytesIO, StringIO
 
 from creator_tracking import canonicalize_xhs_post_url, normalize_tracking_url, sync_tracking_for_creator_account
 from models import (
@@ -76,6 +79,198 @@ def normalize_creator_platform(value=''):
     return alias_map.get(raw, raw if raw in valid_keys else 'xhs')
 
 
+CREATOR_IMPORT_HEADER_ALIASES = {
+    'platform': {'platform', '平台'},
+    'account_handle': {'account_handle', 'creator_account_handle', 'xhs_id', 'xhs_account', '小红书id', '小红书账号', '账号', '账号id', '小红书id/账号'},
+    'display_name': {'display_name', 'creator_display_name', 'nickname', '昵称', '用户昵称', '账号昵称', '名称'},
+    'owner_name': {'owner_name', '姓名', '达人姓名', '博主姓名'},
+    'owner_phone': {'owner_phone', 'phone', '手机号', '联系方式', '电话', '手机号/联系方式'},
+    'profile_url': {'profile_url', 'xhs_profile_link', '主页链接', '账号链接', '个人主页链接', '小红书主页链接'},
+    'post_url': {'post_url', 'xhs_link', '笔记链接', '笔记url', '小红书笔记链接', '小红书链接', '链接', '作品链接'},
+    'title': {'title', '笔记标题', '标题', '作品标题'},
+    'publish_time': {'publish_time', '发布时间', '发布日期', '时间'},
+    'views': {'views', 'view_count', '阅读量', '浏览量', '播放量', '传播量', '曝光量', '小红书传播量', '小红书浏览量', '小红书阅读量'},
+    'exposures': {'exposures', '曝光', '曝光数'},
+    'likes': {'likes', '点赞', '点赞量', '赞数', '小红书点赞量'},
+    'favorites': {'favorites', '收藏', '收藏量', '小红书收藏量'},
+    'comments': {'comments', '评论', '评论量', '小红书评论量'},
+    'shares': {'shares', '分享', '分享量'},
+    'follower_count': {'follower_count', '粉丝', '粉丝量', '粉丝数'},
+    'post_count': {'post_count', '发文数', '笔记数'},
+    'total_views': {'total_views', '总阅读', '总浏览', '总传播量'},
+    'total_interactions': {'total_interactions', '总互动', '总互动量'},
+    'source_channel': {'source_channel', '来源', '来源渠道', '数据来源'},
+    'topic_title': {'topic_title', '话题', '话题标题'},
+    'snapshot_date': {'snapshot_date', '快照日期', '统计日期', '日期'},
+}
+
+
+def _normalize_import_header(value=''):
+    text = str(value or '').strip().lower()
+    text = text.replace('（', '(').replace('）', ')')
+    text = text.replace('：', ':').replace('_', '').replace('-', '').replace(' ', '')
+    return text
+
+
+def _resolve_import_header(value=''):
+    normalized = _normalize_import_header(value)
+    if not normalized:
+        return ''
+    for canonical, aliases in CREATOR_IMPORT_HEADER_ALIASES.items():
+        normalized_aliases = {_normalize_import_header(alias) for alias in aliases}
+        if normalized in normalized_aliases:
+            return canonical
+    return normalized
+
+
+def _guess_post_title(row):
+    title = (row.get('title') or '').strip()
+    if title:
+        return title
+    post_url = canonicalize_xhs_post_url((row.get('post_url') or '').strip())
+    if post_url:
+        post_id = post_url.rstrip('/').split('/')[-1]
+        return f'小红书笔记 {post_id}'
+    account_handle = (row.get('account_handle') or '').strip()
+    publish_time = (row.get('publish_time') or '').strip()
+    if account_handle or publish_time:
+        return f'{account_handle or "账号"} 笔记 {publish_time or ""}'.strip()
+    return '小红书笔记'
+
+
+def _rows_to_creator_bundle(rows):
+    if not rows or len(rows[0]) < 2:
+        raise ValueError('未识别到有效表头，请确认是 Excel 复制内容或标准 CSV')
+
+    raw_headers = rows[0]
+    headers = [_resolve_import_header(item) for item in raw_headers]
+    accounts = []
+    posts = []
+    snapshots = []
+
+    seen_account_keys = set()
+    for raw_row in rows[1:]:
+        if not any(str(item or '').strip() for item in raw_row):
+            continue
+        row = {}
+        for idx, header in enumerate(headers):
+            if not header:
+                continue
+            row[header] = str(raw_row[idx]).strip() if idx < len(raw_row) and raw_row[idx] is not None else ''
+
+        platform = normalize_creator_platform(row.get('platform') or 'xhs')
+        account_handle = (row.get('account_handle') or '').strip()
+        display_name = (row.get('display_name') or '').strip()
+        owner_phone = (row.get('owner_phone') or '').strip()
+        profile_url = normalize_tracking_url(row.get('profile_url') or '')
+        owner_name = (row.get('owner_name') or '').strip()
+        if not (account_handle or display_name or profile_url or owner_phone):
+            continue
+
+        account_key = (platform, account_handle or display_name or profile_url or owner_phone)
+        if account_key not in seen_account_keys:
+            accounts.append({
+                'platform': platform,
+                'account_handle': account_handle,
+                'display_name': display_name or account_handle,
+                'owner_name': owner_name,
+                'owner_phone': owner_phone,
+                'profile_url': profile_url,
+                'follower_count': row.get('follower_count') or '',
+                'source_channel': row.get('source_channel') or 'spreadsheet_import',
+            })
+            seen_account_keys.add(account_key)
+
+        post_url = canonicalize_xhs_post_url((row.get('post_url') or '').strip())
+        if post_url:
+            posts.append({
+                'platform': platform,
+                'account_handle': account_handle,
+                'display_name': display_name,
+                'owner_name': owner_name,
+                'owner_phone': owner_phone,
+                'profile_url': profile_url,
+                'post_url': post_url,
+                'title': _guess_post_title(row),
+                'publish_time': row.get('publish_time') or '',
+                'views': row.get('views') or '',
+                'exposures': row.get('exposures') or '',
+                'likes': row.get('likes') or '',
+                'favorites': row.get('favorites') or '',
+                'comments': row.get('comments') or '',
+                'shares': row.get('shares') or '',
+                'topic_title': row.get('topic_title') or '',
+                'source_channel': row.get('source_channel') or 'spreadsheet_import',
+            })
+
+        if any((row.get(key) or '').strip() for key in ['follower_count', 'post_count', 'total_views', 'total_interactions']):
+            snapshot_date = row.get('snapshot_date') or row.get('publish_time') or datetime.now().strftime('%Y-%m-%d')
+            snapshots.append({
+                'platform': platform,
+                'account_handle': account_handle,
+                'display_name': display_name,
+                'owner_name': owner_name,
+                'owner_phone': owner_phone,
+                'profile_url': profile_url,
+                'snapshot_date': snapshot_date,
+                'follower_count': row.get('follower_count') or '',
+                'post_count': row.get('post_count') or '',
+                'total_views': row.get('total_views') or '',
+                'total_interactions': row.get('total_interactions') or '',
+                'source_channel': row.get('source_channel') or 'spreadsheet_import',
+            })
+
+    return {
+        'accounts': accounts,
+        'posts': posts,
+        'snapshots': snapshots,
+    }
+
+
+def _parse_creator_import_table(raw_payload=''):
+    payload = (raw_payload or '').strip()
+    if not payload:
+        return {
+            'accounts': [],
+            'posts': [],
+            'snapshots': [],
+        }
+
+    lines = [line for line in payload.splitlines() if line.strip()]
+    if len(lines) < 2:
+        raise ValueError('表格导入至少需要表头和一行数据')
+
+    delimiter = '\t' if '\t' in lines[0] else ','
+    reader = csv.reader(lines, delimiter=delimiter)
+    rows = list(reader)
+    return _rows_to_creator_bundle(rows)
+
+
+def parse_creator_import_file(filename='', content_bytes=b''):
+    name = (filename or '').strip()
+    if not name:
+        raise ValueError('未识别到文件名')
+    ext = os.path.splitext(name.lower())[1]
+    if ext in {'.csv', '.tsv', '.txt'}:
+        try:
+            text = content_bytes.decode('utf-8-sig')
+        except UnicodeDecodeError:
+            text = content_bytes.decode('gb18030')
+        return _parse_creator_import_table(text)
+    if ext == '.xlsx':
+        try:
+            from openpyxl import load_workbook
+        except ImportError as exc:
+            raise ValueError('当前环境未安装 openpyxl，暂时无法解析 xlsx 文件') from exc
+        workbook = load_workbook(filename=BytesIO(content_bytes), read_only=True, data_only=True)
+        sheet = workbook.active
+        rows = []
+        for row in sheet.iter_rows(values_only=True):
+            rows.append([str(cell).strip() if cell is not None else '' for cell in row])
+        return _rows_to_creator_bundle(rows)
+    raise ValueError('仅支持 csv/tsv/txt/xlsx 文件导入')
+
+
 def parse_creator_import_bundle(raw_payload=''):
     payload = (raw_payload or '').strip()
     if not payload:
@@ -84,6 +279,9 @@ def parse_creator_import_bundle(raw_payload=''):
             'posts': [],
             'snapshots': [],
         }
+
+    if not payload.startswith('{') and not payload.startswith('['):
+        return _parse_creator_import_table(payload)
 
     try:
         parsed = json.loads(payload)
