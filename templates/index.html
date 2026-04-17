@@ -124,6 +124,17 @@
             color: var(--ink);
         }
 
+        .stat-card-link {
+            display: block;
+            text-decoration: none;
+            transition: transform 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .stat-card-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 52px rgba(15, 23, 42, 0.12);
+        }
+
         .stat-label {
             color: var(--muted);
             font-size: 13px;
@@ -135,6 +146,12 @@
             line-height: 1;
             font-weight: 700;
             color: var(--primary);
+        }
+
+        .stat-helper {
+            color: var(--muted);
+            font-size: 12px;
+            margin-top: 10px;
         }
 
         .main-wrap {
@@ -462,7 +479,6 @@
                 {{ site_config.hero_badge or '当前活动期' }}
             </div>
             <div class="hero-title">{{ site_config.hero_title or '福瑞医科内容运营平台' }}</div>
-            <p class="hero-subtitle">{{ site_config.hero_subtitle or '面向报名人和运营团队，统一承接话题发布、报名、内容生成、提报补录与数据复盘。' }}</p>
             <div class="hero-actions">
                 {% if first_available_topic %}
                 <a class="hero-action hero-action-primary" href="/topic/{{ first_available_topic.id }}">
@@ -474,9 +490,9 @@
                     <i class="bi bi-bar-chart-line"></i>
                     查看数据看板
                 </a>
-                <a class="hero-action hero-action-secondary" href="/automation_center">
-                    <i class="bi bi-lightning-charge"></i>
-                    进入自动化中心
+                <a class="hero-action hero-action-secondary" href="/liver-science">
+                    <i class="bi bi-journal-medical"></i>
+                    肝病科普
                 </a>
             </div>
 
@@ -494,121 +510,24 @@
                     </div>
                 </div>
                 <div class="col-md-3 col-6">
-                    <div class="stat-card">
+                    <a class="stat-card stat-card-link" href="/announcements">
                         <div class="stat-label">在线公告</div>
-                        <div class="stat-number">{{ announcements|length }}</div>
-                    </div>
+                        <div class="stat-number">{{ announcement_count }}</div>
+                        <div class="stat-helper">点击查看全部公告</div>
+                    </a>
                 </div>
                 <div class="col-md-3 col-6">
-                    <div class="stat-card">
+                    <a class="stat-card stat-card-link" href="/trends">
                         <div class="stat-label">热点速览</div>
-                        <div class="stat-number">{{ trend_notes|length }}</div>
-                    </div>
+                        <div class="stat-number">{{ trend_note_count }}</div>
+                        <div class="stat-helper">点击查看热点详情</div>
+                    </a>
                 </div>
             </div>
         </div>
     </section>
 
     <div class="container public-container main-wrap">
-        <div class="row g-3 quick-grid">
-            <div class="col-md-4">
-                <a class="quick-link" href="/my_registration">
-                    <div class="icon"><i class="bi bi-person-check"></i></div>
-                    <div class="title">我的报名</div>
-                    <div class="desc">快速查看报名记录、提报状态和后续需要补录的数据。</div>
-                </a>
-            </div>
-            <div class="col-md-4">
-                <a class="quick-link" href="/activity">
-                    <div class="icon"><i class="bi bi-calendar-event"></i></div>
-                    <div class="title">活动期数</div>
-                    <div class="desc">按期查看当前活动、历史期和每一期话题的发布情况。</div>
-                </a>
-            </div>
-            <div class="col-md-4">
-                <a class="quick-link" href="/admin">
-                    <div class="icon"><i class="bi bi-window-stack"></i></div>
-                    <div class="title">运营后台</div>
-                    <div class="desc">进入活动管理、门户配置、账号看板和自动化审核发布流。</div>
-                </a>
-            </div>
-        </div>
-
-        <div class="row g-4">
-            <div class="col-lg-8">
-                <div class="content-card">
-                    <div class="section-title">
-                        <h5>{{ site_config.announcement_title or '最新公告' }}</h5>
-                        <div class="section-subtle">后台可配置展示内容、链接与生效时间</div>
-                    </div>
-                    {% if announcements %}
-                    <div class="row g-3">
-                        {% for item in announcements %}
-                        <div class="col-md-6">
-                            <div class="announcement-item">
-                                <div class="d-flex justify-content-between align-items-start gap-2">
-                                    <div>
-                                        <div class="fw-semibold mb-2">{{ item.title }}</div>
-                                        <div class="announcement-meta mb-2">
-                                            状态：{{ item.status }}
-                                            {% if item.starts_at %} ｜ 开始：{{ item.starts_at }}{% endif %}
-                                        </div>
-                                    </div>
-                                    <span class="badge text-bg-light">P{{ item.priority }}</span>
-                                </div>
-                                <div class="small" style="line-height:1.8;">{{ item.content }}</div>
-                                {% if item.link_url %}
-                                <div class="mt-3">
-                                    <a class="ref-link-btn" href="{{ item.link_url }}" target="_blank" rel="noreferrer">
-                                        <i class="bi bi-arrow-up-right"></i>
-                                        {{ item.button_text or '查看详情' }}
-                                    </a>
-                                </div>
-                                {% endif %}
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% else %}
-                    <div class="empty-state">当前还没有生效中的公告，管理员可在后台新增。</div>
-                    {% endif %}
-                </div>
-            </div>
-
-            <div class="col-lg-4">
-                <div class="content-card">
-                    <div class="section-title">
-                        <h5>{{ site_config.trend_title or '最新热点' }}</h5>
-                        <div class="section-subtle">来自热点池的最新补充</div>
-                    </div>
-                    {% if trend_notes %}
-                    {% for note in trend_notes %}
-                    <div class="trend-item">
-                        <div class="fw-semibold mb-1">{{ note.title }}</div>
-                        <div class="trend-meta mb-2">
-                            {{ note.source_platform or '热点池' }}
-                            {% if note.keyword %} ｜ 关键词：{{ note.keyword }}{% endif %}
-                        </div>
-                        <div class="trend-meta">
-                            阅读 {{ note.views }} ｜ 点赞 {{ note.likes }} ｜ 收藏 {{ note.favorites }} ｜ 评论 {{ note.comments }}
-                        </div>
-                        {% if note.link %}
-                        <div class="mt-2">
-                            <a href="{{ note.link }}" target="_blank" rel="noreferrer" class="ref-link-btn">
-                                <i class="bi bi-box-arrow-up-right"></i>
-                                查看原始链接
-                            </a>
-                        </div>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
-                    {% else %}
-                    <div class="empty-state">热点池暂时为空，可以先去自动化中心导入。</div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
         {% if activity %}
         <div class="topic-section topic-section-primary">
             <div class="topic-section-head">

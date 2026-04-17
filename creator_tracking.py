@@ -92,6 +92,25 @@ def _serialize_post_brief(post):
     }
 
 
+def _current_month_range(now=None):
+    current = now or datetime.now()
+    month_start = current.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return month_start, current
+
+
+def _filter_posts_in_range(posts, start_dt=None, end_dt=None):
+    if not posts:
+        return []
+    start_dt = start_dt or datetime.min
+    end_dt = end_dt or datetime.max
+    rows = []
+    for post in posts:
+        active_time = post.publish_time or post.created_at or datetime.min
+        if start_dt <= active_time <= end_dt:
+            rows.append(post)
+    return rows
+
+
 def _tracking_status_label(status):
     return {
         'empty': '未开启',
@@ -305,24 +324,22 @@ def refresh_submission_tracking_state(submission):
         CreatorPost.updated_at.desc(),
         CreatorPost.id.desc(),
     ).all()
-    primary_post = _match_primary_post(submission, account)
-    if primary_post:
-        submission.xhs_primary_post_id = primary_post.id
-        submission.xhs_link = primary_post.post_url or submission.xhs_link
-        submission.xhs_views = primary_post.views or 0
-        submission.xhs_likes = primary_post.likes or 0
-        submission.xhs_favorites = primary_post.favorites or 0
-        submission.xhs_comments = primary_post.comments or 0
+    month_start, now = _current_month_range()
+    month_posts = _filter_posts_in_range(posts, month_start, now)
 
     submission.xhs_tracking_enabled = True
     submission.xhs_tracking_status = 'tracking' if posts else 'account_bound'
     submission.xhs_tracking_message = (
-        f'已绑定账号，累计同步 {len(posts)} 条小红书笔记'
+        (
+            f'已绑定账号，本月同步 {len(month_posts)} 条小红书笔记，账号累计 {len(posts)} 条'
+            if month_posts else
+            f'已绑定账号，本月暂未同步到新笔记，账号累计 {len(posts)} 条'
+        )
         if posts else
         '已绑定账号，等待同步该账号下的笔记'
     )
     submission.xhs_last_synced_at = account.last_synced_at or datetime.now()
-    return primary_post
+    return month_posts[0] if month_posts else (posts[0] if posts else None)
 
 
 def sync_tracking_from_submission(registration, submission, payload=None):
@@ -374,12 +391,15 @@ def build_registration_tracking_summary(registration, submission=None):
             'account_handle': getattr(registration, 'xhs_account', '') or '',
             'creator_account_id': 0,
             'total_post_count': 0,
-            'linked_post_count': 0,
             'total_views': 0,
             'total_interactions': 0,
             'follower_count': 0,
             'last_synced_at': '',
-            'primary_post': None,
+            'current_month_label': datetime.now().strftime('%Y-%m'),
+            'current_month_post_count': 0,
+            'current_month_views': 0,
+            'current_month_interactions': 0,
+            'tracked_posts': [],
             'latest_post': None,
             'best_post': None,
         }
@@ -401,12 +421,15 @@ def build_registration_tracking_summary(registration, submission=None):
             'account_handle': getattr(registration, 'xhs_account', '') or '',
             'creator_account_id': 0,
             'total_post_count': 0,
-            'linked_post_count': 0,
             'total_views': 0,
             'total_interactions': 0,
             'follower_count': 0,
             'last_synced_at': getattr(submission, 'xhs_last_synced_at', None).strftime('%Y-%m-%d %H:%M:%S') if getattr(submission, 'xhs_last_synced_at', None) else '',
-            'primary_post': None,
+            'current_month_label': datetime.now().strftime('%Y-%m'),
+            'current_month_post_count': 0,
+            'current_month_views': 0,
+            'current_month_interactions': 0,
+            'tracked_posts': [],
             'latest_post': None,
             'best_post': None,
         }
@@ -416,26 +439,30 @@ def build_registration_tracking_summary(registration, submission=None):
         CreatorPost.updated_at.desc(),
         CreatorPost.id.desc(),
     ).all()
-    linked_posts = [
-        post for post in posts
-        if post.registration_id == registration.id or post.submission_id == submission.id
-    ]
-    primary_post = _match_primary_post(submission, account)
+    month_start, now = _current_month_range()
+    month_posts = _filter_posts_in_range(posts, month_start, now)
+    scoped_posts = month_posts or posts
     best_post = sorted(
-        posts,
+        scoped_posts,
         key=lambda item: ((item.views or 0), _creator_post_interactions(item), (item.follower_delta or 0), (item.exposures or 0)),
         reverse=True,
-    )[0] if posts else None
-    latest_post = posts[0] if posts else None
+    )[0] if scoped_posts else None
+    latest_post = scoped_posts[0] if scoped_posts else None
     total_views = sum(post.views or 0 for post in posts)
     total_interactions = sum(_creator_post_interactions(post) for post in posts)
+    current_month_views = sum(post.views or 0 for post in month_posts)
+    current_month_interactions = sum(_creator_post_interactions(post) for post in month_posts)
     status = getattr(submission, 'xhs_tracking_status', '') or ('tracking' if posts else 'account_bound')
     return {
         'enabled': bool(getattr(submission, 'xhs_tracking_enabled', False) or account or submission.xhs_profile_link or submission.xhs_link),
         'status': status,
         'status_label': _tracking_status_label(status),
         'message': getattr(submission, 'xhs_tracking_message', '') or (
-            f'已绑定账号，累计同步 {len(posts)} 条小红书笔记'
+            (
+                f'已绑定账号，本月同步 {len(month_posts)} 条小红书笔记，账号累计 {len(posts)} 条'
+                if month_posts else
+                f'已绑定账号，本月暂未同步到新笔记，账号累计 {len(posts)} 条'
+            )
             if posts else
             '已绑定账号，等待同步该账号下的笔记'
         ),
@@ -443,12 +470,15 @@ def build_registration_tracking_summary(registration, submission=None):
         'account_handle': account.account_handle or getattr(registration, 'xhs_account', '') or '',
         'creator_account_id': account.id,
         'total_post_count': len(posts),
-        'linked_post_count': len(linked_posts),
         'total_views': total_views,
         'total_interactions': total_interactions,
         'follower_count': account.follower_count or 0,
         'last_synced_at': (getattr(submission, 'xhs_last_synced_at', None) or account.last_synced_at).strftime('%Y-%m-%d %H:%M:%S') if ((getattr(submission, 'xhs_last_synced_at', None) or account.last_synced_at)) else '',
-        'primary_post': _serialize_post_brief(primary_post),
+        'current_month_label': now.strftime('%Y-%m'),
+        'current_month_post_count': len(month_posts),
+        'current_month_views': current_month_views,
+        'current_month_interactions': current_month_interactions,
+        'tracked_posts': [_serialize_post_brief(post) for post in month_posts[:10]],
         'latest_post': _serialize_post_brief(latest_post),
         'best_post': _serialize_post_brief(best_post),
     }

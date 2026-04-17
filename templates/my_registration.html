@@ -61,7 +61,7 @@
                 <div>
                     <div class="public-eyebrow mb-3"><i class="bi bi-person-lines-fill"></i> My Workspace</div>
                     <h4 class="mb-2 fw-bold">查询我的报名</h4>
-                    <div class="public-note">输入组号和姓名，查看自己当前报名、提报状态和各平台数据表现。</div>
+                    <div class="public-note">输入组号和姓名，查看自己当前报名、提报状态和小红书数据表现。</div>
                 </div>
             </div>
             <form method="POST">
@@ -102,6 +102,8 @@
             <h5 class="mb-3">您的报名记录（共{{ registrations|length }}条）</h5>
             {% for reg in registrations %}
             {% set tracking = tracking_summaries.get(reg.id) if tracking_summaries else None %}
+            {% set detail_url = reg.submission.xhs_link if reg.submission and reg.submission.xhs_link else ('/register_success/' ~ reg.id) %}
+            {% set detail_target = '_blank' if reg.submission and reg.submission.xhs_link else '_self' %}
             <div class="border rounded p-3 mb-3">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
@@ -119,29 +121,6 @@
                                         <div class="p-metric">收藏量：{{ reg.submission.xhs_favorites or 0 }} ｜ 评论量：{{ reg.submission.xhs_comments or 0 }}</div>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="platform-card platform-dy">
-                                        <div class="p-title">抖音</div>
-                                        <div class="p-metric">传播量：{{ reg.submission.douyin_views or 0 }} ｜ 点赞量：{{ reg.submission.douyin_likes or 0 }}</div>
-                                        <div class="p-metric">收藏量：{{ reg.submission.douyin_favorites or 0 }} ｜ 评论量：{{ reg.submission.douyin_comments or 0 }}</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="row g-2">
-                                <div class="col-md-6">
-                                    <div class="platform-card platform-video">
-                                        <div class="p-title">视频号</div>
-                                        <div class="p-metric">传播量：{{ reg.submission.video_views or 0 }} ｜ 点赞量：{{ reg.submission.video_likes or 0 }}</div>
-                                        <div class="p-metric">收藏量：{{ reg.submission.video_favorites or 0 }} ｜ 评论量：{{ reg.submission.video_comments or 0 }}</div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="platform-card platform-weibo">
-                                        <div class="p-title">微博</div>
-                                        <div class="p-metric">传播量：{{ reg.submission.weibo_views or 0 }} ｜ 点赞量：{{ reg.submission.weibo_likes or 0 }}</div>
-                                        <div class="p-metric">收藏量：{{ reg.submission.weibo_favorites or 0 }} ｜ 评论量：{{ reg.submission.weibo_comments or 0 }}</div>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                         {% endif %}
@@ -150,11 +129,28 @@
                             <div class="fw-semibold text-danger mb-1">小红书账号持续跟踪</div>
                             <div class="small text-muted mb-1">{{ tracking.message }}</div>
                             <div class="small">
-                                累计笔记 {{ tracking.total_post_count or 0 }} 条 ｜ 总阅读 {{ tracking.total_views or 0 }} ｜ 总互动 {{ tracking.total_interactions or 0 }}
+                                本月笔记 {{ tracking.current_month_post_count or 0 }} 条 ｜ 本月阅读 {{ tracking.current_month_views or 0 }} ｜ 本月互动 {{ tracking.current_month_interactions or 0 }}
+                                {% if tracking.last_synced_at %}｜ 最近同步 {{ tracking.last_synced_at }}{% endif %}
+                            </div>
+                            <div class="small text-muted mt-1">
+                                账号累计笔记 {{ tracking.total_post_count or 0 }} 条 ｜ 累计阅读 {{ tracking.total_views or 0 }} ｜ 累计互动 {{ tracking.total_interactions or 0 }}
                                 {% if tracking.last_synced_at %}｜ 最近同步 {{ tracking.last_synced_at }}{% endif %}
                             </div>
                             {% if tracking.profile_url %}
                             <div class="small mt-1"><a href="{{ tracking.profile_url }}" target="_blank">查看账号主页</a></div>
+                            {% endif %}
+                            {% if tracking.tracked_posts %}
+                            <div class="mt-2">
+                                <div class="small fw-semibold text-dark mb-1">{{ tracking.current_month_label or '本月' }} 已同步笔记</div>
+                                <div class="small">
+                                    {% for post in tracking.tracked_posts %}
+                                    <div class="mb-1">
+                                        <a href="{{ post.post_url }}" target="_blank">{{ post.title or ('笔记' ~ loop.index) }}</a>
+                                        ｜ 阅读 {{ post.views or 0 }} ｜ 点赞 {{ post.likes or 0 }} ｜ 收藏 {{ post.favorites or 0 }} ｜ 评论 {{ post.comments or 0 }}
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
                             {% endif %}
                         </div>
                         {% endif %}
@@ -162,45 +158,24 @@
                     <div>
                         {% if reg.submission and reg.submission.xhs_link %}
                         <span class="badge bg-success">已提交</span>
-                        <a href="{{ reg.submission.xhs_link }}" target="_blank" class="btn btn-sm btn-outline-primary ms-2">查看链接</a>
+                        <a href="{{ detail_url }}" target="{{ detail_target }}" class="btn btn-sm btn-outline-primary ms-2">查看详情</a>
                         <button type="button" class="btn btn-sm btn-primary ms-2"
                                 onclick="openUpdateDataModal({{ reg.id }}, {
                                     xhs_profile_link: {{ (reg.submission.xhs_profile_link or (tracking.profile_url if tracking else ''))|tojson }},
                                     xhs_link: {{ (reg.submission.xhs_link or '')|tojson }},
-                                    douyin_link: {{ (reg.submission.douyin_link or '')|tojson }},
-                                    video_link: {{ (reg.submission.video_link or '')|tojson }},
-                                    weibo_link: {{ (reg.submission.weibo_link or '')|tojson }},
-                                    xhs_views: {{ reg.submission.xhs_views or 0 }}, xhs_likes: {{ reg.submission.xhs_likes or 0 }}, xhs_favorites: {{ reg.submission.xhs_favorites or 0 }}, xhs_comments: {{ reg.submission.xhs_comments or 0 }},
-                                    douyin_views: {{ reg.submission.douyin_views or 0 }}, douyin_likes: {{ reg.submission.douyin_likes or 0 }}, douyin_favorites: {{ reg.submission.douyin_favorites or 0 }}, douyin_comments: {{ reg.submission.douyin_comments or 0 }},
-                                    video_views: {{ reg.submission.video_views or 0 }}, video_likes: {{ reg.submission.video_likes or 0 }}, video_favorites: {{ reg.submission.video_favorites or 0 }}, video_comments: {{ reg.submission.video_comments or 0 }},
-                                    weibo_views: {{ reg.submission.weibo_views or 0 }}, weibo_likes: {{ reg.submission.weibo_likes or 0 }}, weibo_favorites: {{ reg.submission.weibo_favorites or 0 }}, weibo_comments: {{ reg.submission.weibo_comments or 0 }}
+                                    xhs_views: {{ reg.submission.xhs_views or 0 }}, xhs_likes: {{ reg.submission.xhs_likes or 0 }}, xhs_favorites: {{ reg.submission.xhs_favorites or 0 }}, xhs_comments: {{ reg.submission.xhs_comments or 0 }}
                                 })">更新数据</button>
                         {% else %}
                         <span class="badge bg-secondary">待提交</span>
-                        <a href="{{ reg.submission.xhs_link if reg.submission and reg.submission.xhs_link else ('/topic/' ~ reg.topic_id) }}" target="_blank" class="btn btn-sm btn-xhs ms-2">查看详情</a>
+                        <a href="{{ detail_url }}" target="{{ detail_target }}" class="btn btn-sm btn-xhs ms-2">查看详情</a>
 <button type="button" class="btn btn-sm btn-primary ms-2"
 onclick='openUpdateDataModal({{ reg.id }}, {
 xhs_profile_link: {{ (reg.submission.xhs_profile_link or (tracking.profile_url if tracking else ""))|tojson if reg.submission or tracking else '""' }},
 xhs_link: {{ (reg.submission.xhs_link or "")|tojson if reg.submission else '""' }},
-douyin_link: {{ (reg.submission.douyin_link or "")|tojson if reg.submission else '""' }},
-video_link: {{ (reg.submission.video_link or "")|tojson if reg.submission else '""' }},
-weibo_link: {{ (reg.submission.weibo_link or "")|tojson if reg.submission else '""' }},
 xhs_views: {{ reg.submission.xhs_views or 0 if reg.submission else 0 }},
 xhs_likes: {{ reg.submission.xhs_likes or 0 if reg.submission else 0 }},
 xhs_favorites: {{ reg.submission.xhs_favorites or 0 if reg.submission else 0 }},
-xhs_comments: {{ reg.submission.xhs_comments or 0 if reg.submission else 0 }},
-douyin_views: {{ reg.submission.douyin_views or 0 if reg.submission else 0 }},
-douyin_likes: {{ reg.submission.douyin_likes or 0 if reg.submission else 0 }},
-douyin_favorites: {{ reg.submission.douyin_favorites or 0 if reg.submission else 0 }},
-douyin_comments: {{ reg.submission.douyin_comments or 0 if reg.submission else 0 }},
-video_views: {{ reg.submission.video_views or 0 if reg.submission else 0 }},
-video_likes: {{ reg.submission.video_likes or 0 if reg.submission else 0 }},
-video_favorites: {{ reg.submission.video_favorites or 0 if reg.submission else 0 }},
-video_comments: {{ reg.submission.video_comments or 0 if reg.submission else 0 }},
-weibo_views: {{ reg.submission.weibo_views or 0 if reg.submission else 0 }},
-weibo_likes: {{ reg.submission.weibo_likes or 0 if reg.submission else 0 }},
-weibo_favorites: {{ reg.submission.weibo_favorites or 0 if reg.submission else 0 }},
-weibo_comments: {{ reg.submission.weibo_comments or 0 if reg.submission else 0 }}
+xhs_comments: {{ reg.submission.xhs_comments or 0 if reg.submission else 0 }}
 })'>更新数据</button>
                         {% endif %}
                     </div>
@@ -291,7 +266,7 @@ weibo_comments: {{ reg.submission.weibo_comments or 0 if reg.submission else 0 }
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">提交数据（可分平台）</h5>
+                        <h5 class="modal-title">提交数据（仅小红书）</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <form id="submitForm">
@@ -307,39 +282,7 @@ weibo_comments: {{ reg.submission.weibo_comments or 0 if reg.submission else 0 }
                                 <div class="col"><label class="form-label small mb-1">收藏量</label><input type="number" name="xhs_favorites" class="form-control" min="0" value="0" placeholder="收藏量"></div>
                                 <div class="col"><label class="form-label small mb-1">评论量</label><input type="number" name="xhs_comments" class="form-control" min="0" value="0" placeholder="评论量"></div>
                             </div>
-
-                            <h6>抖音</h6>
-                            <input type="url" name="douyin_link" class="form-control mb-2" placeholder="抖音链接">
-                            <div class="row g-2 mb-3 align-items-end">
-                                <div class="col"><label class="form-label small mb-1">传播量</label><input type="number" name="douyin_views" class="form-control" min="0" value="0" placeholder="传播量"></div>
-                                <div class="col"><label class="form-label small mb-1">点赞量</label><input type="number" name="douyin_likes" class="form-control" min="0" value="0" placeholder="点赞量"></div>
-                                <div class="col"><label class="form-label small mb-1">收藏量</label><input type="number" name="douyin_favorites" class="form-control" min="0" value="0" placeholder="收藏量"></div>
-                                <div class="col"><label class="form-label small mb-1">评论量</label><input type="number" name="douyin_comments" class="form-control" min="0" value="0" placeholder="评论量"></div>
-                            </div>
-
-                            <h6>视频号</h6>
-                            <input type="url" name="video_link" class="form-control mb-2" placeholder="视频号链接">
-                            <div class="row g-2 mb-3 align-items-end">
-                                <div class="col"><label class="form-label small mb-1">传播量</label><input type="number" name="video_views" class="form-control" min="0" value="0" placeholder="传播量"></div>
-                                <div class="col"><label class="form-label small mb-1">点赞量</label><input type="number" name="video_likes" class="form-control" min="0" value="0" placeholder="点赞量"></div>
-                                <div class="col"><label class="form-label small mb-1">收藏量</label><input type="number" name="video_favorites" class="form-control" min="0" value="0" placeholder="收藏量"></div>
-                                <div class="col"><label class="form-label small mb-1">评论量</label><input type="number" name="video_comments" class="form-control" min="0" value="0" placeholder="评论量"></div>
-                            </div>
-
-                            <h6>微博</h6>
-                            <input type="url" name="weibo_link" class="form-control mb-2" placeholder="微博链接">
-                            <div class="row g-2 mb-3 align-items-end">
-                                <div class="col"><label class="form-label small mb-1">传播量</label><input type="number" name="weibo_views" class="form-control" min="0" value="0" placeholder="传播量"></div>
-                                <div class="col"><label class="form-label small mb-1">点赞量</label><input type="number" name="weibo_likes" class="form-control" min="0" value="0" placeholder="点赞量"></div>
-                                <div class="col"><label class="form-label small mb-1">收藏量</label><input type="number" name="weibo_favorites" class="form-control" min="0" value="0" placeholder="收藏量"></div>
-                                <div class="col"><label class="form-label small mb-1">评论量</label><input type="number" name="weibo_comments" class="form-control" min="0" value="0" placeholder="评论量"></div>
-                            </div>
                         </div>
-                        <div class="border rounded p-3 mb-2">
-                        <h6 class="mb-2">可选补充（用于自动识别内容类型）</h6>
-                        <div class="mb-2"><input type="text" class="form-control" id="u_note_title" name="note_title" placeholder="笔记标题（可选）"></div>
-                        <div><textarea class="form-control" id="u_note_content" name="note_content" rows="3" placeholder="可粘贴正文，帮助系统分析哪类内容效果最好"></textarea></div>
-                    </div>
                     <div class="modal-footer">
                             <button type="submit" class="btn btn-xhs">提交</button>
                         </div>
@@ -355,7 +298,7 @@ weibo_comments: {{ reg.submission.weibo_comments or 0 if reg.submission else 0 }
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">更新数据（支持修改各平台链接）</h5>
+                    <h5 class="modal-title">更新小红书数据</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <form id="updateDataForm">
@@ -370,35 +313,6 @@ weibo_comments: {{ reg.submission.weibo_comments or 0 if reg.submission else 0 }
                             <div class="col-md-3"><label class="form-label small">收藏量</label><input type="number" class="form-control" id="u_xhs_favorites" min="0" value="0"></div>
                             <div class="col-md-3"><label class="form-label small">评论量</label><input type="number" class="form-control" id="u_xhs_comments" min="0" value="0"></div>
                         </div>
-                        <div class="row g-2 mb-3">
-                            <div class="col-12"><strong>抖音</strong></div>
- <div class="col-12"><label class="form-label small">链接</label><input type="url" class="form-control" id="u_douyin_link" placeholder="https://..."></div>
-                            <div class="col-md-3"><label class="form-label small">传播量</label><input type="number" class="form-control" id="u_douyin_views" min="0" value="0"></div>
-                            <div class="col-md-3"><label class="form-label small">点赞量</label><input type="number" class="form-control" id="u_douyin_likes" min="0" value="0"></div>
-                            <div class="col-md-3"><label class="form-label small">收藏量</label><input type="number" class="form-control" id="u_douyin_favorites" min="0" value="0"></div>
-                            <div class="col-md-3"><label class="form-label small">评论量</label><input type="number" class="form-control" id="u_douyin_comments" min="0" value="0"></div>
-                        </div>
-                        <div class="row g-2 mb-3">
-                            <div class="col-12"><strong>视频号</strong></div>
- <div class="col-12"><label class="form-label small">链接</label><input type="url" class="form-control" id="u_video_link" placeholder="https://..."></div>
-                            <div class="col-md-3"><label class="form-label small">传播量</label><input type="number" class="form-control" id="u_video_views" min="0" value="0"></div>
-                            <div class="col-md-3"><label class="form-label small">点赞量</label><input type="number" class="form-control" id="u_video_likes" min="0" value="0"></div>
-                            <div class="col-md-3"><label class="form-label small">收藏量</label><input type="number" class="form-control" id="u_video_favorites" min="0" value="0"></div>
-                            <div class="col-md-3"><label class="form-label small">评论量</label><input type="number" class="form-control" id="u_video_comments" min="0" value="0"></div>
-                        </div>
-                        <div class="row g-2 mb-1">
-                            <div class="col-12"><strong>微博</strong></div>
- <div class="col-12"><label class="form-label small">链接</label><input type="url" class="form-control" id="u_weibo_link" placeholder="https://..."></div>
-                            <div class="col-md-3"><label class="form-label small">传播量</label><input type="number" class="form-control" id="u_weibo_views" min="0" value="0"></div>
-                            <div class="col-md-3"><label class="form-label small">点赞量</label><input type="number" class="form-control" id="u_weibo_likes" min="0" value="0"></div>
-                            <div class="col-md-3"><label class="form-label small">收藏量</label><input type="number" class="form-control" id="u_weibo_favorites" min="0" value="0"></div>
-                            <div class="col-md-3"><label class="form-label small">评论量</label><input type="number" class="form-control" id="u_weibo_comments" min="0" value="0"></div>
-                        </div>
-                    </div>
-                    <div class="border rounded p-3 mb-2">
-                        <h6 class="mb-2">可选补充（用于自动识别内容类型）</h6>
-                        <div class="mb-2"><input type="text" class="form-control" id="u_note_title" placeholder="笔记标题（可选）"></div>
-                        <div><textarea class="form-control" id="u_note_content" rows="3" placeholder="可粘贴正文，帮助系统分析哪类内容效果最好"></textarea></div>
                     </div>
                     <div class="modal-footer">
                         <button type="submit" class="btn btn-primary">保存更新</button>
@@ -413,7 +327,7 @@ weibo_comments: {{ reg.submission.weibo_comments or 0 if reg.submission else 0 }
         let updateModal;
         function openUpdateDataModal(regId, metrics) {
             document.getElementById('update_registration_id').value = regId;
-            const fields = ['xhs_profile_link','xhs_link','douyin_link','video_link','weibo_link','xhs_views','xhs_likes','xhs_favorites','xhs_comments','douyin_views','douyin_likes','douyin_favorites','douyin_comments','video_views','video_likes','video_favorites','video_comments','weibo_views','weibo_likes','weibo_favorites','weibo_comments'];
+            const fields = ['xhs_profile_link','xhs_link','xhs_views','xhs_likes','xhs_favorites','xhs_comments'];
             fields.forEach(k => {
                 const el = document.getElementById('u_' + k);
                 if (!el) return;
@@ -430,27 +344,10 @@ weibo_comments: {{ reg.submission.weibo_comments or 0 if reg.submission else 0 }
                 registration_id: parseInt(document.getElementById('update_registration_id').value),
  xhs_profile_link: (document.getElementById('u_xhs_profile_link').value || '').trim(),
  xhs_link: (document.getElementById('u_xhs_link').value || '').trim(),
- douyin_link: (document.getElementById('u_douyin_link').value || '').trim(),
- video_link: (document.getElementById('u_video_link').value || '').trim(),
- weibo_link: (document.getElementById('u_weibo_link').value || '').trim(),
                 xhs_views: parseInt(document.getElementById('u_xhs_views').value || 0),
                 xhs_likes: parseInt(document.getElementById('u_xhs_likes').value || 0),
                 xhs_favorites: parseInt(document.getElementById('u_xhs_favorites').value || 0),
-                xhs_comments: parseInt(document.getElementById('u_xhs_comments').value || 0),
-                douyin_views: parseInt(document.getElementById('u_douyin_views').value || 0),
-                douyin_likes: parseInt(document.getElementById('u_douyin_likes').value || 0),
-                douyin_favorites: parseInt(document.getElementById('u_douyin_favorites').value || 0),
-                douyin_comments: parseInt(document.getElementById('u_douyin_comments').value || 0),
-                video_views: parseInt(document.getElementById('u_video_views').value || 0),
-                video_likes: parseInt(document.getElementById('u_video_likes').value || 0),
-                video_favorites: parseInt(document.getElementById('u_video_favorites').value || 0),
-                video_comments: parseInt(document.getElementById('u_video_comments').value || 0),
-                weibo_views: parseInt(document.getElementById('u_weibo_views').value || 0),
-                weibo_likes: parseInt(document.getElementById('u_weibo_likes').value || 0),
-                weibo_favorites: parseInt(document.getElementById('u_weibo_favorites').value || 0),
-                weibo_comments: parseInt(document.getElementById('u_weibo_comments').value || 0),
-                note_title: document.getElementById('u_note_title') ? document.getElementById('u_note_title').value : '',
-                note_content: document.getElementById('u_note_content') ? document.getElementById('u_note_content').value : ''
+                xhs_comments: parseInt(document.getElementById('u_xhs_comments').value || 0)
             };
             const res = await fetch('/api/update_data', {
                 method: 'POST',

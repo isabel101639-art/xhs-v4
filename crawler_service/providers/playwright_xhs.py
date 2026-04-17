@@ -1,6 +1,7 @@
 import os
 import re
-from datetime import datetime
+import tempfile
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
 from crawler_service.providers.base import BaseCrawlerProvider
@@ -135,6 +136,78 @@ def _selector_candidates(primary_value, defaults):
     return items
 
 
+def _parse_date_boundary(raw, *, start=True):
+    text = (raw or '').strip()
+    if not text:
+        return None
+    for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d']:
+        try:
+            parsed = datetime.strptime(text, fmt)
+            if fmt == '%Y-%m-%d' and not start:
+                return parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
+            return parsed
+        except ValueError:
+            continue
+    return None
+
+
+def _resolve_post_date_window(payload):
+    now = datetime.now()
+    date_from = _parse_date_boundary(getattr(payload, 'date_from', ''), start=True)
+    date_to = _parse_date_boundary(getattr(payload, 'date_to', ''), start=False)
+    if getattr(payload, 'current_month_only', False) and not date_from:
+        date_from = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if getattr(payload, 'current_month_only', False) and not date_to:
+        date_to = now
+    return date_from, date_to
+
+
+def _parse_publish_time_value(raw_text, now=None):
+    current = now or datetime.now()
+    text = (raw_text or '').strip()
+    if not text:
+        return None
+    compact = re.sub(r'\s+', ' ', text)
+    for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%Y/%m/%d %H:%M', '%Y/%m/%d', '%Y-%m-%d']:
+        try:
+            return datetime.strptime(compact, fmt)
+        except ValueError:
+            continue
+    matched = re.match(r'(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2}):(\d{2}))?', compact)
+    if matched:
+        month = int(matched.group(1))
+        day = int(matched.group(2))
+        hour = int(matched.group(3) or 0)
+        minute = int(matched.group(4) or 0)
+        year = current.year
+        candidate = datetime(year, month, day, hour, minute)
+        if candidate > current + timedelta(days=1):
+            candidate = datetime(year - 1, month, day, hour, minute)
+        return candidate
+    matched = re.match(r'(\d+)\s*分钟前', compact)
+    if matched:
+        return current - timedelta(minutes=int(matched.group(1)))
+    matched = re.match(r'(\d+)\s*小时前', compact)
+    if matched:
+        return current - timedelta(hours=int(matched.group(1)))
+    matched = re.match(r'(\d+)\s*天前', compact)
+    if matched:
+        return current - timedelta(days=int(matched.group(1)))
+    matched = re.match(r'昨天(?:\s+(\d{1,2}):(\d{2}))?', compact)
+    if matched:
+        hour = int(matched.group(1) or 12)
+        minute = int(matched.group(2) or 0)
+        return (current - timedelta(days=1)).replace(hour=hour, minute=minute, second=0, microsecond=0)
+    matched = re.match(r'前天(?:\s+(\d{1,2}):(\d{2}))?', compact)
+    if matched:
+        hour = int(matched.group(1) or 12)
+        minute = int(matched.group(2) or 0)
+        return (current - timedelta(days=2)).replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if compact in {'刚刚', '刚刚发布'}:
+        return current
+    return None
+
+
 class PlaywrightXHSCrawlerProvider(BaseCrawlerProvider):
     async def healthcheck(self):
         try:
@@ -161,9 +234,22 @@ class PlaywrightXHSCrawlerProvider(BaseCrawlerProvider):
         accounts = []
         posts = []
         snapshots = []
+        max_posts = min(max(_safe_int(getattr(payload, 'max_posts_per_account', 60), 60), 1), self.settings.xhs_max_posts_per_account)
+        date_from, date_to = _resolve_post_date_window(payload)
 
         async with async_playwright() as playwright:
             launch_kwargs = {'headless': self.settings.playwright_headless}
+            if self.settings.playwright_headless:
+                launch_kwargs['headless'] = True
+                launch_kwargs['args'] = ['--headless=new', '--disable-crashpad', '--disable-crash-reporter', '--disable-breakpad']
+            temp_home = tempfile.mkdtemp(prefix='xhs-pw-home-')
+            launch_kwargs['env'] = {
+                **os.environ,
+                'HOME': temp_home,
+                'TMPDIR': temp_home,
+                'XDG_CONFIG_HOME': temp_home,
+                'XDG_CACHE_HOME': temp_home,
+            }
             if self.settings.playwright_browser_channel:
                 launch_kwargs['channel'] = self.settings.playwright_browser_channel
             browser = await playwright.chromium.launch(**launch_kwargs)
@@ -173,7 +259,7 @@ class PlaywrightXHSCrawlerProvider(BaseCrawlerProvider):
                 context_kwargs['storage_state'] = storage_path
             context = await browser.new_context(**context_kwargs)
             try:
-                for target in payload.targets[: self.settings.xhs_max_posts_per_account]:
+                for target in payload.targets:
                     profile_url = (target.profile_url or '').strip()
                     account_handle = (target.account_handle or '').strip()
                     if not profile_url and account_handle:
@@ -214,6 +300,9 @@ class PlaywrightXHSCrawlerProvider(BaseCrawlerProvider):
                         profile_url=account_row['profile_url'],
                         account_handle=account_row['account_handle'],
                         source_channel=payload.source_channel or 'playwright_xhs',
+                        max_posts=max_posts,
+                        date_from=date_from,
+                        date_to=date_to,
                     )
                     posts.extend(post_rows)
                     snapshots.append({
@@ -251,6 +340,9 @@ class PlaywrightXHSCrawlerProvider(BaseCrawlerProvider):
                 'target_count': len(payload.targets),
                 'returned_account_count': len(accounts),
                 'returned_post_count': len(posts),
+                'current_month_only': bool(getattr(payload, 'current_month_only', False)),
+                'date_from': getattr(payload, 'date_from', ''),
+                'date_to': getattr(payload, 'date_to', ''),
             },
         }
 
@@ -357,42 +449,58 @@ class PlaywrightXHSCrawlerProvider(BaseCrawlerProvider):
                 return text
         return ''
 
-    async def _extract_posts(self, page, target, profile_url, account_handle, source_channel):
-        cards = await self._candidate_cards(page)
+    async def _extract_posts(self, page, target, profile_url, account_handle, source_channel, max_posts=20, date_from=None, date_to=None):
         rows = []
         seen_urls = set()
-        for card in cards:
-            post_url = await self._extract_post_url(card)
-            if not post_url or post_url in seen_urls:
-                continue
-            seen_urls.add(post_url)
-            title = await self._extract_title(card)
-            platform_post_id = _extract_post_id(post_url)
-            if not (title or platform_post_id):
-                continue
-            rows.append({
-                'platform': 'xhs',
-                'account_handle': account_handle,
-                'owner_phone': target.owner_phone or '',
-                'owner_name': target.owner_name or '',
-                'profile_url': profile_url,
-                'registration_id': _safe_int(target.registration_id),
-                'topic_id': _safe_int(target.topic_id),
-                'submission_id': _safe_int(target.submission_id),
-                'platform_post_id': platform_post_id,
-                'title': title or f'未命名笔记 {len(rows) + 1}',
-                'post_url': post_url,
-                'publish_time': await self._extract_publish_time(card),
-                'topic_title': '',
-                'views': await self._extract_metric(card, self.settings.xhs_post_views_selector, DEFAULT_POST_VIEWS_SELECTORS, '浏览|阅读'),
-                'exposures': 0,
-                'likes': await self._extract_metric(card, self.settings.xhs_post_likes_selector, DEFAULT_POST_LIKES_SELECTORS, '点赞'),
-                'favorites': await self._extract_metric(card, self.settings.xhs_post_favorites_selector, DEFAULT_POST_FAVORITES_SELECTORS, '收藏'),
-                'comments': await self._extract_metric(card, self.settings.xhs_post_comments_selector, DEFAULT_POST_COMMENTS_SELECTORS, '评论'),
-                'shares': 0,
-                'follower_delta': 0,
-                'source_channel': source_channel,
-            })
-            if len(rows) >= self.settings.xhs_max_posts_per_account:
+        reached_older_posts = False
+        previous_seen_count = -1
+        for _ in range(8):
+            cards = await self._candidate_cards(page)
+            for card in cards:
+                post_url = await self._extract_post_url(card)
+                if not post_url or post_url in seen_urls:
+                    continue
+                seen_urls.add(post_url)
+                publish_time_text = await self._extract_publish_time(card)
+                publish_time_dt = _parse_publish_time_value(publish_time_text)
+                if date_from and publish_time_dt and publish_time_dt < date_from:
+                    reached_older_posts = True
+                    continue
+                if date_to and publish_time_dt and publish_time_dt > date_to:
+                    continue
+                title = await self._extract_title(card)
+                platform_post_id = _extract_post_id(post_url)
+                if not (title or platform_post_id):
+                    continue
+                rows.append({
+                    'platform': 'xhs',
+                    'account_handle': account_handle,
+                    'owner_phone': target.owner_phone or '',
+                    'owner_name': target.owner_name or '',
+                    'profile_url': profile_url,
+                    'registration_id': _safe_int(target.registration_id),
+                    'topic_id': _safe_int(target.topic_id),
+                    'submission_id': _safe_int(target.submission_id),
+                    'platform_post_id': platform_post_id,
+                    'title': title or f'未命名笔记 {len(rows) + 1}',
+                    'post_url': post_url,
+                    'publish_time': publish_time_dt.strftime('%Y-%m-%d %H:%M:%S') if publish_time_dt else publish_time_text,
+                    'topic_title': '',
+                    'views': await self._extract_metric(card, self.settings.xhs_post_views_selector, DEFAULT_POST_VIEWS_SELECTORS, '浏览|阅读'),
+                    'exposures': 0,
+                    'likes': await self._extract_metric(card, self.settings.xhs_post_likes_selector, DEFAULT_POST_LIKES_SELECTORS, '点赞'),
+                    'favorites': await self._extract_metric(card, self.settings.xhs_post_favorites_selector, DEFAULT_POST_FAVORITES_SELECTORS, '收藏'),
+                    'comments': await self._extract_metric(card, self.settings.xhs_post_comments_selector, DEFAULT_POST_COMMENTS_SELECTORS, '评论'),
+                    'shares': 0,
+                    'follower_delta': 0,
+                    'source_channel': source_channel,
+                })
+                if len(rows) >= max_posts:
+                    return rows
+            current_seen_count = len(seen_urls)
+            if reached_older_posts or current_seen_count == previous_seen_count:
                 break
+            previous_seen_count = current_seen_count
+            await page.mouse.wheel(0, 2400)
+            await page.wait_for_timeout(1200)
         return rows

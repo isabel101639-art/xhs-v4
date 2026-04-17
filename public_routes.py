@@ -1,6 +1,6 @@
 from flask import jsonify, render_template, request
 
-from models import Activity, Registration, Submission, Topic, TrendNote
+from models import Activity, AssetLibrary, CorpusEntry, Registration, Submission, Topic, TrendNote
 
 
 def register_public_routes(app, helpers):
@@ -24,6 +24,84 @@ def register_public_routes(app, helpers):
     db = helpers['db']
     datetime = helpers['datetime']
 
+    def build_public_context():
+        context = dict(build_public_shell_context())
+        site_config = dict(context.get('site_config') or {})
+        nav_items = [dict(item) for item in (site_config.get('nav_items') or [dict(item) for item in default_site_nav_items])]
+        has_image_library = any(
+            (item.get('label') or '').strip() == '图片库' or (item.get('url') or '').strip() == '/image-library'
+            for item in nav_items
+        )
+        if not has_image_library:
+            insert_at = next(
+                (index + 1 for index, item in enumerate(nav_items) if (item.get('label') or '').strip() == '数据分析'),
+                min(len(nav_items), 3),
+            )
+            nav_items.insert(insert_at, {
+                'label': '图片库',
+                'url': '/image-library',
+                'icon': 'bi-images',
+                'target': '_self',
+            })
+        site_config['nav_items'] = nav_items[:8]
+        context['site_config'] = site_config
+        return context
+
+    def serialize_public_trend(note):
+        return {
+            'id': note.id,
+            'title': note.title or '',
+            'keyword': note.keyword or '',
+            'source_platform': note.source_platform or '',
+            'source_channel': note.source_channel or '',
+            'author': note.author or '',
+            'views': note.views or 0,
+            'likes': note.likes or 0,
+            'favorites': note.favorites or 0,
+            'comments': note.comments or 0,
+            'summary': note.summary or '',
+            'link': note.link or '',
+            'created_at': note.created_at.strftime('%Y-%m-%d %H:%M:%S') if note.created_at else '',
+        }
+
+    def serialize_public_asset(item):
+        tags = [part.strip() for part in (item.tags or '').split(',') if part.strip()]
+        library_type_label_map = {
+            'generated': '生成资产',
+            'product': '产品图库',
+            'content': '内容素材库',
+            'reference': '风格参考库',
+        }
+        return {
+            'id': item.id,
+            'title': item.title or '未命名图片',
+            'subtitle': item.subtitle or '',
+            'preview_url': item.preview_url or '',
+            'product_name': item.product_name or '',
+            'product_category': item.product_category or '',
+            'product_indication': item.product_indication or '',
+            'library_type': library_type_label_map.get(item.library_type or 'generated', item.library_type or '生成资产'),
+            'asset_type': item.asset_type or '',
+            'style_type_key': item.style_type_key or '',
+            'visual_role': item.visual_role or '',
+            'source_provider': item.source_provider or '',
+            'download_name': item.download_name or '',
+            'tags': tags[:8],
+            'created_at': item.created_at.strftime('%Y-%m-%d %H:%M:%S') if item.created_at else '',
+        }
+
+    def serialize_public_corpus(entry):
+        tags = [part.strip() for part in (entry.tags or '').split(',') if part.strip()]
+        return {
+            'id': entry.id,
+            'title': entry.title or '未命名科普内容',
+            'category': entry.category or '医学科普',
+            'source': entry.source or '',
+            'content': entry.content or '',
+            'tags': tags[:8],
+            'created_at': entry.created_at.strftime('%Y-%m-%d %H:%M:%S') if entry.created_at else '',
+        }
+
     def render_my_registration_page(registrations=None, error=''):
         registrations = registrations or []
         tracking_summaries = {
@@ -35,7 +113,7 @@ def register_public_routes(app, helpers):
             registrations=registrations,
             error=error,
             tracking_summaries=tracking_summaries,
-            **build_public_shell_context(),
+            **build_public_context(),
         )
 
     @app.route('/')
@@ -46,13 +124,9 @@ def register_public_routes(app, helpers):
             if activities:
                 activity = activities[0]
 
-        page_config = get_site_page_config('home')
-        theme = get_active_site_theme()
-        site_config = serialize_site_page_config(page_config) if page_config else {
-            **default_home_page_config,
-            'nav_items': [dict(item) for item in default_site_nav_items],
-        }
-        site_theme = serialize_site_theme(theme) if theme else dict(helpers['default_site_theme'])
+        public_context = build_public_context()
+        site_config = dict(public_context.get('site_config') or {})
+        site_theme = dict(public_context.get('site_theme') or {})
 
         split_index = normalize_quota(
             site_config.get('primary_topic_limit'),
@@ -64,18 +138,8 @@ def register_public_routes(app, helpers):
         primary_topics = all_topics[:split_index]
         secondary_topics = all_topics[split_index:]
         first_available_topic = next((topic for topic in all_topics if (topic.filled or 0) < (topic.quota or 0)), None)
-        announcements = [serialize_announcement(item) for item in list_announcements(limit=4)]
-        trend_notes = [{
-            'id': note.id,
-            'title': note.title or '',
-            'keyword': note.keyword or '',
-            'source_platform': note.source_platform or '',
-            'likes': note.likes or 0,
-            'favorites': note.favorites or 0,
-            'comments': note.comments or 0,
-            'views': note.views or 0,
-            'link': note.link or '',
-        } for note in TrendNote.query.order_by(TrendNote.created_at.desc()).limit(6).all()]
+        announcement_count = len(list_announcements())
+        trend_note_count = TrendNote.query.count()
 
         hero_title = (site_config.get('hero_title') or '').strip() or (activity.title if activity else '')
         hero_subtitle = (site_config.get('hero_subtitle') or '').strip() or (activity.description if activity else '')
@@ -87,8 +151,8 @@ def register_public_routes(app, helpers):
             primary_topics=primary_topics,
             secondary_topics=secondary_topics,
             first_available_topic=first_available_topic,
-            announcements=announcements,
-            trend_notes=trend_notes,
+            announcement_count=announcement_count,
+            trend_note_count=trend_note_count,
             site_config={
                 **site_config,
                 'hero_title': hero_title,
@@ -98,10 +162,104 @@ def register_public_routes(app, helpers):
             site_theme=site_theme,
         )
 
+    @app.route('/announcements')
+    def announcement_list():
+        context = build_public_context()
+        items = [serialize_announcement(item) for item in list_announcements()]
+        return render_template(
+            'public_collection.html',
+            page_title='在线公告',
+            page_heading='在线公告',
+            page_description='查看当前正在生效的公告、通知和活动说明。',
+            page_badge='公告中心',
+            page_kind='announcement',
+            items=items,
+            empty_message='当前还没有生效中的公告。',
+            **context,
+        )
+
+    @app.route('/trends')
+    def trend_list():
+        context = build_public_context()
+        items = [
+            serialize_public_trend(note)
+            for note in TrendNote.query.order_by(TrendNote.created_at.desc(), TrendNote.id.desc()).limit(40).all()
+        ]
+        return render_template(
+            'public_collection.html',
+            page_title='热点速览',
+            page_heading='热点速览',
+            page_description='集中查看热点池里最近入库的热点和互动数据。',
+            page_badge='热点池',
+            page_kind='trend',
+            items=items,
+            empty_message='热点池暂时为空，可以稍后再看。',
+            **context,
+        )
+
+    @app.route('/liver-science')
+    def liver_science():
+        context = build_public_context()
+        items = CorpusEntry.query.filter_by(status='active').filter(
+            CorpusEntry.category.in_(['医学科普', '合规表达'])
+        ).order_by(
+            CorpusEntry.usage_count.desc(),
+            CorpusEntry.updated_at.desc(),
+            CorpusEntry.id.desc(),
+        ).limit(24).all()
+        if not items:
+            items = CorpusEntry.query.filter_by(status='active').order_by(
+                CorpusEntry.usage_count.desc(),
+                CorpusEntry.updated_at.desc(),
+                CorpusEntry.id.desc(),
+            ).limit(24).all()
+
+        return render_template(
+            'public_collection.html',
+            page_title='肝病科普',
+            page_heading='肝病科普',
+            page_description='集中查看适合前台用户浏览的肝病知识、检查解读和常见误区说明。',
+            page_badge='健康知识',
+            page_kind='science',
+            items=[serialize_public_corpus(item) for item in items],
+            empty_message='当前还没有可展示的科普内容。',
+            **context,
+        )
+
+    @app.route('/image-library')
+    def public_image_library():
+        context = build_public_context()
+        base_query = AssetLibrary.query.filter_by(status='active').filter(
+            AssetLibrary.preview_url.isnot(None),
+            AssetLibrary.preview_url != '',
+        )
+        items = base_query.filter_by(pool_status='formal').order_by(
+            AssetLibrary.created_at.desc(),
+            AssetLibrary.id.desc(),
+        ).limit(60).all()
+        visibility_note = '当前展示正式图片库内容。'
+        if not items:
+            items = base_query.filter(AssetLibrary.pool_status != 'archived').order_by(
+                AssetLibrary.created_at.desc(),
+                AssetLibrary.id.desc(),
+            ).limit(60).all()
+            visibility_note = '当前正式图片库为空，已临时展示非归档图片内容。'
+
+        return render_template(
+            'public_image_library.html',
+            page_title='图片库',
+            page_heading='图片库',
+            page_description='集中查看可直接参考或下载的图片素材。',
+            page_badge='内容素材',
+            items=[serialize_public_asset(item) for item in items],
+            visibility_note=visibility_note,
+            **context,
+        )
+
     @app.route('/topic/<int:topic_id>')
     def topic_detail(topic_id):
         topic = Topic.query.get_or_404(topic_id)
-        return render_template('topic_detail.html', topic=topic, **build_public_shell_context())
+        return render_template('topic_detail.html', topic=topic, **build_public_context())
 
     @app.route('/register_success/<int:reg_id>')
     def register_success(reg_id):
@@ -111,7 +269,7 @@ def register_public_routes(app, helpers):
             registration=reg,
             tracking_summary=build_registration_tracking_summary(reg),
             asset_style_types=asset_style_type_options(),
-            **build_public_shell_context(),
+            **build_public_context(),
         )
 
     @app.route('/my_registration', methods=['GET', 'POST'])

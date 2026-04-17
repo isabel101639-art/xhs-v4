@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title }} - {{ site_config.site_name or '福瑞医科' }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/static/css/public_site.css">
+    <style>
+        :root {
+            --primary: {{ site_theme.primary_color or '#ff2442' }};
+            --primary-soft: {{ site_theme.primary_soft_color or '#ffe5e8' }};
+            --secondary: {{ site_theme.secondary_color or '#ff7a59' }};
+            --nav-start: {{ site_theme.nav_gradient_start or '#ff2442' }};
+            --nav-end: {{ site_theme.nav_gradient_end or '#ff6b6b' }};
+            --hero-start: {{ site_theme.hero_gradient_start or '#ff2442' }};
+            --hero-end: {{ site_theme.hero_gradient_end or '#ff7a59' }};
+            --bg-start: {{ site_theme.background_gradient_start or '#fff7f5' }};
+            --bg-end: {{ site_theme.background_gradient_end or '#ffffff' }};
+            --ink: {{ site_theme.text_color or '#1f2937' }};
+            --muted: {{ site_theme.muted_text_color or '#6b7280' }};
+            --surface: {{ site_theme.surface_color or '#ffffff' }};
+        }
+
+        body.public-body {
+            font-family: 'Manrope', 'Noto Sans SC', {{ site_theme.font_family or 'sans-serif' }};
+            background:
+                radial-gradient(circle at top right, {{ site_theme.primary_soft_color or '#ffe5e8' }} 0%, transparent 34%),
+                linear-gradient(180deg, var(--bg-start) 0%, var(--bg-end) 100%);
+            color: var(--ink);
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: linear-gradient(135deg, var(--nav-start) 0%, var(--nav-end) 100%);
+            box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+        }
+
+        .hero {
+            background: linear-gradient(135deg, var(--hero-start) 0%, var(--hero-end) 100%);
+            color: white;
+            padding: 32px 0 36px;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.14);
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+
+        .hero-title {
+            font-size: 32px;
+            line-height: 1.2;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .hero-subtitle {
+            font-size: 15px;
+            line-height: 1.8;
+            max-width: 760px;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 0;
+        }
+
+        .hero-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 18px;
+        }
+
+        .hero-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border-radius: 999px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 600;
+            transition: transform 0.18s ease;
+        }
+
+        .hero-action:hover {
+            transform: translateY(-1px);
+        }
+
+        .hero-action-primary {
+            background: white;
+            color: var(--primary);
+        }
+
+        .hero-action-secondary {
+            background: rgba(255, 255, 255, 0.14);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+        }
+
+        .main-wrap {
+            margin-top: -22px;
+            padding-bottom: 40px;
+        }
+
+        .summary-card,
+        .collection-card {
+            background: rgba(255, 255, 255, 0.94);
+            border: 1px solid rgba(255, 255, 255, 0.55);
+            border-radius: 20px;
+            box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+        }
+
+        .summary-card {
+            padding: 18px 20px;
+            height: 100%;
+        }
+
+        .summary-label {
+            color: var(--muted);
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        .summary-number {
+            font-size: 30px;
+            line-height: 1;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .collection-card {
+            padding: 20px;
+            height: 100%;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .section-title h5 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .section-subtle {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .meta-line {
+            color: var(--muted);
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+
+        .body-copy {
+            font-size: 14px;
+            line-height: 1.8;
+            color: var(--ink);
+        }
+
+        .chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 14px;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: var(--primary-soft);
+            color: var(--primary);
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .ref-link-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            text-decoration: none;
+            border-radius: 999px;
+            font-size: 13px;
+            padding: 9px 14px;
+            color: var(--primary);
+            border: 1px solid rgba(255, 36, 66, 0.14);
+            background: white;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--muted);
+            padding: 56px 16px;
+        }
+
+        footer {
+            color: var(--muted);
+            font-size: 13px;
+            padding-bottom: 28px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding-left: 12px;
+                padding-right: 12px;
+            }
+
+            .navbar .container {
+                align-items: flex-start;
+            }
+
+            .navbar-nav {
+                flex-wrap: wrap;
+                row-gap: 4px;
+            }
+
+            .nav-link {
+                padding: 6px !important;
+                font-size: 12px;
+            }
+
+            .hero-title {
+                font-size: 26px;
+            }
+
+            .hero-actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+    </style>
+</head>
+<body class="public-body">
+    <div class="public-shell">
+        <nav class="navbar navbar-dark public-navbar">
+            <div class="container public-container">
+                <a class="navbar-brand" href="/">
+                    <i class="bi bi-bookmark-heart-fill"></i>
+                    {{ site_config.site_name or '福瑞医科' }}
+                </a>
+                <ul class="navbar-nav ms-auto d-flex flex-row">
+                    {% for item in site_config.nav_items %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if not loop.first %}ms-3{% endif %}" href="{{ item.url }}" {% if item.target == '_blank' %}target="_blank" rel="noreferrer"{% endif %}>
+                            {% if item.icon %}<i class="bi {{ item.icon }}"></i>{% endif %}
+                            {{ item.label }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </nav>
+
+        <section class="hero">
+            <div class="container">
+                <div class="hero-badge">
+                    <i class="bi bi-grid"></i>
+                    {{ page_badge }}
+                </div>
+                <div class="hero-title">{{ page_heading }}</div>
+                <p class="hero-subtitle">{{ page_description }}</p>
+                <div class="hero-actions">
+                    <a class="hero-action hero-action-primary" href="/">
+                        <i class="bi bi-house-door"></i>
+                        返回首页
+                    </a>
+                    <a class="hero-action hero-action-secondary" href="/activity">
+                        <i class="bi bi-calendar-event"></i>
+                        查看活动期数
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <div class="container public-container main-wrap">
+            <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                    <div class="summary-card">
+                        <div class="summary-label">当前页内容数</div>
+                        <div class="summary-number">{{ items|length }}</div>
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="summary-card">
+                        <div class="summary-label">说明</div>
+                        <div class="body-copy">{{ page_description }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-title">
+                <h5>{{ page_heading }}</h5>
+                <div class="section-subtle">共 {{ items|length }} 条</div>
+            </div>
+
+            {% if items %}
+            <div class="row g-3">
+                {% for item in items %}
+                <div class="{% if page_kind == 'announcement' %}col-lg-6{% else %}col-12{% endif %}">
+                    <div class="collection-card">
+                        {% if page_kind == 'announcement' %}
+                        <div class="section-title mb-2">
+                            <h5>{{ item.title }}</h5>
+                            <span class="chip">P{{ item.priority }}</span>
+                        </div>
+                        <div class="meta-line">
+                            状态：{{ item.status }}
+                            {% if item.starts_at %} ｜ 开始：{{ item.starts_at }}{% endif %}
+                            {% if item.ends_at %} ｜ 结束：{{ item.ends_at }}{% endif %}
+                        </div>
+                        <div class="body-copy">{{ item.content }}</div>
+                        {% if item.link_url %}
+                        <div class="chip-row">
+                            <a class="ref-link-btn" href="{{ item.link_url }}" target="_blank" rel="noreferrer">
+                                <i class="bi bi-arrow-up-right"></i>
+                                {{ item.button_text or '查看详情' }}
+                            </a>
+                        </div>
+                        {% endif %}
+                        {% elif page_kind == 'science' %}
+                        <div class="section-title mb-2">
+                            <h5>{{ item.title }}</h5>
+                            <span class="chip">{{ item.category or '医学科普' }}</span>
+                        </div>
+                        <div class="meta-line">
+                            {% if item.source %}来源：{{ item.source }}{% endif %}
+                            {% if item.created_at %}{% if item.source %} ｜ {% endif %}整理时间：{{ item.created_at }}{% endif %}
+                        </div>
+                        <div class="body-copy">{{ item.content }}</div>
+                        {% if item.tags %}
+                        <div class="chip-row">
+                            {% for tag in item.tags %}
+                            <span class="chip">{{ tag }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        {% else %}
+                        <div class="section-title mb-2">
+                            <h5>{{ item.title }}</h5>
+                            <span class="chip">{{ item.source_platform or '热点池' }}</span>
+                        </div>
+                        <div class="meta-line">
+                            {% if item.keyword %}关键词：{{ item.keyword }} ｜ {% endif %}
+                            阅读 {{ item.views }} ｜ 点赞 {{ item.likes }} ｜ 收藏 {{ item.favorites }} ｜ 评论 {{ item.comments }}
+                        </div>
+                        {% if item.summary %}
+                        <div class="body-copy">{{ item.summary }}</div>
+                        {% endif %}
+                        <div class="chip-row">
+                            {% if item.author %}<span class="chip">作者：{{ item.author }}</span>{% endif %}
+                            {% if item.source_channel %}<span class="chip">渠道：{{ item.source_channel }}</span>{% endif %}
+                            {% if item.created_at %}<span class="chip">入库：{{ item.created_at }}</span>{% endif %}
+                        </div>
+                        {% if item.link %}
+                        <div class="chip-row">
+                            <a class="ref-link-btn" href="{{ item.link }}" target="_blank" rel="noreferrer">
+                                <i class="bi bi-box-arrow-up-right"></i>
+                                查看原始链接
+                            </a>
+                        </div>
+                        {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="collection-card">
+                <div class="empty-state">{{ empty_message }}</div>
+            </div>
+            {% endif %}
+        </div>
+
+        <footer class="public-footer text-center">
+            <div>{{ site_config.footer_text or site_theme.footer_text or '福瑞医科小红书任务管理系统' }}</div>
+        </footer>
+    </div>
+</body>
+</html>

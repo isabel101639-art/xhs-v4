@@ -100,6 +100,10 @@ def build_creator_sync_request_preview(config, targets, source_channel='', batch
     body_json = _load_json_config(config.get('body_json'), {})
     headers_json = _load_json_config(config.get('headers_json'), {})
     timeout_seconds = max(safe_int(config.get('timeout_seconds'), 60), 5)
+    current_month_only = bool(config.get('current_month_only', False))
+    date_from = (config.get('date_from') or '').strip()
+    date_to = (config.get('date_to') or '').strip()
+    max_posts_per_account = max(safe_int(config.get('max_posts_per_account'), 60), 1)
     targets = targets or []
     context = {
         'targets': list(targets),
@@ -121,11 +125,19 @@ def build_creator_sync_request_preview(config, targets, source_channel='', batch
             'targets': list(targets),
             'batch_name': batch_name,
             'source_channel': source_channel,
+            'current_month_only': current_month_only,
+            'date_from': date_from,
+            'date_to': date_to,
+            'max_posts_per_account': max_posts_per_account,
         }
     if not rendered_query and api_method == 'GET':
         rendered_query = {
             'target_count': len(targets),
             'batch_name': batch_name,
+            'current_month_only': current_month_only,
+            'date_from': date_from,
+            'date_to': date_to,
+            'max_posts_per_account': max_posts_per_account,
         }
 
     return {

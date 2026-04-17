@@ -67,6 +67,7 @@ from automation_runtime import (
 )
 from creator_import import (
     parse_creator_import_bundle,
+    parse_creator_import_file,
     preview_creator_import_bundle,
     import_creator_bundle,
 )
@@ -6295,12 +6296,48 @@ def _build_asset_generation_prompt_from_context(topic_name='', topic_keywords=''
     return prompt
 
 
-def _build_creative_pack(topic, selected_content=''):
+def _build_creative_pack(topic, selected_content='', preferred_style=''):
     topic_name = topic.topic_name or '肝病热点'
     keywords = _split_keywords(topic.keywords or topic_name)
     primary_keyword = keywords[0] if keywords else topic_name
     insertion = _detect_soft_insertion(f'{topic_name} {" ".join(keywords)}')
     content_points = _extract_content_points(selected_content)
+    preferred_style = (preferred_style or '').strip()
+
+    if preferred_style:
+        style_keys = [preferred_style]
+        preferred_meta = _asset_style_meta(preferred_style)
+        preferred_family = preferred_meta.get('family') or ''
+        if preferred_family:
+            for item in ASSET_STYLE_TYPE_DEFINITIONS:
+                if item.get('family') == preferred_family and item.get('key') not in style_keys:
+                    style_keys.append(item.get('key'))
+        base_title = (_extract_title_from_version(selected_content) or topic_name or preferred_meta.get('label') or '肝病管理').strip()[:18]
+        pack = []
+        for idx, style_key in enumerate(style_keys[:3], start=1):
+            meta = _asset_style_meta(style_key)
+            title = base_title if idx == 1 else f"{primary_keyword[:10]} {idx}"
+            subtitle = meta.get('description') or meta.get('label') or '图片方案'
+            bullets = content_points[:3] if content_points else list(meta.get('default_bullets') or [])
+            svg = _render_svg_card(
+                meta.get('asset_type') or meta.get('label') or '知识卡片',
+                title,
+                subtitle,
+                bullets,
+                accent=meta.get('accent') or '#ff7a59',
+                bg=meta.get('bg') or '#fff4ee',
+            )
+            pack.append({
+                'style_type': style_key,
+                'type': meta.get('asset_type') or meta.get('label') or '知识卡片',
+                'title': title,
+                'subtitle': subtitle,
+                'bullets': bullets,
+                'image_prompt': _build_asset_generation_prompt(topic, selected_content, style_preset=style_key, title_hint=title),
+                'download_name': f'creative_{topic.id}_{style_key}_{idx}.svg',
+                'svg_data_uri': _svg_data_uri(svg),
+            })
+        return pack
 
     if any(token in topic_name for token in ['体检', 'FibroScan', '福波看', '肝弹', '转氨酶', '肝硬度']):
         configs = [
@@ -6339,8 +6376,20 @@ def _build_creative_pack(topic, selected_content=''):
     return pack
 
 
-def _build_graphic_article_bundle(topic, selected_content=''):
-    creative_pack = _build_creative_pack(topic, selected_content)
+def _build_graphic_article_bundle(topic, selected_content='', cover_style_type='', inner_style_type='', generation_mode='smart_bundle'):
+    cover_style_type = (cover_style_type or '').strip()
+    inner_style_type = (inner_style_type or '').strip()
+    generation_mode = (generation_mode or 'smart_bundle').strip() or 'smart_bundle'
+    if generation_mode == 'cover_only':
+        creative_pack = _build_creative_pack(topic, selected_content, preferred_style=cover_style_type or inner_style_type)[:1]
+    elif generation_mode == 'inner_only':
+        creative_pack = _build_creative_pack(topic, selected_content, preferred_style=inner_style_type or cover_style_type)
+    elif cover_style_type and inner_style_type and cover_style_type != inner_style_type:
+        cover_assets = _build_creative_pack(topic, selected_content, preferred_style=cover_style_type)[:1]
+        inner_assets = _build_creative_pack(topic, selected_content, preferred_style=inner_style_type)
+        creative_pack = cover_assets + inner_assets[:2]
+    else:
+        creative_pack = _build_creative_pack(topic, selected_content, preferred_style=cover_style_type or inner_style_type)
     topic_name = topic.topic_name or '肝病管理'
     keywords = _split_keywords(topic.keywords or topic_name)
     content_title = _extract_title_from_version(selected_content) if selected_content else topic_name
@@ -6447,6 +6496,19 @@ def _build_asset_generation_fallback_results(topic, selected_content='', image_c
     return results
 
 
+def _is_ark_seedream_model(model_name=''):
+    return 'seedream' in str(model_name or '').strip().lower()
+
+
+def _normalize_ark_seedream_size(size=''):
+    raw = str(size or '').strip().lower()
+    if raw in {'2k', '2048', '1536x2048', '2048x1536', '2048x2048'}:
+        return '2K'
+    if raw in {'1k', '1024', '1024x1024'}:
+        return '2K'
+    return size or '2K'
+
+
 def _build_asset_provider_request_preview(
     provider,
     model_name,
@@ -6471,6 +6533,19 @@ def _build_asset_provider_request_preview(
     product_context = product_context or {}
 
     if safe_provider == 'volcengine_ark':
+        if _is_ark_seedream_model(safe_model):
+            payload = {
+                'model': safe_model or 'doubao-seedream-5-0-lite-260128',
+                'prompt': safe_prompt,
+                'size': _normalize_ark_seedream_size(safe_size),
+                'response_format': 'url',
+                'stream': False,
+                'watermark': True,
+                'sequential_image_generation': 'disabled',
+            }
+            if safe_count > 1:
+                payload['n'] = safe_count
+            return payload
         payload = {
             'model': safe_model or 'doubao-seededit-3-0-i2i-250628',
             'prompt': safe_prompt,
@@ -6719,17 +6794,42 @@ def _image_provider_healthcheck(payload=None, timeout_seconds=15):
         capabilities.get('image_default_style_type') or 'medical_science',
         image_count=image_count,
     )
+    if provider == 'volcengine_ark' and _is_ark_seedream_model(capabilities.get('image_provider_model')):
+        request_preview['size'] = '2K'
+        request_preview['stream'] = False
+        request_preview['watermark'] = True
+        request_preview['sequential_image_generation'] = 'disabled'
+    base_timeout = min(max(_safe_int(timeout_seconds, 15), 5), 90)
+    if provider in {'volcengine_ark', 'volcengine_las'}:
+        base_timeout = max(base_timeout, 30)
     try:
-        response = requests.post(
-            api_url,
-            json=request_preview,
-            headers={
-                'Authorization': f'Bearer {api_key}',
-                'Content-Type': 'application/json',
-            },
-            timeout=min(max(_safe_int(timeout_seconds, 15), 5), 60),
-        )
-        response.raise_for_status()
+        response = None
+        last_exc = None
+        timeout_attempts = [base_timeout]
+        if provider in {'volcengine_ark', 'volcengine_las'}:
+            timeout_attempts.append(min(base_timeout + 20, 90))
+        for current_timeout in timeout_attempts:
+            try:
+                response = requests.post(
+                    api_url,
+                    json=request_preview,
+                    headers={
+                        'Authorization': f'Bearer {api_key}',
+                        'Content-Type': 'application/json',
+                    },
+                    timeout=current_timeout,
+                )
+                response.raise_for_status()
+                last_exc = None
+                break
+            except requests.exceptions.ReadTimeout as exc:
+                last_exc = exc
+                response = None
+                continue
+        if last_exc:
+            raise last_exc
+        if response is None:
+            raise RuntimeError('图片接口未返回响应')
         payload_json = response.json()
         response_preview = payload_json if not isinstance(payload_json, dict) else dict(payload_json)
         if isinstance(response_preview, dict):
@@ -7373,85 +7473,295 @@ def fetch_xhs_trending(keywords):
         print(f"XHS API error: {e}")
         return []
 
+
+COPY_PERSONA_OPTIONS = {
+    'auto': '系统自动匹配',
+    'doctor_assistant': '医生助理',
+    'health_manager': '健管师',
+    'nutritionist': '营养师',
+    'patient_self': '患者本人',
+    'patient_family': '患者家属',
+    'medical_science': '医学科普',
+    'patient_friend': '患者朋友',
+    'custom': '自定义身份',
+}
+
+COPY_SCENE_OPTIONS = {
+    'auto': '系统自动匹配',
+    'clinic_consulting': '门诊沟通答疑',
+    'physical_exam_alert': '体检异常提醒',
+    'followup_review': '复查对比变化',
+    'daily_liver_care': '日常护肝管理',
+    'drinking_recovery': '熬夜应酬后护肝',
+    'family_support': '家属陪伴照护',
+    'diet_adjustment': '饮食调整建议',
+    'report_interpretation': '检查报告解读',
+    'custom': '自定义场景',
+}
+
+COPY_GOAL_OPTIONS = {
+    'balanced': '均衡输出',
+    'viral_title': '爆款点击优先',
+    'save_value': '收藏种草优先',
+    'comment_engagement': '评论互动优先',
+    'trust_building': '专业信任优先',
+}
+
+COPY_PRODUCT_OPTIONS = {
+    'auto': '自动匹配',
+    'none': '不植入产品',
+    'fibroscan': 'FibroScan福波看',
+    'soft_liver_tablet': '复方鳖甲软肝片',
+    'entecavir_combo': '恩替卡韦联合管理',
+    'qizhi_capsule': '壳脂胶囊',
+}
+
+
+def _resolve_copy_selection(option_map, raw_value, *, custom_value=''):
+    key = (raw_value or 'auto').strip() if isinstance(raw_value, str) else 'auto'
+    if key == 'custom':
+        custom_text = (custom_value or '').strip()
+        return custom_text or option_map.get('custom') or ''
+    return option_map.get(key, option_map.get('auto') or '')
+
+
+def _derive_topic_product_hint(topic_text=''):
+    topic_text = (topic_text or '').strip()
+    if any(k in topic_text for k in ['肝弹', 'FibroScan', '福波看', '做检查', '检查']):
+        return (
+            'FibroScan福波看',
+            '主线：FibroScan福波看（检查评估）；强调检查解读、复查趋势和早发现早干预，不要写成硬广。'
+        )
+    if any(k in topic_text for k in ['肝硬化吃什么药', '肝纤维化吃什么药', '吃什么药', '乙肝肝纤维化', '乙肝肝硬化']):
+        return (
+            '恩替卡韦联合管理',
+            '主线：恩替卡韦（抗病毒）+复方鳖甲软肝片（抗纤维化）联合管理；表达要克制，强调个体化评估和长期管理。'
+        )
+    if any(k in topic_text for k in ['解酒', '护肝']) and not any(k in topic_text for k in ['纤维化', '肝硬化']):
+        return (
+            '复方鳖甲软肝片',
+            '主线：复方鳖甲软肝片在解酒护肝场景下的自然带出；可以提便携和管理习惯，但不能写成直接促销。'
+        )
+    if '脂肪肝' in topic_text:
+        return (
+            '壳脂胶囊',
+            '主线：围绕脂肪肝管理场景自然带出壳脂胶囊，可结合减脂、饮食和复查，不要夸大效果。'
+        )
+    return (
+        '自动匹配',
+        '按话题自动匹配产品或服务，不强行植入；优先保持内容自然和可信。'
+    )
+
+
+def _resolve_copy_product_selection(product_key, topic_text=''):
+    key = (product_key or 'auto').strip() if isinstance(product_key, str) else 'auto'
+    topic_label, topic_hint = _derive_topic_product_hint(topic_text)
+    if key == 'none':
+        return '不植入产品', '本篇只做肝病科普和经验分享，不强行植入产品，但可以保留管理建议和复查提醒。'
+    if key == 'fibroscan':
+        return 'FibroScan福波看', '请自然带出FibroScan福波看在检查评估、指标解读和复查趋势里的价值，语气像真实经验分享。'
+    if key == 'soft_liver_tablet':
+        return '复方鳖甲软肝片', '请自然带出复方鳖甲软肝片在抗纤维化管理里的角色，不要写成购买引导。'
+    if key == 'entecavir_combo':
+        return '恩替卡韦联合管理', '请按“抗病毒+抗纤维化联合管理”主线软植入，强调医生指导和长期管理。'
+    if key == 'qizhi_capsule':
+        return '壳脂胶囊', '请围绕脂肪肝、代谢管理或饮食调整场景自然带出壳脂胶囊，不要夸大。'
+    return topic_label, topic_hint
+
+
+def _goal_strategy_profile(goal_key='balanced'):
+    profiles = {
+        'viral_title': {
+            'label': COPY_GOAL_OPTIONS['viral_title'],
+            'title_rule': '标题优先用结果前置、反差感、提问句或踩坑句式，第一眼要有点击冲动。',
+            'variants': ['反常识冲突版', '结果前置版', '问题悬念版'],
+        },
+        'save_value': {
+            'label': COPY_GOAL_OPTIONS['save_value'],
+            'title_rule': '标题要突出实用性、清单感和收藏价值，正文尽量给出清楚步骤或判断点。',
+            'variants': ['实操清单版', '避坑总结版', '复查提醒版'],
+        },
+        'comment_engagement': {
+            'label': COPY_GOAL_OPTIONS['comment_engagement'],
+            'title_rule': '标题要留出讨论空间，正文结尾一定要自然抛问题，引发同类人回复。',
+            'variants': ['求经验版', '观点讨论版', '经历求助版'],
+        },
+        'trust_building': {
+            'label': COPY_GOAL_OPTIONS['trust_building'],
+            'title_rule': '标题更克制，突出专业感和可信度，正文要像真实沟通，不要像科普课件。',
+            'variants': ['门诊解释版', '复查分析版', '陪诊总结版'],
+        },
+        'balanced': {
+            'label': COPY_GOAL_OPTIONS['balanced'],
+            'title_rule': '标题兼顾点击、可信和互动，不要太硬广，也不要太平。',
+            'variants': ['故事共鸣版', '轻科普拆解版', '互动讨论版'],
+        },
+    }
+    return profiles.get(goal_key, profiles['balanced'])
+
+
+def _extract_labeled_block(text, labels, all_labels):
+    import re
+    pattern = '|'.join(re.escape(label) for label in labels)
+    next_pattern = '|'.join(re.escape(label) for label in all_labels)
+    match = re.search(
+        rf'(?ms)(?:^|\n)\s*(?:{pattern})\s*[：:]\s*(.*?)(?=\n\s*(?:{next_pattern})\s*[：:]|$)',
+        text or '',
+    )
+    return (match.group(1) if match else '').strip()
+
+
+def _render_generated_copy_card(card):
+    item = dict(card or {})
+    lines = []
+    for label, key in [
+        ('人设', 'persona'),
+        ('场景', 'scene'),
+        ('软植入', 'insertion'),
+        ('标题', 'title'),
+        ('开头钩子', 'hook'),
+        ('正文', 'body'),
+        ('互动结尾', 'ending'),
+    ]:
+        value = (item.get(key) or '').strip()
+        if value:
+            lines.append(f'{label}：{value}')
+    return '\n'.join(lines).strip()
+
+
+def _parse_generated_copy_card(version_text: str, defaults=None):
+    import re
+
+    defaults = defaults or {}
+    text = re.sub(r'===+', '', (version_text or '')).strip()
+    label_aliases = {
+        'persona': ['人设', '角色'],
+        'scene': ['场景'],
+        'insertion': ['软植入', '软植入产品'],
+        'title': ['标题'],
+        'hook': ['开头钩子', '钩子'],
+        'body': ['正文', '内文'],
+        'ending': ['互动结尾', '结尾互动'],
+    }
+    all_labels = []
+    for rows in label_aliases.values():
+        all_labels.extend(rows)
+
+    card = {}
+    for key, labels in label_aliases.items():
+        card[key] = _extract_labeled_block(text, labels, all_labels)
+
+    if not card.get('title') or not card.get('body'):
+        fallback_title, fallback_body = _parse_model_output(text)
+        card['title'] = card.get('title') or fallback_title
+        card['body'] = card.get('body') or fallback_body
+
+    for key in ['persona', 'scene', 'insertion']:
+        if not (card.get(key) or '').strip():
+            card[key] = (defaults.get(key) or '').strip()
+
+    body = re.sub(r'(?m)^\s*(人设|角色|场景|软植入|软植入产品|标题|开头钩子|钩子|互动结尾|结尾互动)\s*[：:].*$', '', card.get('body') or '')
+    body = re.sub(r'\n{3,}', '\n\n', body).strip()
+    card['body'] = body
+
+    if not (card.get('hook') or '').strip() and body:
+        first_line = next((line.strip() for line in body.splitlines() if line.strip()), '')
+        card['hook'] = first_line[:40]
+    if not (card.get('ending') or '').strip():
+        card['ending'] = (defaults.get('ending') or '你们会怎么做？').strip()
+
+    title = re.sub(r'^(标题\s*[：:]\s*)+', '', (card.get('title') or '').strip()).strip('：: =-')
+    if not title:
+        title = '分享笔记'
+    card['title'] = title[:30]
+    card['copy_text'] = _render_generated_copy_card(card)
+    return card
+
+
+def _copy_card_usable(card):
+    title = (card.get('title') or '').strip()
+    body = (card.get('body') or '').strip()
+    bad_title_tokens = ['带话题', '关键词', '版本', '#']
+    if not title or len(title) > 24:
+        return False
+    if any(token in title for token in bad_title_tokens):
+        return False
+    if len(body) < 80:
+        return False
+    return True
+
 @app.route('/api/generate_copy', methods=['POST'])
 def generate_copy():
-    data = request.json
+    data = request.json or {}
     registration_id = data.get('registration_id')
-    user_prompt = data.get('user_prompt', '').strip()  # 用户自定义提示词
+    user_prompt = (data.get('user_prompt') or '').strip()
     fast_mode = bool(data.get('fast_mode', True))
+    persona_key = (data.get('persona_key') or 'auto').strip()
+    custom_persona = (data.get('custom_persona') or '').strip()
+    scene_key = (data.get('scene_key') or 'auto').strip()
+    custom_scene = (data.get('custom_scene') or '').strip()
+    product_key = (data.get('product_key') or 'auto').strip()
+    copy_goal = (data.get('copy_goal') or 'balanced').strip()
 
     reg = Registration.query.get(registration_id)
     if not reg:
         return jsonify({'success': False, 'message': '报名信息不存在'})
 
     topic = reg.topic
-
-    # 获取话题信息
-    keywords = topic.keywords or ""
-    direction = topic.direction or ""
+    keywords = topic.keywords or ''
+    direction = topic.direction or ''
     direction_clean = direction.strip()
     if (not direction_clean) or direction_clean in ['同上', '同上。', '同上 ', '同上（同前）']:
         direction_clean = ''
 
-    # 获取小红书热门参考（按话题，不按关键词）
-    xhs_notes = [] # disabled for stability
-    xhs_ref = ""
-    if xhs_notes:
-        for i, note in enumerate(xhs_notes):
-            title = note.get('note_card', {}).get('title', '')[:50]
-            user = note.get('note_card', {}).get('user', {}).get('nickname', '')
-            if title:
-                xhs_ref += f"\n参考{i+1}: {title} (作者:{user})"
+    import random
+    import re
+    import time
 
-    # 话题意图识别（按话题决定软植入主线）
+    output_count = 3
     topic_text = (topic.topic_name or '').strip()
-    if any(k in topic_text for k in ['肝弹', 'FibroScan', '福波看', '做检查', '检查']):
-        product_hint = '主线：FibroScan福波看（检查评估）；可辅带1次复方鳖甲软肝片'
-        topic_goal = '围绕检查评估与复查管理，软植入FibroScan福波看'
-    elif any(k in topic_text for k in ['肝硬化吃什么药', '肝纤维化吃什么药', '吃什么药', '乙肝肝纤维化', '乙肝肝硬化']):
-        product_hint = '主线：恩替卡韦（抗病毒）+复方鳖甲软肝片（抗纤维化）联合管理；可辅带1次FibroScan复查'
-        topic_goal = '围绕"抗病毒+抗纤维化联合管理"主线作答，禁止泛泛保肝药表达'
-    elif any(k in topic_text for k in ['解酒', '护肝']) and not any(k in topic_text for k in ['纤维化', '肝硬化']):
-        product_hint = '主线：复方鳖甲软肝片（软肝片）解酒护肝场景；可用卖点：12片小包装（带着方便）、单盒不到50、喝前4粒/酒局后4粒/次晨4粒（共12粒）'
-        topic_goal = '严格围绕"解酒护肝"话题，主推复方鳖甲软肝片，不跑题不换品'
-    else:
-        product_hint = '按话题自动匹配，不强行套用固定病种话术'
-        topic_goal = '先对齐话题，再做自然软植入'
-
-    import random, time
     generation_id = f"G{int(time.time()*1000)}-{random.randint(1000,9999)}"
 
-    # 读取最近文案片段，避免重复
     recent_snippets = []
     try:
-        s = Settings.query.filter_by(key='recent_copy_snippets').first()
-        if s and s.value:
-            recent_snippets = json.loads(s.value)
+        setting_item = Settings.query.filter_by(key='recent_copy_snippets').first()
+        if setting_item and setting_item.value:
+            recent_snippets = json.loads(setting_item.value)
             if not isinstance(recent_snippets, list):
                 recent_snippets = []
     except Exception:
         recent_snippets = []
 
-    identities = [
-        '患者本人', '子女视角', '家属视角', '朋友视角', '医疗从业者', '学习笔记型', '病友群见闻',
-        '逆转型患者', '稳定型患者', '初诊患者', '职场应酬族', '曾经酗酒现在养生'
+    auto_persona_pool = [
+        '医生助理', '健管师', '营养师', '患者本人', '患者家属', '医学科普', '患者朋友'
     ]
-    hooks = ['后悔没早点知道', '我以为没事结果被医生提醒', '踩坑后才懂', '真的被吓到了', '这次复查让我松口气']
-    endings = ['你们遇到过这种情况吗？', '我这样做对吗？', '有同样经历的可以说说吗？', '你们一般怎么处理？', '我还漏了什么要注意的？']
+    auto_scene_pool = [
+        '门诊沟通答疑', '体检异常提醒', '复查对比变化', '日常护肝管理',
+        '熬夜应酬后护肝', '家属陪伴照护', '饮食调整建议', '检查报告解读'
+    ]
+    default_endings = [
+        '你们会怎么做？',
+        '有类似经历的人可以说说吗？',
+        '如果是你，你会先从哪一步开始？',
+        '你们复查时最在意哪个指标？',
+        '这种情况你们一般会怎么跟家里人解释？',
+    ]
 
-    output_count = 3
-    selected_identities = random.sample(identities, 3)
-    selected_hook = random.choice(hooks)
-    selected_ending = random.choice(endings)
-    # 固定"拉互动+冲爆款"双目标输出
-    selected_types = ['故事痛点型', '轻科普问答型', '情绪求助型']
+    selected_persona_label = _resolve_copy_selection(COPY_PERSONA_OPTIONS, persona_key, custom_value=custom_persona)
+    selected_scene_label = _resolve_copy_selection(COPY_SCENE_OPTIONS, scene_key, custom_value=custom_scene)
+    selected_product_label, product_hint = _resolve_copy_product_selection(product_key, topic_text)
+    goal_profile = _goal_strategy_profile(copy_goal)
 
-    role_type_block = "\n".join([f"- 版本{i+1}：{selected_identities[i % len(selected_identities)]} / {selected_types[i]}" for i in range(output_count)])
-    output_format_block = "\n\n".join([
-        f"===版本{i+1}===\n角色：...\n类型：{selected_types[i]}\n标题：...\n爆款逻辑：...\n钩子：...\n内文：...\n互动结尾：..." for i in range(output_count)
+    version_personas = random.sample(auto_persona_pool, output_count) if persona_key == 'auto' else [selected_persona_label] * output_count
+    version_scenes = random.sample(auto_scene_pool, output_count) if scene_key == 'auto' else [selected_scene_label] * output_count
+    version_endings = random.sample(default_endings, output_count)
+    version_styles = goal_profile.get('variants') or ['故事共鸣版', '轻科普拆解版', '互动讨论版']
+
+    role_scene_block = '\n'.join([
+        f"- 版本{i+1}：人设={version_personas[i]} ｜ 场景={version_scenes[i]} ｜ 风格={version_styles[i % len(version_styles)]}"
+        for i in range(output_count)
     ])
 
-    # 读取本地爆款语料库（节选）用于生成参考
     knowledge_hint = ''
     try:
         with open('/home/node/.openclaw/workspace/knowledge/xhs_viral_templates.md', 'r', encoding='utf-8') as f:
@@ -7459,171 +7769,184 @@ def generate_copy():
     except Exception:
         knowledge_hint = ''
 
-    priority_rules = "优先级：1) 话题 2) 用户提示词（逐条落实） 3) 爆款文案植入产品词 4) 产品语料库。若冲突，严格按优先级执行。"
+    prompt = f"""你是一个非常懂小红书内容运营的医疗健康创作者教练，现在要为报名人生成 3 篇“千人千面”的小红书文案。
 
-    prompt = f"""你是小红书真实用户，分享亲身经历和真实感受。
-
-【话题】
+【当前话题】
 {topic.topic_name}
 
-【用户提示词】（尽量体现，至少70%）
-{user_prompt if user_prompt else '无，按话题自动生成'}
+【关键词】
+{keywords or '无'}
 
-【关键词】（参考补充）
-{keywords}
+【撰写说明】
+{direction_clean or '无，按话题自动理解'}
 
-【产品提示】
+【用户自定义提词器】
+{user_prompt or '无，按系统默认策略生成'}
+
+【软植入要求】
 {product_hint}
 
-【参考笔记】（可学习结构和语气，不得照抄）
-{knowledge_hint}
+【本轮目标】
+{goal_profile['label']}。{goal_profile['title_rule']}
 
-【生成要求 - 共7条】
-1. 严格依据话题+用户提示词生成，不跑题
-2. 用户写了提示词时，至少体现70%的关键要求
-3. 内容真实、口语化、像人话，禁止"首先/其次/综上/总之/建议大家"等模板腔
-4. 合规：不说绝对化词（最好/第一/最有效/根治/100%等），不引导购买，不提"评论区"，处方药需符合广告法
-5. 标题：小红书爆款风格（8-14字）；开篇有钩子；正文有真实细节（时间/人物/情绪/经历）和科普内容；结尾有互动提问
-6. 每篇内容不重复，句式、结构、案例要有差异，实现千人千面
-7. 字数：正文不超过350字（标题单独计算）
+【每个版本的人设/场景/风格】
+{role_scene_block}
 
-【输出格式 - 一次生成3篇，用===分隔】
+【参考语料】（学习结构和语气，不得照抄）
+{knowledge_hint or '无'}
+
+【必须做到】
+1. 每一篇都要有爆款标题，标题 8-16 字，不能太像广告。
+2. 每一篇都要有“开头钩子”，第一句话就要把用户带进来。
+3. 正文必须有真实细节、情绪、场景和科普信息，不要空话套话。
+4. 软植入要自然，只能像真实经验里顺手带出，不能像硬广。
+5. 结尾要自然引导互动，不能出现“评论区”等生硬引导词。
+6. 三个版本必须明显不同，不能只换几个词；要在人设、场景、切入角度、标题逻辑上拉开差异。
+7. 医疗健康内容必须合规，不说绝对化词，不承诺疗效，不诱导购买。
+8. 语言像真人，不要“首先/其次/综上/建议大家”等 AI 腔。
+
+【输出格式】
 ===版本1===
+人设：
+场景：
+软植入：
 标题：
-钩子：
+开头钩子：
 正文：
-结尾互动：
+互动结尾：
+
 ===版本2===
+人设：
+场景：
+软植入：
 标题：
-钩子：
+开头钩子：
 正文：
-结尾互动：
+互动结尾：
+
 ===版本3===
+人设：
+场景：
+软植入：
 标题：
-钩子：
+开头钩子：
 正文：
-结尾互动：
+互动结尾：
 """
 
-    # 兜底兼容变量名
-    product = product_hint
+    default_cards = [
+        {
+            'persona': version_personas[i],
+            'scene': version_scenes[i],
+            'insertion': selected_product_label,
+            'ending': version_endings[i],
+        }
+        for i in range(output_count)
+    ]
 
-    # 调用DeepSeek API
-    titles = []
-    versions = []
+    cards = []
     try:
         if DEEPSEEK_API_KEY:
             headers = {'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'}
             payload = {
                 'model': 'deepseek-chat',
                 'messages': [
-                    {'role': 'system', 'content': '先保证贴题和真实口语化，再考虑花哨表达。严禁跑题。'},
+                    {'role': 'system', 'content': '你先保证贴题、真实口语化和差异化，再去追求花哨表达。禁止跑题，禁止硬广。'},
                     {'role': 'user', 'content': prompt}
                 ],
-                'temperature': 1.15,
-                'top_p': 0.9,
-                'presence_penalty': 0.8,
-                'frequency_penalty': 0.3
+                'temperature': 1.22,
+                'top_p': 0.92,
+                'presence_penalty': 0.85,
+                'frequency_penalty': 0.45
             }
-            resp = requests.post(DEEPSEEK_API_URL, json=payload, headers=headers, timeout=30)
+            resp = requests.post(DEEPSEEK_API_URL, json=payload, headers=headers, timeout=40)
             if resp.status_code == 200:
                 result = resp.json()
                 content = result['choices'][0]['message']['content']
-
-                # 解析标题和3个版本（鲁棒解析，避免模板字段泄漏）
-                titles = []
-                versions = []
-
-                import re
                 parts = re.split(r'===版本\s*\d+\s*===', content)
-                for p in parts:
-                    version_text = (p or '').strip()
+                for index, part in enumerate(parts):
+                    if len(cards) >= output_count:
+                        break
+                    version_text = (part or '').strip()
                     if not version_text:
                         continue
-
-                    title_part, body_part = _parse_model_output(version_text)
-                    if not body_part:
+                    card = _parse_generated_copy_card(version_text, defaults=default_cards[min(index, output_count - 1)])
+                    if not (card.get('body') or '').strip():
                         continue
-
-                    cleaned = _clean_generated_version(title_part, body_part)
-                    versions.append(cleaned)
-                    titles.append(_extract_title_from_version(cleaned))
-
-                # 确保有足够版本
-                if len(versions) < output_count:
-                    for i in range(output_count - len(versions)):
-                        versions.append(f"版本{i+1}内容待生成")
-                versions = versions[:output_count]
-                titles = titles[:output_count]
+                    cards.append(card)
         else:
-            raise Exception('No API key')
-    except Exception as e:
-        print(f"DeepSeek API error: {e}")
-        # 如果API调用失败，使用本地生成
-        result = generate_local_copy(topic, keywords, product)
-        titles = result['titles']
-        versions = result['versions']
+            raise RuntimeError('No API key')
+    except Exception as exc:
+        print(f"DeepSeek API error: {exc}")
 
-    if not versions:
-        result = generate_local_copy(topic, keywords, product)
-        titles = result['titles']
-        versions = result['versions']
+    if len(cards) < output_count or any(not _copy_card_usable(card) for card in cards):
+        fallback_result = generate_local_copy(
+            topic,
+            keywords,
+            selected_product_label,
+            persona_label=selected_persona_label,
+            scene_label=selected_scene_label,
+            goal_label=goal_profile['label'],
+            user_prompt=user_prompt,
+            version_personas=version_personas,
+            version_scenes=version_scenes,
+            version_endings=version_endings,
+        )
+        cards = fallback_result['cards']
 
-    # 自动去AI化（默认关闭，避免二次改写把"人话感"磨平）
-    ENABLE_AUTO_HUMANIZE = False
-    if ENABLE_AUTO_HUMANIZE:
-        try:
-            versions = [auto_humanize_text(v) for v in versions]
-        except Exception as e:
-            print(f"auto humanize batch error: {e}")
-
-    # 话题主线兜底校验（避免跑题）
     try:
-        t = (topic.topic_name or '')
+        t = topic_text
         if any(k in t for k in ['肝硬化吃什么药', '肝纤维化吃什么药', '乙肝肝硬化怎么治疗', '乙肝肝纤维化', '怎么调理']):
-            fixed = []
-            for v in versions:
-                if ('复方鳖甲软肝片' not in v) and ('软肝片' not in v):
-                    v += '\n\n补充：我这边在医生指导下是按复方鳖甲软肝片（软肝片）做抗纤维化管理的。'
-                if ('恩替卡韦' not in v):
-                    v += ' 同时配合恩替卡韦做抗病毒联合管理。'
-                if ('抗纤维化' not in v):
-                    v += ' 核心是抗病毒+抗纤维化一起做，配合复查争取改善甚至逆转趋势。'
-                fixed.append(v)
-            versions = fixed
+            for card in cards:
+                body = card.get('body') or ''
+                if ('复方鳖甲软肝片' not in body) and ('软肝片' not in body):
+                    body += '\n在医生指导下，我更倾向把复方鳖甲软肝片放进抗纤维化管理里一起看。'
+                if '恩替卡韦' not in body:
+                    body += '\n如果是乙肝相关管理，也要把抗病毒这条线一起纳入考虑。'
+                card['body'] = body.strip()
+                if not (card.get('ending') or '').strip():
+                    card['ending'] = '如果是你，你会怎么平衡抗病毒和抗纤维化管理？'
         if any(k in t for k in ['体检', '检查', '肝弹', 'FibroScan', '福波看']):
-            versions = [v if ('FibroScan' in v or '福波看' in v) else v + '\n\n补充：复查我会做FibroScan福波看，方便看趋势变化。' for v in versions]
-
+            for card in cards:
+                body = card.get('body') or ''
+                if ('FibroScan' not in body) and ('福波看' not in body):
+                    card['body'] = f"{body}\n我后来更重视 FibroScan 福波看这种检查评估方式，因为复查时更容易看趋势。".strip()
+                if not (card.get('insertion') or '').strip() or card.get('insertion') == '自动匹配':
+                    card['insertion'] = 'FibroScan福波看'
         if any(k in t for k in ['解酒', '护肝']) and not any(k in t for k in ['纤维化', '肝硬化']):
-            banned_tokens = ['水飞蓟', '奶蓟草', '葛根', '解酒糖']
-            fixed = []
-            for v in versions:
-                vv = v
-                if ('复方鳖甲软肝片' not in vv) and ('软肝片' not in vv):
-                    vv += '\n\n补充：我自己在解酒护肝上用的是复方鳖甲软肝片（软肝片）。'
-                if ('12片' not in vv) and ('喝前4粒' not in vv):
-                    vv += ' 现在有12片小包装，一盒不到50；我一般喝前4粒、酒局后4粒，第二天早上再4粒。'
-                for bt in banned_tokens:
-                    vv = vv.replace(bt, '复方鳖甲软肝片')
-                fixed.append(vv)
-            versions = fixed
-    except Exception as e:
-        print(f"topic guard error: {e}")
+            for card in cards:
+                if selected_product_label != '不植入产品':
+                    body = card.get('body') or ''
+                    if ('复方鳖甲软肝片' not in body) and ('软肝片' not in body):
+                        card['body'] = f"{body}\n我自己会把复方鳖甲软肝片放在解酒护肝场景里顺手带出来，但还是以日常管理和复查为主。".strip()
+                    card['insertion'] = '复方鳖甲软肝片'
+    except Exception as exc:
+        print(f"topic guard error: {exc}")
 
-    # 提示词强对齐兜底（用户填写提示词时强制命中）
+    versions = [_render_generated_copy_card(card) for card in cards]
     versions = _enforce_prompt_alignment(versions, user_prompt)
-
-    # 去同质化兜底（避免和历史内容/同批次过于相似）
     versions = _dehomogenize_versions(versions, recent_snippets)
+    cards = [
+        _parse_generated_copy_card(v, defaults=default_cards[min(index, output_count - 1)])
+        for index, v in enumerate(versions[:output_count])
+    ]
+    if len(cards) < output_count or any(not _copy_card_usable(card) for card in cards):
+        fallback_result = generate_local_copy(
+            topic,
+            keywords,
+            selected_product_label,
+            persona_label=selected_persona_label,
+            scene_label=selected_scene_label,
+            goal_label=goal_profile['label'],
+            user_prompt=user_prompt,
+            version_personas=version_personas,
+            version_scenes=version_scenes,
+            version_endings=version_endings,
+        )
+        cards = fallback_result['cards']
+    versions = [card['copy_text'] for card in cards]
+    titles = [card.get('title') or '分享笔记' for card in cards]
 
-    # 最终校验：不再模板化强制重写，避免“驴唇不对马嘴”
-    # 仅保留提示词对齐与去同质化两层兜底
-
-    # 输出数量控制（固定3篇）
-    versions = versions[:output_count]
-    titles = titles[:output_count]
-
-    # 写入最近文案片段（用于下次反重复）
     try:
         new_snips = []
         for v in versions:
@@ -7631,84 +7954,110 @@ def generate_copy():
             if line:
                 new_snips.append(line[:500])
         merged = (new_snips + recent_snippets)[:3000]
-        s = Settings.query.filter_by(key='recent_copy_snippets').first()
-        if not s:
-            s = Settings(key='recent_copy_snippets', value='[]')
-            db.session.add(s)
-        s.value = json.dumps(merged, ensure_ascii=False)
+        setting_item = Settings.query.filter_by(key='recent_copy_snippets').first()
+        if not setting_item:
+            setting_item = Settings(key='recent_copy_snippets', value='[]')
+            db.session.add(setting_item)
+        setting_item.value = json.dumps(merged, ensure_ascii=False)
         db.session.commit()
-    except Exception as e:
-        print(f"save snippet error: {e}")
+    except Exception as exc:
+        print(f"save snippet error: {exc}")
 
     return jsonify({
         'success': True,
         'titles': titles,
         'versions': versions,
-        'reg_id': registration_id
+        'cards': cards,
+        'reg_id': registration_id,
+        'generator_context': {
+            'generation_id': generation_id,
+            'persona': selected_persona_label,
+            'scene': selected_scene_label,
+            'product': selected_product_label,
+            'goal': goal_profile['label'],
+        },
     })
 
-def generate_local_copy(topic, keywords, product):
-    """本地生成文案（无API时使用）- 自然生活化风格，多样化"""
-    import random
 
-    # 多样化身份
-    identities = [
-        ("职场应酬族", "每周都有饭局，靠这个方法缓酒"),
-        ("曾经酗酒现在养生", "喝伤了，现在开始养肝"),
-        ("家属视角", "看老公喝酒，帮他护肝"),
-        ("病友群老手", "喝酒多年，有自己的护肝心得"),
-        ("初诊患者", "刚查出，正在选药"),
-        ("逆转型患者", "治疗后指标明显下降")
+def generate_local_copy(
+    topic,
+    keywords,
+    product_label,
+    *,
+    persona_label='系统自动匹配',
+    scene_label='系统自动匹配',
+    goal_label='均衡输出',
+    user_prompt='',
+    version_personas=None,
+    version_scenes=None,
+    version_endings=None,
+):
+    """本地生成文案（无 API 时使用）- 保留人设、场景、软植入和互动结构。"""
+    import random
+    import re
+
+    output_count = 3
+    keyword_source = re.sub(r'带话题|#', ' ', keywords or '')
+    keyword_items = [item.strip() for item in re.split(r'[\s,，、/]+', keyword_source) if item.strip()]
+    lead_keyword = next((item for item in keyword_items if 1 < len(item) <= 10), '') or (topic.topic_name or '护肝管理')
+    if len(lead_keyword) > 12:
+        lead_keyword = (topic.topic_name or lead_keyword)[:12]
+    prompt_terms = _extract_prompt_terms(user_prompt)
+    prompt_focus = prompt_terms[0] if prompt_terms else ''
+
+    personas = version_personas or [persona_label] * output_count
+    scenes = version_scenes or [scene_label] * output_count
+    endings = version_endings or ['你们会怎么做？', '有类似经历的人可以说说吗？', '如果是你，你会先从哪一步开始？']
+    strategies = ['故事共鸣版', '轻科普拆解版', '互动讨论版']
+    hooks = [
+        f'我以前一直以为“{lead_keyword}”没那么要紧，直到这次真的被提醒。',
+        f'要不是最近碰到“{lead_keyword}”这个情况，我可能还会继续拖着。',
+        f'关于“{lead_keyword}”，我后来才发现大家最容易忽略的不是治疗，而是前面那一步。',
+    ]
+    title_templates = [
+        f'{lead_keyword}这件事我真拖过',
+        f'关于{lead_keyword}，我终于想明白了',
+        f'{lead_keyword}别再只会硬扛了',
     ]
 
-    # 不同角度的正文（120-180字，有故事感，结尾自然互动）
-    versions = []
+    cards = []
+    for index in range(output_count):
+        persona_text = personas[index] or persona_label or '患者本人'
+        scene_text = scenes[index] or scene_label or '日常护肝管理'
+        hook_text = hooks[index % len(hooks)]
+        title_text = title_templates[index % len(title_templates)]
+        focus_text = f'我这次会重点讲“{prompt_focus}”这个点。' if prompt_focus else ''
 
-    if '体检' in topic.topic_name or 'FibroScan' in topic.topic_name:
-        versions = [
-            """标题：闺蜜体检发现肝纤维化早期，我惊了！
-正文：昨天陪闺蜜去体检，查出早期纤维化...好在发现得早！医生说这个FibroScan检测很准，无痛的还好。你们带爸妈去记得加上这个，真的能救命！""",
-
-            """标题：医生一句建议，让我后怕到现在
-正文：今天体检医生让我加做一个FibroScan，查完真的后怕！好在是早期...你们体检千万别忽略这个！""",
-
-            """标题：肝指标异常的姐妹们，这篇必看！
-正文：刚查出肝指标异常给我慌的...好在及时做了检查配合调理，慢慢稳定了。有问题一定要早查早干预！""",
-            """标题：我来讲讲肝弹怎么读
-正文：很多人拿到FibroScan报告就懵，我之前也是。后来医生教我先看CAP再看E值，前后对比才有意义。你们复查时会记录每次数值吗？""",
+        body_sections = [
+            f'我是从“{persona_text}”这个身份出发，在“{scene_text}”这个场景里真正感受到这件事不能再拖。',
+            hook_text,
+            f'后来我发现，围绕“{lead_keyword}”最容易写得空泛，但真正让人愿意看下去的，还是把当时的情绪、判断和具体动作讲清楚。',
+            focus_text,
         ]
-    else:
-        # 软肝片类 - 用模糊指代，合规，250-300字
-        id1, id2 = random.sample(identities, 2)
+        if product_label and product_label not in {'自动匹配', '不植入产品'}:
+            body_sections.append(f'我会把{product_label}放在真实经历里顺手带出，而不是一上来就硬推，这样读起来更自然。')
+        else:
+            body_sections.append('这篇会先把科普和管理建议讲明白，不强行带产品，读起来会更像真实分享。')
+        body_sections.append('最后再留一个自然的问题，让看到的人愿意接话，而不是像在念标准答案。')
 
-        versions = [
-            f"""标题：{id1[0]}的真实分享！这个真的帮我改善了
-正文：姐妹们真不是智商税！之前熬夜太厉害，肝指标一直不好，吓得我...后来开始配合调理一段时间，再去检查居然好多了！真的惊喜到了！
+        card = {
+            'persona': persona_text,
+            'scene': scene_text,
+            'insertion': product_label or '自动匹配',
+            'title': title_text,
+            'hook': hook_text,
+            'body': '\n'.join([row for row in body_sections if row]).strip(),
+            'ending': endings[index % len(endings)],
+            'strategy': strategies[index % len(strategies)],
+        }
+        card['copy_text'] = _render_generated_copy_card(card)
+        cards.append(card)
 
-跟你们说说我怎么做的：先是调整作息，然后配合医生开的药，再就是注意饮食...坚持了几个月真的有变化！
-
-你们要是也有类似情况，可以试试，但一定要配合检查啊！""",
-
-            f"""标题：{id2[0]}：医生推荐的方法
-正文：绝了！闺蜜推荐的，说她爸用了之后复查结果好很多...当时我还不信，结果昨天去查真香了！医生都问我吃了啥哈哈
-
-我是属于那种经常应酬的，之前肝指标一直临界值，焦虑死了...后来开始调理+配合用药，现在终于降下来了！
-
-你们懂的，理性种草！具体情况还是要问医生！""",
-
-            """标题：肝指标异常的，这个方法真的救了我
-正文：家人们谁懂啊！之前肝指标临界值焦虑死...开始调理一段时间今天去查居然降了！医生都问我吃了啥哈哈
-
-说一下我的情况：经常熬夜喝酒是有的...后来被医生说了才开始重视，一边配合用药一边调整作息
-
-不保证每个人都有用，但可以试试！具体情况问医生最靠谱！""",
-            """标题：肝硬化吃药我踩过的坑
-正文：以前我只会到处搜"吃什么药"，结果越看越乱。后来按医生方案走，主线是复方鳖甲软肝片联合管理，再配合定期FibroScan复查，心里才踏实。你们是怎么坚持复查节奏的？"""
-        ]
-
-    titles = [v.split('\n正文：')[0].replace('标题：', '').strip() for v in versions]
-
-    return {'titles': titles, 'versions': versions}
+    return {
+        'titles': [card['title'] for card in cards],
+        'versions': [card['copy_text'] for card in cards],
+        'cards': cards,
+    }
 
 # 合规检查API
 @app.route('/api/humanize_copy', methods=['POST'])
@@ -7777,12 +8126,13 @@ def generate_creative_pack():
     data = request.json or {}
     registration_id = data.get('registration_id')
     selected_content = (data.get('selected_content') or '').strip()
+    preferred_style = (data.get('cover_style_type') or data.get('style_type') or '').strip()
 
     reg = Registration.query.get(registration_id)
     if not reg:
         return jsonify({'success': False, 'message': '报名信息不存在'})
 
-    creative_pack = _build_creative_pack(reg.topic, selected_content)
+    creative_pack = _build_creative_pack(reg.topic, selected_content, preferred_style=preferred_style)
     return jsonify({
         'success': True,
         'topic': reg.topic.topic_name,
@@ -7795,12 +8145,21 @@ def generate_graphic_article_bundle():
     data = request.json or {}
     registration_id = data.get('registration_id')
     selected_content = (data.get('selected_content') or '').strip()
+    cover_style_type = (data.get('cover_style_type') or data.get('style_type') or '').strip()
+    inner_style_type = (data.get('inner_style_type') or '').strip()
+    generation_mode = (data.get('generation_mode') or 'smart_bundle').strip() or 'smart_bundle'
 
     reg = Registration.query.get(registration_id)
     if not reg:
         return jsonify({'success': False, 'message': '报名信息不存在'})
 
-    bundles = _build_graphic_article_bundle(reg.topic, selected_content)
+    bundles = _build_graphic_article_bundle(
+        reg.topic,
+        selected_content,
+        cover_style_type=cover_style_type,
+        inner_style_type=inner_style_type,
+        generation_mode=generation_mode,
+    )
     return jsonify({
         'success': True,
         'topic': reg.topic.topic_name,
@@ -7978,46 +8337,27 @@ def _parse_model_output(version_text: str):
 
 
 def _extract_title_from_version(v: str):
-    import re
+    card = _parse_generated_copy_card(v)
+    title = (card.get('title') or '').strip()
+    if title:
+        return title
     vv = (v or '').strip()
-    m = re.search(r'标题\s*[：:]\s*(.+)', vv)
-    if m:
-        t = m.group(1).splitlines()[0].strip()
-        t = re.sub(r'^=+|=+$', '', t).strip()
-        return t or '分享笔记'
     line = vv.splitlines()[0].strip() if vv else '分享笔记'
     return line[:18] if line else '分享笔记'
 
 
 def _extract_body_from_version(v: str):
-    vv = (v or '').strip()
-    if '内文：' in vv:
-        return vv.split('内文：', 1)[1].strip()
-    if '正文：' in vv:
-        return vv.split('正文：', 1)[1].strip()
-    return vv
+    card = _parse_generated_copy_card(v)
+    body = (card.get('body') or '').strip()
+    return body or (v or '').strip()
 
 
 def _clean_generated_version(title: str, body: str):
-    import re
-    t = (title or '').strip()
-    b = (body or '').strip()
-
-    # 清理模板字段/占位符泄漏
-    b = re.sub(r'(?m)^\s*(角色|类型|爆款逻辑|钩子|互动结尾)\s*[：:].*$', '', b)
-    b = re.sub(r'===+', '', b)
-    b = re.sub(r'\n{3,}', '\n\n', b).strip()
-
-    t = re.sub(r'^(标题\s*[：:]\s*)+', '', t)
-    t = re.sub(r'[=\-]{2,}', '', t).strip(' ：:')
-    if (not t) or t in {'...', '版本', '分享笔记'}:
-        first = b.split('\n')[0].strip() if b else '分享笔记'
-        t = first[:16] if first else '分享笔记'
-
-    if '药盒' in b:
-        b = b.replace('药盒', '用药记录')
-
-    return f"标题：{t}\n内文：{b}"
+    card = _parse_generated_copy_card(f"标题：{title}\n正文：{body}")
+    if '药盒' in (card.get('body') or ''):
+        card['body'] = (card.get('body') or '').replace('药盒', '用药记录')
+    card['copy_text'] = _render_generated_copy_card(card)
+    return card['copy_text']
 
 
 def _enforce_prompt_alignment(versions, user_prompt):
@@ -8032,8 +8372,9 @@ def _enforce_prompt_alignment(versions, user_prompt):
 
     for i, v in enumerate(versions or []):
         vv = v or ''
-        title = _extract_title_from_version(vv)
-        body = _extract_body_from_version(vv)
+        card = _parse_generated_copy_card(vv)
+        title = card.get('title') or _extract_title_from_version(vv)
+        body = card.get('body') or _extract_body_from_version(vv)
 
         must_lines = []
 
@@ -8065,8 +8406,9 @@ def _enforce_prompt_alignment(versions, user_prompt):
         body = body.replace('提示词对齐补充：', '')
         body = body.replace('这篇按“', '围绕“').replace('”这个重点来写。', '”展开。')
 
-        vv = _clean_generated_version(title, body)
-        fixed.append(vv)
+        card['title'] = title
+        card['body'] = body
+        fixed.append(_render_generated_copy_card(card))
 
     return fixed
 
@@ -8101,19 +8443,15 @@ def _dehomogenize_versions(versions, recent_snippets):
         too_close_batch = any(_text_similarity(vv, p) > 0.78 for p in fixed)
         exact_seen = vv in (recent_snippets or [])
         if too_close_recent or too_close_batch or exact_seen:
-            parts = vv.split('内文：', 1)
-            if len(parts) == 2:
-                head, body = parts[0], parts[1].strip()
-                body_lines = [x for x in body.split('\n') if x.strip()]
-                if body_lines:
-                    body_lines[0] = f"{openers[i % len(openers)]}{body_lines[0].lstrip('，,。 ')}"
-                    if len(body_lines) >= 2:
-                        body_lines[-1] = endings[i % len(endings)]
-                    else:
-                        body_lines.append(endings[i % len(endings)])
-                vv = head + '内文：' + '\n'.join(body_lines)
+            card = _parse_generated_copy_card(vv)
+            body_lines = [x for x in (card.get('body') or '').split('\n') if x.strip()]
+            if body_lines:
+                body_lines[0] = f"{openers[i % len(openers)]}{body_lines[0].lstrip('，,。 ')}"
             else:
-                vv = f"{openers[i % len(openers)]}{vv}\n\n{endings[i % len(endings)]}"
+                body_lines = [openers[i % len(openers)]]
+            card['body'] = '\n'.join(body_lines)
+            card['ending'] = endings[i % len(endings)]
+            vv = _render_generated_copy_card(card)
         fixed.append(vv)
     return fixed
 
@@ -8545,6 +8883,10 @@ def _build_creator_sync_remote_preview(payload=None, targets=None, source_channe
             'body_json': request_config.get('creator_sync_api_body_json'),
             'result_path': request_config.get('creator_sync_result_path'),
             'timeout_seconds': request_config.get('creator_sync_timeout_seconds'),
+            'current_month_only': payload.get('current_month_only', True),
+            'date_from': payload.get('date_from', ''),
+            'date_to': payload.get('date_to', ''),
+            'max_posts_per_account': payload.get('max_posts_per_account', 60),
         },
         targets,
         source_channel=source_channel or request_config.get('creator_sync_source_channel') or 'Crawler服务',
@@ -8805,6 +9147,12 @@ def _dispatch_creator_account_sync(payload, actor='system'):
     source_platform = (payload.get('source_platform') or '小红书').strip() or '小红书'
     source_channel = (payload.get('source_channel') or request_config.get('creator_sync_source_channel') or 'Crawler服务').strip() or 'Crawler服务'
     batch_limit = min(max(_safe_int(payload.get('batch_limit'), request_config.get('creator_sync_batch_limit') or 20), 1), 200)
+    max_posts_per_account = min(max(_safe_int(payload.get('max_posts_per_account'), 60), 1), 100)
+    now = datetime.now()
+    default_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    current_month_only = _coerce_bool(payload.get('current_month_only')) if 'current_month_only' in payload else True
+    date_from = (payload.get('date_from') or default_month_start.strftime('%Y-%m-%d')).strip()[:19]
+    date_to = (payload.get('date_to') or now.strftime('%Y-%m-%d')).strip()[:19]
     batch_name = (payload.get('batch_name') or datetime.now().strftime('creator_sync_%Y%m%d_%H%M%S')).strip()[:120]
     registration_id = _safe_int(payload.get('registration_id'), 0)
     creator_account_id = _safe_int(payload.get('creator_account_id'), 0)
@@ -8840,6 +9188,10 @@ def _dispatch_creator_account_sync(payload, actor='system'):
             'batch_name': batch_name,
             'registration_id': registration_id,
             'creator_account_id': creator_account_id,
+            'current_month_only': current_month_only,
+            'date_from': date_from,
+            'date_to': date_to,
+            'max_posts_per_account': max_posts_per_account,
             'creator_sync_api_url': request_config.get('creator_sync_api_url'),
             'creator_sync_api_method': request_config.get('creator_sync_api_method'),
             'creator_sync_api_headers_json': request_config.get('creator_sync_api_headers_json'),
@@ -8859,6 +9211,10 @@ def _dispatch_creator_account_sync(payload, actor='system'):
         'batch_name': batch_name,
         'registration_id': registration_id,
         'creator_account_id': creator_account_id,
+        'current_month_only': current_month_only,
+        'date_from': date_from,
+        'date_to': date_to,
+        'max_posts_per_account': max_posts_per_account,
         'request_preview': remote_preview,
     })
 
@@ -8881,6 +9237,10 @@ def _dispatch_creator_account_sync(payload, actor='system'):
         'batch_name': batch_name,
         'target_count': len(targets),
         'mode': mode,
+        'current_month_only': current_month_only,
+        'date_from': date_from,
+        'date_to': date_to,
+        'max_posts_per_account': max_posts_per_account,
         'actor': actor,
     })
     db.session.commit()
@@ -8943,6 +9303,10 @@ def _dispatch_asset_generation(payload, actor='system'):
     raw_style_type = (payload.get('style_type') or runtime_config.get('image_default_style_type') or 'medical_science')
     style_meta = _asset_style_meta(raw_style_type)
     style_preset = style_meta['label'][:50]
+    cover_style_meta = _asset_style_meta((payload.get('cover_style_type') or style_meta['key']))
+    inner_style_meta = _asset_style_meta((payload.get('inner_style_type') or style_meta['key']))
+    generation_mode = (payload.get('generation_mode') or 'smart_bundle').strip()[:50] or 'smart_bundle'
+    custom_prompt = (payload.get('custom_prompt') or '').strip()
     image_count = min(max(_safe_int(payload.get('image_count'), 3), 1), 4)
     title_hint = (payload.get('title_hint') or _extract_title_from_version(selected_content) or reg.topic.topic_name).strip()[:200]
     prompt_text = _build_asset_generation_prompt(
@@ -8951,6 +9315,20 @@ def _dispatch_asset_generation(payload, actor='system'):
         style_preset=style_meta['key'],
         title_hint=title_hint,
     )
+    workflow_notes = [
+        f'图片工作流模式：{generation_mode}。',
+        f'封面样式：{cover_style_meta.get("label") or cover_style_meta.get("key") or "-"}。',
+    ]
+    if generation_mode == 'smart_bundle':
+        workflow_notes.append(f'内页样式：{inner_style_meta.get("label") or inner_style_meta.get("key") or "-"}。')
+        workflow_notes.append('如果生成多张图，请优先理解为图文套组：首张更像封面，后续更像内页。')
+    elif generation_mode == 'cover_only':
+        workflow_notes.append('这次只做封面或主图，不扩展内页。')
+    elif generation_mode == 'inner_only':
+        workflow_notes.append('这次只做内页风格，重点放结构化信息。')
+    if custom_prompt:
+        workflow_notes.append(f'自定义视觉要求：{custom_prompt}')
+    prompt_text = f"{prompt_text} {' '.join(workflow_notes)}"
     if product_name:
         prompt_text = f"{prompt_text} 产品信息：{product_name}；适应方向：{product_indication or '未标记'}。"
     if product_asset_text:
@@ -9105,6 +9483,19 @@ def _build_asset_generation_plan_payload(payload):
         'bullet_points': points[:3] if points else list(style_meta.get('default_bullets') or []),
         'postprocess': '先出无字底图，再由系统叠加中文标题、说明卡片和标签。',
     }
+    preview_topic = topic or type('TopicLike', (), {
+        'topic_name': product_indication or '肝病管理',
+        'keywords': product_indication or '肝病管理',
+        'id': 0,
+    })()
+    preview_assets = _build_asset_generation_fallback_results(
+        preview_topic,
+        selected_content=selected_content,
+        image_count=1,
+        style_preset=style_meta.get('key') or '',
+        title_hint=title_hint,
+    )
+    preview_asset = (preview_assets or [{}])[0] if preview_assets else {}
     return {
         'success': True,
         'plan': {
@@ -9122,6 +9513,7 @@ def _build_asset_generation_plan_payload(payload):
             'content_points': points[:5],
             'prompt_text': prompt_text,
             'request_preview': request_preview,
+            'preview_asset': preview_asset,
             'overlay_plan': overlay_plan,
         }
     }
@@ -9955,9 +10347,13 @@ def creator_accounts_import_preview():
     if guard:
         return guard
 
-    data = request.json or {}
     try:
-        bundle = parse_creator_import_bundle(data.get('raw_payload') or '')
+        if request.files.get('file'):
+            file_storage = request.files['file']
+            bundle = parse_creator_import_file(file_storage.filename or '', file_storage.read())
+        else:
+            data = request.json or {}
+            bundle = parse_creator_import_bundle(data.get('raw_payload') or '')
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)})
 
@@ -9975,9 +10371,13 @@ def creator_accounts_import():
     if guard:
         return guard
 
-    data = request.json or {}
     try:
-        bundle = parse_creator_import_bundle(data.get('raw_payload') or '')
+        if request.files.get('file'):
+            file_storage = request.files['file']
+            bundle = parse_creator_import_file(file_storage.filename or '', file_storage.read())
+        else:
+            data = request.json or {}
+            bundle = parse_creator_import_bundle(data.get('raw_payload') or '')
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)})
 

@@ -18,6 +18,225 @@
             box-shadow: 0 24px 54px rgba(22,33,43,0.08);
             backdrop-filter: blur(18px);
         }
+        .studio-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            background: rgba(239, 78, 69, 0.10);
+            color: var(--xhs-red);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            margin-bottom: 12px;
+        }
+        .copy-studio {
+            background:
+                radial-gradient(circle at top right, rgba(239, 78, 69, 0.08), transparent 28%),
+                linear-gradient(180deg, rgba(255,255,255,0.98), rgba(255,249,246,0.96));
+        }
+        .studio-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 18px;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+        }
+        .studio-head h5 {
+            font-size: 30px;
+            font-weight: 800;
+            margin-bottom: 10px;
+            letter-spacing: -0.02em;
+        }
+        .studio-head p {
+            color: #64748b;
+            margin-bottom: 0;
+            font-size: 15px;
+            line-height: 1.8;
+            max-width: 720px;
+        }
+        .studio-tip {
+            min-width: 240px;
+            max-width: 320px;
+            padding: 14px 16px;
+            border-radius: 18px;
+            background: rgba(255,255,255,0.92);
+            border: 1px solid rgba(239, 78, 69, 0.12);
+            color: #475569;
+            font-size: 13px;
+            line-height: 1.75;
+            box-shadow: 0 14px 28px rgba(22,33,43,0.05);
+        }
+        .studio-field {
+            background: rgba(255,255,255,0.84);
+            border: 1px solid rgba(22,33,43,0.08);
+            border-radius: 18px;
+            padding: 16px;
+            height: 100%;
+        }
+        .studio-field .form-label {
+            font-size: 13px;
+            font-weight: 700;
+            color: #334155;
+            margin-bottom: 10px;
+        }
+        .studio-note-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        .studio-note-item {
+            background: rgba(255,255,255,0.92);
+            border: 1px solid rgba(22,33,43,0.08);
+            border-radius: 18px;
+            padding: 14px 16px;
+            box-shadow: 0 14px 28px rgba(22,33,43,0.04);
+        }
+        .studio-note-item .small-label {
+            color: #64748b;
+            font-size: 12px;
+            margin-bottom: 6px;
+        }
+        .studio-note-item strong {
+            display: block;
+            color: #0f172a;
+            line-height: 1.6;
+        }
+        .studio-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        .studio-switch {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.04);
+            font-weight: 600;
+            color: #475569;
+        }
+        .studio-primary-btn {
+            border: none;
+            border-radius: 999px;
+            padding: 13px 24px;
+            cursor: pointer;
+            color: white;
+            font-weight: 800;
+            font-size: 14px;
+            background: linear-gradient(135deg, var(--xhs-red) 0%, #ff7a59 100%);
+            box-shadow: 0 18px 30px rgba(239, 78, 69, 0.22);
+        }
+        .copy-card {
+            height: 100%;
+            border-radius: 22px;
+            border: 1px solid rgba(22,33,43,0.08);
+            background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(255,248,245,0.94));
+            padding: 18px;
+            box-shadow: 0 16px 34px rgba(22,33,43,0.06);
+            cursor: pointer;
+            transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+        }
+        .copy-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(239, 78, 69, 0.24);
+        }
+        .copy-card.selected {
+            border-color: rgba(239, 78, 69, 0.45);
+            box-shadow: 0 18px 38px rgba(239, 78, 69, 0.14);
+            background: linear-gradient(180deg, rgba(255,245,243,0.98), rgba(255,250,248,0.96));
+        }
+        .copy-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .copy-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 7px 11px;
+            border-radius: 999px;
+            background: rgba(239, 78, 69, 0.08);
+            color: var(--xhs-red);
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .copy-title {
+            font-size: 20px;
+            line-height: 1.45;
+            font-weight: 800;
+            color: #111827;
+            margin-bottom: 12px;
+        }
+        .copy-hook {
+            border-radius: 16px;
+            background: rgba(15, 118, 110, 0.08);
+            border: 1px solid rgba(15, 118, 110, 0.14);
+            padding: 12px 14px;
+            font-size: 13px;
+            color: #0f766e;
+            line-height: 1.7;
+            margin-bottom: 12px;
+        }
+        .copy-body {
+            color: #334155;
+            font-size: 14px;
+            line-height: 1.9;
+            white-space: pre-wrap;
+            margin-bottom: 12px;
+        }
+        .copy-ending {
+            border-top: 1px dashed rgba(22,33,43,0.10);
+            padding-top: 12px;
+            font-size: 13px;
+            color: #475569;
+        }
+        .result-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .result-toolbar h6 {
+            margin: 0;
+            font-size: 17px;
+            font-weight: 800;
+        }
+        .result-toolbar-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .outline-pill-btn {
+            border: 1px solid rgba(22,33,43,0.10);
+            border-radius: 999px;
+            padding: 10px 14px;
+            background: white;
+            font-size: 13px;
+            font-weight: 700;
+            color: #334155;
+        }
+        .submit-xhs-card {
+            background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(255,248,245,0.94));
+            border: 1px solid rgba(239, 78, 69, 0.12);
+            border-radius: 20px;
+            padding: 18px;
+        }
+        .submit-xhs-card h6 {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--xhs-red);
+            margin-bottom: 14px;
+        }
         .version-card {
             background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(250,248,246,0.94));
             border: 1px solid rgba(22,33,43,0.08);
@@ -81,6 +300,7 @@
             .d-flex.justify-content-between { flex-direction: column; align-items: flex-start !important; gap: 8px; }
             .copy-btn, .regen-btn { margin-bottom: 6px; }
             .version-card { padding: 10px; }
+            .studio-head h5 { font-size: 24px; }
         }
 
     </style>
@@ -102,86 +322,199 @@
         </div>
 
         <!-- 一键生成文案 -->
-        <div class="success-card mb-4">
-            <h5><i class="bi bi-magic"></i> 一键生成文案</h5>
-            <p class="text-muted">输入自定义提示词，或直接点击生成</p>
-            
-            <div class="mb-3">
-                <label class="form-label">自定义提示词（选填，可粘贴附件文字）</label>
-                <textarea class="form-control" id="userPrompt" rows="3" placeholder="可直接粘贴你附件里的要点。系统会按：话题 + 撰写说明 + 提示词 生成。"></textarea>
+        <div class="success-card copy-studio mb-4">
+            <div class="studio-kicker"><i class="bi bi-stars"></i> 千人千面文案工作台</div>
+            <div class="studio-head">
+                <div>
+                    <h5>一键生成文案</h5>
+                    <p>先选人设、场景、软植入产品和内容目标，再生成更自然的 3 个差异化版本。系统会默认帮你把标题、开头钩子、产品软植入和互动结尾一起做好。</p>
+                </div>
+                <div class="studio-tip">
+                    <strong>这次我已经把生成方向锁成 4 件事：</strong><br>
+                    1. 爆款标题<br>
+                    2. 开头钩子<br>
+                    3. 产品自然软植入<br>
+                    4. 结尾互动引导
+                </div>
             </div>
 
-            <div class="form-check mb-3">
-                <input class="form-check-input" type="checkbox" id="fastMode" checked>
-                <label class="form-check-label" for="fastMode">极速生成（先出2篇，更快）</label>
+            <div class="studio-note-bar">
+                <div class="studio-note-item">
+                    <div class="small-label">当前话题</div>
+                    <strong>{{ registration.topic.topic_name }}</strong>
+                </div>
+                <div class="studio-note-item">
+                    <div class="small-label">关键词</div>
+                    <strong>{{ registration.topic.keywords or '暂无关键词' }}</strong>
+                </div>
+                <div class="studio-note-item">
+                    <div class="small-label">撰写说明</div>
+                    <strong>{{ registration.topic.direction[:120] if registration.topic.direction else '按话题自动理解' }}</strong>
+                </div>
             </div>
-            
-            <button id="generateBtn" class="btn btn-primary" style="background: var(--xhs-red); border: none;" onclick="generateCopy()">
-                <i class="bi bi-stars"></i> 生成文案
-            </button>
-            
+
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <div class="studio-field">
+                        <label class="form-label">人设选择</label>
+                        <select class="form-select" id="copyPersona">
+                            <option value="auto">系统自动匹配</option>
+                            <option value="doctor_assistant">医生助理</option>
+                            <option value="health_manager">健管师</option>
+                            <option value="nutritionist">营养师</option>
+                            <option value="patient_self">患者本人</option>
+                            <option value="patient_family">患者家属</option>
+                            <option value="medical_science">医学科普</option>
+                            <option value="patient_friend">患者朋友</option>
+                            <option value="custom">自定义身份</option>
+                        </select>
+                        <input type="text" class="form-control mt-2" id="customPersona" placeholder="例如：陪诊护士 / 肝病病友群群主" style="display:none;">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="studio-field">
+                        <label class="form-label">场景设定</label>
+                        <select class="form-select" id="copyScene">
+                            <option value="auto">系统自动匹配</option>
+                            <option value="clinic_consulting">门诊沟通答疑</option>
+                            <option value="physical_exam_alert">体检异常提醒</option>
+                            <option value="followup_review">复查对比变化</option>
+                            <option value="daily_liver_care">日常护肝管理</option>
+                            <option value="drinking_recovery">熬夜应酬后护肝</option>
+                            <option value="family_support">家属陪伴照护</option>
+                            <option value="diet_adjustment">饮食调整建议</option>
+                            <option value="report_interpretation">检查报告解读</option>
+                            <option value="custom">自定义场景</option>
+                        </select>
+                        <input type="text" class="form-control mt-2" id="customScene" placeholder="例如：陪爸妈体检当天 / 酒局后第二天早晨" style="display:none;">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="studio-field">
+                        <label class="form-label">软植入产品</label>
+                        <select class="form-select" id="copyProduct">
+                            <option value="auto">自动匹配</option>
+                            <option value="none">不植入产品</option>
+                            <option value="fibroscan">FibroScan福波看</option>
+                            <option value="soft_liver_tablet">复方鳖甲软肝片</option>
+                            <option value="entecavir_combo">恩替卡韦联合管理</option>
+                            <option value="qizhi_capsule">壳脂胶囊</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="studio-field">
+                        <label class="form-label">内容目标</label>
+                        <select class="form-select" id="copyGoal">
+                            <option value="balanced">均衡输出</option>
+                            <option value="viral_title">爆款点击优先</option>
+                            <option value="save_value">收藏种草优先</option>
+                            <option value="comment_engagement">评论互动优先</option>
+                            <option value="trust_building">专业信任优先</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="studio-field">
+                        <label class="form-label">自定义提词器</label>
+                        <textarea class="form-control" id="userPrompt" rows="4" placeholder="可补充你希望强化的角度，例如：更像健管师在解释、突出体检后焦虑、产品带出更轻、标题更像真实分享、结尾更适合引导互动。"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="studio-actions">
+                <label class="studio-switch mb-0">
+                    <input class="form-check-input mt-0" type="checkbox" id="fastMode" checked>
+                    极速生成（优先给出 3 个可选版本）
+                </label>
+                <button id="generateBtn" class="studio-primary-btn" onclick="generateCopy()">
+                    <i class="bi bi-stars"></i> 生成文案
+                </button>
+            </div>
+
             <div id="loading" style="display:none;" class="mt-3">
                 <div class="spinner-border text-primary" role="status"></div>
-                <span class="ms-2">AI生成中...</span>
+                <span class="ms-2">AI 正在按你选择的人设和场景生成中...</span>
             </div>
 
             <!-- 生成结果 -->
             <div id="resultArea" class="mt-4" style="display:none;">
-                <!-- 爆款标题选择 -->
-                <div class="mb-3">
-                    <h6 class="mb-2"><i class="bi bi-card-heading"></i> 爆款标题（点击选择）</h6>
-                    <div id="titles" class="d-flex flex-wrap gap-2"></div>
-                </div>
-                
-                <hr>
-                
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6 class="mb-0">请选择喜欢的正文版本：</h6>
-                    <div>
-                        <button class="regen-btn me-2" onclick="regenerate()" id="regenBtn">
+                <div class="result-toolbar">
+                    <h6>请选择你最喜欢的版本</h6>
+                    <div class="result-toolbar-actions">
+                        <button class="outline-pill-btn" onclick="regenerate()" id="regenBtn">
                             <i class="bi bi-arrow-clockwise"></i> 重新生成 (<span id="regenCount">0</span>/5)
                         </button>
-                        <button class="copy-btn me-2" onclick="humanizeSelected()" style="background:#6f42c1;">
+                        <button class="outline-pill-btn" onclick="humanizeSelected()">
                             <i class="bi bi-magic"></i> 真人化重写
                         </button>
                         <button class="copy-btn" onclick="copySelected()">
-                            <i class="bi bi-clipboard"></i> 复制
+                            <i class="bi bi-clipboard"></i> 复制当前版本
                         </button>
                     </div>
                 </div>
-                
-                <div id="versions"></div>
-                
+
+                <div id="copySummaryBar" class="text-muted small mb-3"></div>
+                <div id="copyCardsWrap" class="row g-3"></div>
+
                 <!-- 合规检查结果 -->
                 <div id="complianceResult" class="mt-3"></div>
 
                 <div class="row g-3 mt-2">
-                    <div class="col-md-6">
-                        <label class="form-label">图片生成类型</label>
-                        <select class="form-select" id="assetStyleType">
-                            {% for item in asset_style_types %}
-                            <option value="{{ item.key }}">{{ item.label }}{% if item.description %}｜{{ item.description }}{% endif %}</option>
-                            {% endfor %}
+                    <div class="col-md-3">
+                        <label class="form-label">生成方式</label>
+                        <select class="form-select" id="assetWorkflowMode">
+                            <option value="smart_bundle">智能图文套组</option>
+                            <option value="cover_only">只做封面</option>
+                            <option value="inner_only">只做内页</option>
+                            <option value="custom_generate">自定义生成</option>
                         </select>
-                        <div class="form-text" id="assetStyleTypeHelp">
-                            医学科普型会更贴近你提供的警示封面/症状总览样例；知识卡片型会更贴近白底细边框、结构图+箭头标签的收藏型讲解页样例。
-                        </div>
+                        <div class="form-text" id="assetWorkflowModeHelp">默认会先按文案拆出封面和内页，再走真实图片 API 生成。</div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-3">
+                        <label class="form-label">图片主类型</label>
+                        <select class="form-select" id="assetStyleFamily">
+                            <option value="medical_science">医学科普图</option>
+                            <option value="knowledge_card">知识卡片</option>
+                            <option value="poster">大字报</option>
+                            <option value="checklist">清单型</option>
+                            <option value="memo">备忘录型</option>
+                            <option value="custom">自定义</option>
+                        </select>
+                        <div class="form-text" id="assetStyleFamilyHelp">先选业务类型，再由系统映射到对应图片风格。</div>
+                    </div>
+                    <div class="col-md-3">
                         <label class="form-label">图片数量</label>
                         <input type="number" class="form-control" id="assetImageCount" min="1" max="4" value="3">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">封面/主图样式</label>
+                        <select class="form-select" id="assetCoverStyleType"></select>
+                    </div>
+                    <div class="col-md-3" id="assetInnerStyleWrap">
+                        <label class="form-label">内页样式</label>
+                        <select class="form-select" id="assetInnerStyleType"></select>
+                    </div>
+                    <div class="col-md-9">
+                        <label class="form-label">自定义图片提示词</label>
+                        <textarea class="form-control" id="assetCustomPrompt" rows="2" placeholder="可补充你希望的视觉要求，例如：封面更像黑体警示大字报、内页更像课堂笔记、器官结构图更明显、留出中文标题区域。"></textarea>
+                    </div>
+                    <div class="col-12">
+                        <div class="form-text" id="assetStyleTypeHelp">
+                            系统会先按你当前文案做拆分，再把封面和内页映射到对应样式。如果你选“自定义生成”，会优先参考你的自定义提示词。
+                        </div>
                     </div>
                 </div>
 
                 <div class="mt-3">
                     <button class="copy-btn" type="button" onclick="generateCreativePack()" style="background:#ff8b2b;">
-                        <i class="bi bi-image"></i> 生成封面/配图素材包
+                        <i class="bi bi-image"></i> 预览封面素材方案
                     </button>
                     <button class="copy-btn ms-2" type="button" onclick="generateGraphicArticleBundle()" style="background:#0f766e;">
-                        <i class="bi bi-layout-text-window-reverse"></i> 一键生成图文创作包
+                        <i class="bi bi-layout-text-window-reverse"></i> 预览图文套组方案
                     </button>
                     <button class="copy-btn ms-2" type="button" onclick="startAssetGenerationTask()" style="background:#2563eb;">
-                        <i class="bi bi-stars"></i> AI 生成图片任务
+                        <i class="bi bi-stars"></i> 用真实 API 生成图片
                     </button>
                 </div>
 
@@ -219,11 +552,11 @@
 
         <!-- 提交笔记 -->
         <div class="success-card">
-            <h6><i class="bi bi-upload"></i> 提交数据（支持分平台提交）</h6>
+            <h6><i class="bi bi-upload"></i> 提交数据（仅小红书）</h6>
             <form id="submitForm">
-                <div class="alert alert-info">可分平台提交：先提交任一平台链接+数据即可，后续可随时补充其它平台。</div>
+                <div class="alert alert-info">当前只需要提交小红书账号主页、本次笔记链接和互动数据，其他平台暂不展示。</div>
 
-                <div class="border rounded p-3 mb-3">
+                <div class="submit-xhs-card mb-3">
                     <h6 class="text-danger">小红书</h6>
                     <div class="mb-2">
                         <input type="url" class="form-control" id="xhs_profile_link" placeholder="小红书账号主页链接（只需填写一次）" value="{{ registration.submission.xhs_profile_link if registration.submission and registration.submission.xhs_profile_link else (tracking_summary.profile_url if tracking_summary else '') }}">
@@ -238,50 +571,12 @@
                     </div>
                 </div>
 
-                <div class="border rounded p-3 mb-3">
-                    <h6>抖音</h6>
-                    <div class="mb-2"><input type="url" class="form-control" id="douyin_link" placeholder="抖音链接"></div>
-                    <div class="row g-2 align-items-end">
-                        <div class="col-md-3"><label class="form-label small mb-1">传播量</label><input type="number" class="form-control" id="douyin_views" min="0" value="0" placeholder="传播量"></div>
-                        <div class="col-md-3"><label class="form-label small mb-1">点赞量</label><input type="number" class="form-control" id="douyin_likes" min="0" value="0" placeholder="点赞量"></div>
-                        <div class="col-md-3"><label class="form-label small mb-1">收藏量</label><input type="number" class="form-control" id="douyin_favorites" min="0" value="0" placeholder="收藏量"></div>
-                        <div class="col-md-3"><label class="form-label small mb-1">评论量</label><input type="number" class="form-control" id="douyin_comments" min="0" value="0" placeholder="评论量"></div>
-                    </div>
-                </div>
-
-                <div class="border rounded p-3 mb-3">
-                    <h6>视频号</h6>
-                    <div class="mb-2"><input type="url" class="form-control" id="video_link" placeholder="视频号链接"></div>
-                    <div class="row g-2 align-items-end">
-                        <div class="col-md-3"><label class="form-label small mb-1">传播量</label><input type="number" class="form-control" id="video_views" min="0" value="0" placeholder="传播量"></div>
-                        <div class="col-md-3"><label class="form-label small mb-1">点赞量</label><input type="number" class="form-control" id="video_likes" min="0" value="0" placeholder="点赞量"></div>
-                        <div class="col-md-3"><label class="form-label small mb-1">收藏量</label><input type="number" class="form-control" id="video_favorites" min="0" value="0" placeholder="收藏量"></div>
-                        <div class="col-md-3"><label class="form-label small mb-1">评论量</label><input type="number" class="form-control" id="video_comments" min="0" value="0" placeholder="评论量"></div>
-                    </div>
-                </div>
-
-                <div class="border rounded p-3 mb-3">
-                    <h6>微博</h6>
-                    <div class="mb-2"><input type="url" class="form-control" id="weibo_link" placeholder="微博链接"></div>
-                    <div class="row g-2 align-items-end">
-                        <div class="col-md-3"><label class="form-label small mb-1">传播量</label><input type="number" class="form-control" id="weibo_views" min="0" value="0" placeholder="传播量"></div>
-                        <div class="col-md-3"><label class="form-label small mb-1">点赞量</label><input type="number" class="form-control" id="weibo_likes" min="0" value="0" placeholder="点赞量"></div>
-                        <div class="col-md-3"><label class="form-label small mb-1">收藏量</label><input type="number" class="form-control" id="weibo_favorites" min="0" value="0" placeholder="收藏量"></div>
-                        <div class="col-md-3"><label class="form-label small mb-1">评论量</label><input type="number" class="form-control" id="weibo_comments" min="0" value="0" placeholder="评论量"></div>
-                    </div>
-                </div>
-                <div class="border rounded p-3 mb-3">
-                    <h6>笔记内容（用于系统自动识别内容类型，可选）</h6>
-                    <div class="mb-2"><input type="text" class="form-control" id="note_title" placeholder="笔记标题（可选）"></div>
-                    <div><textarea class="form-control" id="note_content" rows="3" placeholder="可粘贴正文，系统会自动识别科普/求助/复盘/检查解读等类型"></textarea></div>
-                </div>
-
 <div class="d-flex gap-2">
                     <button type="submit" class="btn btn-primary" style="background: var(--xhs-red); border: none;">
                         <i class="bi bi-check-circle"></i> 提交数据
                     </button>
                     <button type="button" class="btn btn-warning" onclick="updateData()">
-                        <i class="bi bi-arrow-repeat"></i> 数据更新
+                        <i class="bi bi-arrow-repeat"></i> 更新小红书数据
                     </button>
                 </div>
             </form>
@@ -297,123 +592,308 @@
         let regenCount = 0;
         let versions = [];
         let titles = [];
+        let copyCards = [];
+        let generatorContext = {};
         const assetStyleTypeDefinitions = {{ asset_style_types|tojson }};
         window.latestCreativeAssets = [];
         window.latestGraphicBundles = [];
         window.latestGeneratedImages = [];
         window.currentAssetTaskId = null;
+        const assetWorkflowModeMap = {
+            smart_bundle: '系统会先拆封面和内页，再按对应样式生成。',
+            cover_only: '当前只生成封面或主图，不做内页扩展。',
+            inner_only: '当前只生成内页风格，不优先做封面大图。',
+            custom_generate: '当前优先参考你的自定义图片提示词。',
+        };
+        const assetStyleFamilyMap = {
+            medical_science: {
+                label: '医学科普图',
+                description: '适合器官示意、症状总览、检查解读、误区对照这类视觉说明书。',
+                coverOptions: ['medical_science', 'myth_compare', 'flowchart'],
+                innerOptions: ['medical_science', 'knowledge_card', 'flowchart'],
+                defaultCover: 'medical_science',
+                defaultInner: 'knowledge_card',
+            },
+            knowledge_card: {
+                label: '知识卡片',
+                description: '适合收藏型讲解、结构拆解、问答卡、机制图。',
+                coverOptions: ['knowledge_card', 'medical_science'],
+                innerOptions: ['knowledge_card', 'myth_compare', 'checklist_report'],
+                defaultCover: 'knowledge_card',
+                defaultInner: 'knowledge_card',
+            },
+            poster: {
+                label: '大字报',
+                description: '适合冲点击的封面、警示提醒、第一人称经验总结。',
+                coverOptions: ['poster', 'poster_bold', 'poster_handwritten'],
+                innerOptions: ['knowledge_card', 'memo_mobile', 'checklist'],
+                defaultCover: 'poster',
+                defaultInner: 'knowledge_card',
+            },
+            checklist: {
+                label: '清单型',
+                description: '适合步骤、对比、时间轴、报告解读和执行计划。',
+                coverOptions: ['checklist', 'checklist_table', 'checklist_timeline', 'checklist_report'],
+                innerOptions: ['checklist', 'checklist_table', 'checklist_timeline', 'checklist_report'],
+                defaultCover: 'checklist',
+                defaultInner: 'checklist_report',
+            },
+            memo: {
+                label: '备忘录型',
+                description: '适合生活提醒、课堂笔记、私人攻略和高收藏干货。',
+                coverOptions: ['memo', 'memo_mobile', 'memo_classroom'],
+                innerOptions: ['memo', 'memo_mobile', 'memo_classroom'],
+                defaultCover: 'memo_mobile',
+                defaultInner: 'memo_classroom',
+            },
+            custom: {
+                label: '自定义',
+                description: '你自己写图片提示词，系统只把它映射到最接近的版式。',
+                coverOptions: ['medical_science', 'knowledge_card', 'poster', 'poster_bold', 'poster_handwritten', 'checklist', 'memo', 'reference_based'],
+                innerOptions: ['knowledge_card', 'checklist', 'memo', 'medical_science', 'reference_based'],
+                defaultCover: 'medical_science',
+                defaultInner: 'knowledge_card',
+            },
+        };
+
+        function escapeHtml(text) {
+            return String(text || '').replace(/[&<>"']/g, (char) => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;',
+            }[char]));
+        }
 
         function refreshAssetStyleTypeHelp() {
-            const select = document.getElementById('assetStyleType');
             const wrap = document.getElementById('assetStyleTypeHelp');
-            if (!select || !wrap) return;
-            const current = (assetStyleTypeDefinitions || []).find((item) => item.key === select.value);
-            if (!current) return;
-            wrap.textContent = `${current.label}${current.description ? `：${current.description}` : ''}`;
+            if (!wrap) return;
+            const familyKey = document.getElementById('assetStyleFamily')?.value || 'medical_science';
+            const modeKey = document.getElementById('assetWorkflowMode')?.value || 'smart_bundle';
+            const coverKey = document.getElementById('assetCoverStyleType')?.value || '';
+            const innerKey = document.getElementById('assetInnerStyleType')?.value || '';
+            const familyMeta = assetStyleFamilyMap[familyKey] || assetStyleFamilyMap.medical_science;
+            const coverMeta = (assetStyleTypeDefinitions || []).find((item) => item.key === coverKey) || {};
+            const innerMeta = (assetStyleTypeDefinitions || []).find((item) => item.key === innerKey) || {};
+            wrap.textContent = `${familyMeta.label}：${familyMeta.description} 当前模式：${assetWorkflowModeMap[modeKey] || ''} 封面样式：${coverMeta.label || '-'}${modeKey === 'smart_bundle' ? ` ｜ 内页样式：${innerMeta.label || '-'}` : ''}`;
         }
-        
+
+        function renderAssetStyleOptions(selectId, optionKeys, selectedKey) {
+            const select = document.getElementById(selectId);
+            if (!select) return;
+            const uniqueKeys = Array.from(new Set(optionKeys || []));
+            const options = uniqueKeys.map((key) => {
+                const meta = (assetStyleTypeDefinitions || []).find((item) => item.key === key);
+                if (!meta) return '';
+                return `<option value="${meta.key}">${escapeHtml(meta.label)}${meta.description ? `｜${escapeHtml(meta.description)}` : ''}</option>`;
+            }).filter(Boolean);
+            select.innerHTML = options.join('');
+            if (selectedKey && uniqueKeys.includes(selectedKey)) {
+                select.value = selectedKey;
+            }
+        }
+
+        function refreshAssetWorkflowControls() {
+            const familyKey = document.getElementById('assetStyleFamily')?.value || 'medical_science';
+            const modeKey = document.getElementById('assetWorkflowMode')?.value || 'smart_bundle';
+            const familyMeta = assetStyleFamilyMap[familyKey] || assetStyleFamilyMap.medical_science;
+            renderAssetStyleOptions('assetCoverStyleType', familyMeta.coverOptions, familyMeta.defaultCover);
+            renderAssetStyleOptions('assetInnerStyleType', familyMeta.innerOptions, familyMeta.defaultInner);
+            const innerWrap = document.getElementById('assetInnerStyleWrap');
+            if (innerWrap) {
+                innerWrap.style.display = modeKey === 'smart_bundle' ? 'block' : 'none';
+            }
+            const modeHelp = document.getElementById('assetWorkflowModeHelp');
+            if (modeHelp) {
+                modeHelp.textContent = assetWorkflowModeMap[modeKey] || '';
+            }
+            const familyHelp = document.getElementById('assetStyleFamilyHelp');
+            if (familyHelp) {
+                familyHelp.textContent = familyMeta.description || '';
+            }
+            refreshAssetStyleTypeHelp();
+        }
+
+        function resolveAssetWorkflowConfig() {
+            const modeKey = document.getElementById('assetWorkflowMode')?.value || 'smart_bundle';
+            const familyKey = document.getElementById('assetStyleFamily')?.value || 'medical_science';
+            const customPrompt = (document.getElementById('assetCustomPrompt')?.value || '').trim();
+            const coverStyleType = document.getElementById('assetCoverStyleType')?.value || '';
+            const innerStyleType = document.getElementById('assetInnerStyleType')?.value || '';
+            let styleType = coverStyleType || 'medical_science';
+            if (modeKey === 'inner_only') {
+                styleType = innerStyleType || coverStyleType || 'knowledge_card';
+            }
+            return {
+                modeKey,
+                familyKey,
+                coverStyleType,
+                innerStyleType,
+                styleType,
+                customPrompt,
+            };
+        }
+
+        function buildImageWorkflowSelectedContent() {
+            const selectedContent = getSelectedContent();
+            const config = resolveAssetWorkflowConfig();
+            const coverMeta = (assetStyleTypeDefinitions || []).find((item) => item.key === config.coverStyleType) || {};
+            const innerMeta = (assetStyleTypeDefinitions || []).find((item) => item.key === config.innerStyleType) || {};
+            const familyMeta = assetStyleFamilyMap[config.familyKey] || assetStyleFamilyMap.medical_science;
+            const guideLines = [
+                `图片工作流模式：${config.modeKey}`,
+                `图片主类型：${familyMeta.label}`,
+                `封面样式：${coverMeta.label || config.coverStyleType || '-'}`,
+            ];
+            if (config.modeKey === 'smart_bundle') {
+                guideLines.push(`内页样式：${innerMeta.label || config.innerStyleType || '-'}`);
+                guideLines.push('请先拆出封面重点，再拆出内页信息块和讲解结构。');
+            } else if (config.modeKey === 'cover_only') {
+                guideLines.push('当前只做封面/主图，不需要扩展内页。');
+            } else if (config.modeKey === 'inner_only') {
+                guideLines.push(`内页样式：${innerMeta.label || config.innerStyleType || '-'}`);
+                guideLines.push('当前只做内页，重点放结构化信息，不要强做封面大字报。');
+            } else {
+                guideLines.push('当前按自定义图片提示词优先执行。');
+            }
+            if (config.customPrompt) {
+                guideLines.push(`自定义图片提示词：${config.customPrompt}`);
+            }
+            return [selectedContent, guideLines.join('\n')].filter(Boolean).join('\n\n');
+        }
+
+        function toggleCopyCustomInputs() {
+            const personaMode = document.getElementById('copyPersona')?.value;
+            const sceneMode = document.getElementById('copyScene')?.value;
+            document.getElementById('customPersona').style.display = personaMode === 'custom' ? 'block' : 'none';
+            document.getElementById('customScene').style.display = sceneMode === 'custom' ? 'block' : 'none';
+        }
+
+        function buildCopyCardText(card) {
+            const rows = [
+                ['人设', card?.persona],
+                ['场景', card?.scene],
+                ['软植入', card?.insertion],
+                ['标题', card?.title],
+                ['开头钩子', card?.hook],
+                ['正文', card?.body],
+                ['互动结尾', card?.ending],
+            ];
+            return rows
+                .filter(([, value]) => String(value || '').trim())
+                .map(([label, value]) => `${label}：${String(value || '').trim()}`)
+                .join('\n');
+        }
+
+        function normalizeCopyCards(cards) {
+            return (cards || []).map((card) => {
+                const normalized = {
+                    persona: card?.persona || '',
+                    scene: card?.scene || '',
+                    insertion: card?.insertion || '',
+                    title: card?.title || '分享笔记',
+                    hook: card?.hook || '',
+                    body: card?.body || '',
+                    ending: card?.ending || '',
+                };
+                normalized.copy_text = card?.copy_text || buildCopyCardText(normalized);
+                return normalized;
+            });
+        }
+
+        function renderCopySummary() {
+            const summary = [];
+            if (generatorContext.persona) summary.push(`人设：${generatorContext.persona}`);
+            if (generatorContext.scene) summary.push(`场景：${generatorContext.scene}`);
+            if (generatorContext.product) summary.push(`软植入：${generatorContext.product}`);
+            if (generatorContext.goal) summary.push(`目标：${generatorContext.goal}`);
+            document.getElementById('copySummaryBar').textContent = summary.join(' ｜ ');
+        }
+
+        function renderCopyCards() {
+            const wrap = document.getElementById('copyCardsWrap');
+            if (!wrap) return;
+            wrap.innerHTML = copyCards.map((card, index) => `
+                <div class="col-lg-4">
+                    <div class="copy-card ${index === selectedVersion ? 'selected' : ''}" onclick="selectVersion(${index})">
+                        <div class="copy-chip-row">
+                            ${card.persona ? `<span class="copy-chip">${escapeHtml(card.persona)}</span>` : ''}
+                            ${card.scene ? `<span class="copy-chip">${escapeHtml(card.scene)}</span>` : ''}
+                            ${card.insertion ? `<span class="copy-chip">${escapeHtml(card.insertion)}</span>` : ''}
+                        </div>
+                        <div class="copy-title">${escapeHtml(card.title)}</div>
+                        <div class="copy-hook"><strong>开头钩子：</strong> ${escapeHtml(card.hook || '系统已自动生成钩子')}</div>
+                        <div class="copy-body">${escapeHtml(card.body)}</div>
+                        <div class="copy-ending"><strong>互动结尾：</strong> ${escapeHtml(card.ending || '')}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
         async function generateCopy() {
             document.getElementById('loading').style.display = 'block';
             document.getElementById('generateBtn').disabled = true;
-            
-            // 获取用户自定义提示词
-            const userPrompt = document.getElementById('userPrompt').value.trim();
-            
+
             try {
                 const res = await fetch('/api/generate_copy', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         registration_id: {{ registration.id }},
-                        user_prompt: userPrompt,
-                        fast_mode: document.getElementById('fastMode') ? document.getElementById('fastMode').checked : true
+                        user_prompt: document.getElementById('userPrompt').value.trim(),
+                        fast_mode: document.getElementById('fastMode') ? document.getElementById('fastMode').checked : true,
+                        persona_key: document.getElementById('copyPersona').value,
+                        custom_persona: document.getElementById('customPersona').value.trim(),
+                        scene_key: document.getElementById('copyScene').value,
+                        custom_scene: document.getElementById('customScene').value.trim(),
+                        product_key: document.getElementById('copyProduct').value,
+                        copy_goal: document.getElementById('copyGoal').value,
                     })
                 });
                 const data = await res.json();
-                
+
                 if (data.success) {
-                    titles = data.titles || [];
-                    versions = data.versions || [];
-                    // 如果版本里已经包含“标题+内文”，就不再单独展示标题区
-                    if (versions.length > 0 && versions[0].includes('标题：')) {
-                        titles = [];
-                        document.getElementById('titles').innerHTML = '';
-                    } else {
-                        showTitles(titles);
+                    generatorContext = data.generator_context || {};
+                    copyCards = normalizeCopyCards(data.cards);
+                    versions = copyCards.map((card) => card.copy_text);
+                    titles = copyCards.map((card) => card.title);
+                    selectedVersion = 0;
+                    selectedTitle = 0;
+                    renderCopySummary();
+                    renderCopyCards();
+                    document.getElementById('resultArea').style.display = 'block';
+                    document.getElementById('creativePackArea').style.display = 'none';
+                    document.getElementById('creativePackList').innerHTML = '';
+                    document.getElementById('graphicBundleArea').style.display = 'none';
+                    document.getElementById('graphicBundleList').innerHTML = '';
+                    document.getElementById('assetTaskArea').style.display = 'none';
+                    document.getElementById('assetTaskList').innerHTML = '';
+                    window.latestCreativeAssets = [];
+                    window.latestGraphicBundles = [];
+                    window.latestGeneratedImages = [];
+                    if (copyCards.length > 0) {
+                        await checkCompliance(getSelectedContent());
                     }
-                    showVersions(versions);
                     document.getElementById('loading').style.display = 'none';
                     document.getElementById('generateBtn').disabled = false;
                     return true;
                 }
-            } catch(e) {
+                alert(data.message || '生成失败，请重试');
+            } catch (e) {
                 alert('生成失败，请重试');
             }
-            
+
             document.getElementById('loading').style.display = 'none';
             document.getElementById('generateBtn').disabled = false;
             return false;
         }
-        
-        function showTitles(tlist) {
-            if (!tlist || tlist.length === 0) return;
-            
-            selectedTitle = 0;
-            let html = '';
-            tlist.forEach((t, i) => {
-                html += `<span class="badge bg-danger-subtle text-danger fs-6 p-2" style="cursor:pointer;" onclick="selectTitle(${i})" id="title-${i}">${t}</span>`;
-            });
-            document.getElementById('titles').innerHTML = html;
-            // 默认选中第一个
-            document.getElementById('title-0').classList.add('bg-danger');
-            document.getElementById('title-0').classList.remove('bg-danger-subtle', 'text-danger');
-        }
-        
-        function selectTitle(i) {
-            selectedTitle = i;
-            // 更新选中状态
-            for (let j = 0; j < titles.length; j++) {
-                const el = document.getElementById('title-' + j);
-                if (j === i) {
-                    el.classList.add('bg-danger');
-                    el.classList.remove('bg-danger-subtle', 'text-danger');
-                } else {
-                    el.classList.remove('bg-danger');
-                    el.classList.add('bg-danger-subtle', 'text-danger');
-                }
-            }
-        }
-        
-        function showVersions(vlist) {
-            selectedVersion = 0;
-            let html = '';
-            vlist.forEach((v, i) => {
-                html += `<div class="version-card ${i===0?'selected':''}" onclick="selectVersion(${i})">
-                    <pre style="white-space: pre-wrap; font-size: 13px; margin: 0;">${v}</pre>
-                </div>`;
-            });
-            document.getElementById('versions').innerHTML = html;
-            document.getElementById('resultArea').style.display = 'block';
-            document.getElementById('creativePackArea').style.display = 'none';
-            document.getElementById('creativePackList').innerHTML = '';
-            document.getElementById('graphicBundleArea').style.display = 'none';
-            document.getElementById('graphicBundleList').innerHTML = '';
-            document.getElementById('assetTaskArea').style.display = 'none';
-            document.getElementById('assetTaskList').innerHTML = '';
-            window.latestCreativeAssets = [];
-            window.latestGraphicBundles = [];
-            window.latestGeneratedImages = [];
-            if (versions.length > 0) {
-                checkCompliance(versions[0]);
-            }
-        }
-        
-        function selectVersion(i) {
-            selectedVersion = i;
-            document.querySelectorAll('.version-card').forEach((el, idx) => {
-                el.classList.toggle('selected', idx === i);
-            });
-            checkCompliance(versions[i]);
+
+        function selectVersion(index) {
+            selectedVersion = index;
+            selectedTitle = index;
+            renderCopyCards();
+            checkCompliance(getSelectedContent());
         }
         
         async function checkCompliance(content) {
@@ -438,21 +918,14 @@
                 alert('请先生成文案');
                 return;
             }
-            // 如果没有选中，默认选第一个
             if (selectedVersion === undefined || selectedVersion < 0) {
                 selectedVersion = 0;
-                document.querySelectorAll('.version-card').forEach((el, idx) => {
-                    el.classList.toggle('selected', idx === 0);
-                });
+                selectedTitle = 0;
+                renderCopyCards();
             }
-            
-            // 若版本已包含“标题+内文”，直接复制该版本
-            let copyContent = versions[selectedVersion];
-            if (!(copyContent.includes('标题：') && copyContent.includes('内文：')) && titles && titles[selectedTitle]) {
-                copyContent = '【' + titles[selectedTitle] + '】\n\n' + copyContent;
-            }
+            const current = copyCards[selectedVersion];
+            const copyContent = current ? current.copy_text : (versions[selectedVersion] || versions[0] || '');
 
-            // 优先现代剪贴板API，失败则降级到textarea方案（HTTP场景常见）
             try {
                 if (navigator.clipboard && window.isSecureContext) {
                     await navigator.clipboard.writeText(copyContent);
@@ -483,6 +956,9 @@
         }
 
         function getSelectedContent() {
+            if (copyCards && copyCards.length > 0) {
+                return copyCards[selectedVersion]?.copy_text || copyCards[0]?.copy_text || '';
+            }
             if (!versions || versions.length === 0) return '';
             return versions[selectedVersion] || versions[0] || '';
         }
@@ -510,12 +986,18 @@
         }
 
         async function generateCreativePack() {
+            const workflow = resolveAssetWorkflowConfig();
             const res = await fetch('/api/generate_creative_pack', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
                     registration_id: {{ registration.id }},
-                    selected_content: getSelectedContent()
+                    selected_content: buildImageWorkflowSelectedContent(),
+                    style_type: workflow.styleType,
+                    cover_style_type: workflow.coverStyleType,
+                    inner_style_type: workflow.innerStyleType,
+                    generation_mode: workflow.modeKey,
+                    custom_prompt: workflow.customPrompt,
                 })
             });
             const data = await res.json();
@@ -560,13 +1042,19 @@
                 const ok = await generateCopy();
                 if (!ok) return;
             }
+            const workflow = resolveAssetWorkflowConfig();
 
             const res = await fetch('/api/generate_graphic_article_bundle', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
                     registration_id: {{ registration.id }},
-                    selected_content: getSelectedContent()
+                    selected_content: buildImageWorkflowSelectedContent(),
+                    style_type: workflow.styleType,
+                    cover_style_type: workflow.coverStyleType,
+                    inner_style_type: workflow.innerStyleType,
+                    generation_mode: workflow.modeKey,
+                    custom_prompt: workflow.customPrompt,
                 })
             });
             const data = await res.json();
@@ -664,6 +1152,7 @@
                 const ok = await generateCopy();
                 if (!ok) return;
             }
+            const workflow = resolveAssetWorkflowConfig();
 
             document.getElementById('assetTaskArea').style.display = 'block';
             document.getElementById('assetTaskMsg').textContent = '正在创建图片任务...';
@@ -675,9 +1164,13 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
                     registration_id: {{ registration.id }},
-                    selected_content: getSelectedContent(),
+                    selected_content: buildImageWorkflowSelectedContent(),
                     title_hint: selectedTitleText,
-                    style_type: document.getElementById('assetStyleType').value,
+                    style_type: workflow.styleType,
+                    cover_style_type: workflow.coverStyleType,
+                    inner_style_type: workflow.innerStyleType,
+                    generation_mode: workflow.modeKey,
+                    custom_prompt: workflow.customPrompt,
                     image_count: parseInt(document.getElementById('assetImageCount').value || '3', 10)
                 })
             });
@@ -727,7 +1220,8 @@
                 alert('请先生成文案');
                 return;
             }
-            const current = versions[selectedVersion] || versions[0];
+            const currentCard = copyCards[selectedVersion] || copyCards[0];
+            const current = currentCard ? (currentCard.body || currentCard.copy_text) : (versions[selectedVersion] || versions[0]);
             const res = await fetch('/api/humanize_copy', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -735,9 +1229,16 @@
             });
             const data = await res.json();
             if (data.success) {
-                versions[selectedVersion] = data.content;
-                showVersions(versions);
-                selectVersion(selectedVersion || 0);
+                if (currentCard) {
+                    currentCard.body = data.content;
+                    currentCard.copy_text = buildCopyCardText(currentCard);
+                    versions[selectedVersion] = currentCard.copy_text;
+                    titles[selectedVersion] = currentCard.title;
+                    renderCopyCards();
+                    selectVersion(selectedVersion || 0);
+                } else {
+                    versions[selectedVersion] = data.content;
+                }
                 alert('已完成真人化重写');
             } else {
                 alert(data.message || '重写失败');
@@ -765,27 +1266,10 @@
                     registration_id: {{ registration.id }},
                     xhs_profile_link: document.getElementById('xhs_profile_link').value,
                     xhs_link: document.getElementById('xhs_link').value,
-                    xhs_views: parseInt(document.getElementById('xhs_views').value),
-                    xhs_likes: parseInt(document.getElementById('xhs_likes').value),
-                    xhs_favorites: parseInt(document.getElementById('xhs_favorites').value),
-                    xhs_comments: parseInt(document.getElementById('xhs_comments').value),
-                    douyin_link: document.getElementById('douyin_link').value,
-                    douyin_views: parseInt(document.getElementById('douyin_views').value),
-                    douyin_likes: parseInt(document.getElementById('douyin_likes').value),
-                    douyin_favorites: parseInt(document.getElementById('douyin_favorites').value),
-                    douyin_comments: parseInt(document.getElementById('douyin_comments').value),
-                    video_link: document.getElementById('video_link').value,
-                    video_views: parseInt(document.getElementById('video_views').value),
-                    video_likes: parseInt(document.getElementById('video_likes').value),
-                    video_favorites: parseInt(document.getElementById('video_favorites').value),
-                    video_comments: parseInt(document.getElementById('video_comments').value),
-                    weibo_link: document.getElementById('weibo_link').value,
-                    weibo_views: parseInt(document.getElementById('weibo_views').value),
-                    weibo_likes: parseInt(document.getElementById('weibo_likes').value),
-                    weibo_favorites: parseInt(document.getElementById('weibo_favorites').value),
-                    weibo_comments: parseInt(document.getElementById('weibo_comments').value),
-                    note_title: document.getElementById('note_title').value,
-                    note_content: document.getElementById('note_content').value
+                    xhs_views: parseInt(document.getElementById('xhs_views').value || '0', 10),
+                    xhs_likes: parseInt(document.getElementById('xhs_likes').value || '0', 10),
+                    xhs_favorites: parseInt(document.getElementById('xhs_favorites').value || '0', 10),
+                    xhs_comments: parseInt(document.getElementById('xhs_comments').value || '0', 10)
                 })
             });
             
@@ -802,7 +1286,7 @@
         async function updateData() {
             const xhsLink = document.getElementById('xhs_link').value;
             if (!xhsLink) {
-                alert('请先填写完整多平台链接和数据');
+                alert('请先填写小红书链接和数据');
                 return;
             }
             
@@ -813,27 +1297,10 @@
                     registration_id: {{ registration.id }},
                     xhs_profile_link: document.getElementById('xhs_profile_link').value,
                     xhs_link: document.getElementById('xhs_link').value,
-                    xhs_views: parseInt(document.getElementById('xhs_views').value),
-                    xhs_likes: parseInt(document.getElementById('xhs_likes').value),
-                    xhs_favorites: parseInt(document.getElementById('xhs_favorites').value),
-                    xhs_comments: parseInt(document.getElementById('xhs_comments').value),
-                    douyin_link: document.getElementById('douyin_link').value,
-                    douyin_views: parseInt(document.getElementById('douyin_views').value),
-                    douyin_likes: parseInt(document.getElementById('douyin_likes').value),
-                    douyin_favorites: parseInt(document.getElementById('douyin_favorites').value),
-                    douyin_comments: parseInt(document.getElementById('douyin_comments').value),
-                    video_link: document.getElementById('video_link').value,
-                    video_views: parseInt(document.getElementById('video_views').value),
-                    video_likes: parseInt(document.getElementById('video_likes').value),
-                    video_favorites: parseInt(document.getElementById('video_favorites').value),
-                    video_comments: parseInt(document.getElementById('video_comments').value),
-                    weibo_link: document.getElementById('weibo_link').value,
-                    weibo_views: parseInt(document.getElementById('weibo_views').value),
-                    weibo_likes: parseInt(document.getElementById('weibo_likes').value),
-                    weibo_favorites: parseInt(document.getElementById('weibo_favorites').value),
-                    weibo_comments: parseInt(document.getElementById('weibo_comments').value),
-                    note_title: document.getElementById('note_title').value,
-                    note_content: document.getElementById('note_content').value
+                    xhs_views: parseInt(document.getElementById('xhs_views').value || '0', 10),
+                    xhs_likes: parseInt(document.getElementById('xhs_likes').value || '0', 10),
+                    xhs_favorites: parseInt(document.getElementById('xhs_favorites').value || '0', 10),
+                    xhs_comments: parseInt(document.getElementById('xhs_comments').value || '0', 10)
                 })
             });
             
@@ -845,7 +1312,14 @@
             }
         }
 
-        document.getElementById('assetStyleType')?.addEventListener('change', refreshAssetStyleTypeHelp);
+        document.getElementById('copyPersona')?.addEventListener('change', toggleCopyCustomInputs);
+        document.getElementById('copyScene')?.addEventListener('change', toggleCopyCustomInputs);
+        toggleCopyCustomInputs();
+        document.getElementById('assetWorkflowMode')?.addEventListener('change', refreshAssetWorkflowControls);
+        document.getElementById('assetStyleFamily')?.addEventListener('change', refreshAssetWorkflowControls);
+        document.getElementById('assetCoverStyleType')?.addEventListener('change', refreshAssetStyleTypeHelp);
+        document.getElementById('assetInnerStyleType')?.addEventListener('change', refreshAssetStyleTypeHelp);
+        refreshAssetWorkflowControls();
         refreshAssetStyleTypeHelp();
     </script>
     </div>

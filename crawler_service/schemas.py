@@ -22,6 +22,10 @@ class AccountPostsRequest(BaseModel):
     targets: List[SyncTarget] = Field(default_factory=list)
     batch_name: str = ''
     source_channel: str = 'Crawler服务'
+    current_month_only: bool = True
+    date_from: str = ''
+    date_to: str = ''
+    max_posts_per_account: int = 60
 
 
 class CreatorAccountRow(BaseModel):

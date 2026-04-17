@@ -22,8 +22,15 @@ class MockCrawlerProvider(BaseCrawlerProvider):
         posts = []
         snapshots = []
         now = datetime.now()
+        max_posts = min(max(_safe_int(getattr(payload, 'max_posts_per_account', 60), 60), 1), self.settings.xhs_max_posts_per_account)
+        date_from = self._parse_date_boundary(getattr(payload, 'date_from', ''), start=True)
+        date_to = self._parse_date_boundary(getattr(payload, 'date_to', ''), start=False)
+        if getattr(payload, 'current_month_only', False) and not date_from:
+            date_from = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        if getattr(payload, 'current_month_only', False) and not date_to:
+            date_to = now
 
-        for index, target in enumerate(payload.targets[: self.settings.xhs_max_posts_per_account], start=1):
+        for index, target in enumerate(payload.targets, start=1):
             profile_url = (target.profile_url or '').strip()
             account_handle = (target.account_handle or '').strip() or f'mock_handle_{index}'
             if not profile_url:
@@ -46,16 +53,20 @@ class MockCrawlerProvider(BaseCrawlerProvider):
 
             total_views = 0
             total_interactions = 0
-            for post_index in range(self.settings.mock_posts_per_account):
+            for post_index in range(max_posts):
                 post_seed = seed + post_index * 97
                 post_id = f'mock{post_seed:08x}'
                 views = 200 + (post_seed % 3000)
                 likes = 20 + (post_seed % 200)
                 favorites = 10 + (post_seed % 120)
                 comments = 5 + (post_seed % 80)
+                publish_time = now - timedelta(days=post_index * 2, hours=index)
+                if date_from and publish_time < date_from:
+                    continue
+                if date_to and publish_time > date_to:
+                    continue
                 total_views += views
                 total_interactions += likes + favorites + comments
-                publish_time = now - timedelta(hours=post_index + index)
                 posts.append({
                     'platform': 'xhs',
                     'account_handle': account_handle,
@@ -106,5 +117,23 @@ class MockCrawlerProvider(BaseCrawlerProvider):
                 'target_count': len(payload.targets),
                 'returned_account_count': len(accounts),
                 'returned_post_count': len(posts),
+                'current_month_only': bool(getattr(payload, 'current_month_only', False)),
+                'date_from': getattr(payload, 'date_from', ''),
+                'date_to': getattr(payload, 'date_to', ''),
             },
         }
+
+    def _parse_date_boundary(self, raw, start=True):
+        text = (raw or '').strip()
+        if not text:
+            return None
+        formats = ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d']
+        for fmt in formats:
+            try:
+                parsed = datetime.strptime(text, fmt)
+                if fmt == '%Y-%m-%d' and not start:
+                    return parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
+                return parsed
+            except ValueError:
+                continue
+        return None
