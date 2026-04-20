@@ -4845,6 +4845,7 @@ def _build_crawler_probe_payload():
     ]
 
     items = []
+    payload_map = {}
 
     def resolve_metric_sources(payload):
         metric_sources = payload.get('metric_sources') or {}
@@ -4864,6 +4865,7 @@ def _build_crawler_probe_payload():
         path = os.path.join(debug_output_dir, filename)
         exists = os.path.exists(path)
         payload = _read_crawler_probe_file(path) if exists else {}
+        payload_map[key] = payload
         diagnosis = payload.get('diagnosis') or {}
         summary = diagnosis.get('summary') or ('已生成探测文件' if exists else '暂无探测结果')
         provider = payload.get('provider') or (payload.get('health') or {}).get('provider') or ''
@@ -4887,11 +4889,56 @@ def _build_crawler_probe_payload():
         })
 
     latest_success = next((item for item in items if item['exists']), None)
+    existing_items = [item for item in items if item['exists']]
+    bundle_payload = payload_map.get('bundle_probe') or {}
+    bundle_diagnosis = bundle_payload.get('diagnosis') or {}
+    summary_status = 'pending'
+    summary_message = '尚未运行 crawler 联调探测，建议先执行 verify/probe 脚本。'
+    summary_actions = ['先运行 crawler_service/scripts/verify_xhs_login_state.py 验证登录态']
+    metric_highlights = []
+    if existing_items:
+        if bundle_diagnosis:
+            summary_status = bundle_diagnosis.get('status') or 'partial'
+            summary_message = bundle_diagnosis.get('summary') or 'crawler 联调已有结果'
+            summary_actions = (bundle_diagnosis.get('suggested_actions') or [])[:5]
+            for scope_key, scope_label in [('trends', '热点'), ('account_posts', '账号')]:
+                coverage = ((bundle_payload.get(scope_key) or {}).get('metric_coverage') or {})
+                if not isinstance(coverage, dict):
+                    continue
+                for metric_key in ['views', 'exposures', 'hot_value']:
+                    metric_row = coverage.get(metric_key) or {}
+                    if not metric_row:
+                        continue
+                    metric_highlights.append(
+                        f"{scope_label}{metric_key}={metric_row.get('hit_count', 0)}/{metric_row.get('total_count', 0)}"
+                    )
+        else:
+            statuses = {item.get('status') for item in existing_items}
+            if 'blocked' in statuses:
+                summary_status = 'blocked'
+                summary_message = '已有 crawler 联调结果，但至少有一条链路被阻塞。'
+            elif 'partial' in statuses:
+                summary_status = 'partial'
+                summary_message = 'crawler 联调已部分可用，但还需要继续校准。'
+            else:
+                summary_status = 'ready'
+                summary_message = '已有 crawler 联调结果，可以继续在主站里验证。'
+            summary_actions = []
+            for item in existing_items:
+                summary_actions.extend(item.get('suggested_actions') or [])
+            summary_actions = _unique(summary_actions)[:5]
+
     return {
         'debug_output_dir': debug_output_dir,
         'items': items,
         'has_any_result': any(item['exists'] for item in items),
         'latest_result_label': latest_success.get('label') if latest_success else '',
+        'summary': {
+            'status': summary_status,
+            'message': summary_message,
+            'suggested_actions': summary_actions,
+            'metric_highlights': metric_highlights[:6],
+        },
     }
 
 

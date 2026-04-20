@@ -2968,6 +2968,27 @@
                     <div class="col-12">
                         <strong>最近 crawler 探测</strong>
                         <div class="subtle mt-2">输出目录：${escapeHtml(crawlerProbe.debug_output_dir || '-')}</div>
+                        ${crawlerProbe.summary?.message ? `
+                            <div class="detail-card mt-3">
+                                <div class="d-flex justify-content-between align-items-center gap-2">
+                                    <strong>联调结论</strong>
+                                    <span class="badge ${
+                                        crawlerProbe.summary.status === 'ready'
+                                            ? 'bg-success'
+                                            : (crawlerProbe.summary.status === 'blocked' ? 'bg-danger' : 'bg-warning text-dark')
+                                    }">${escapeHtml(crawlerProbe.summary.status || 'pending')}</span>
+                                </div>
+                                <div class="subtle mt-2">${escapeHtml(crawlerProbe.summary.message || '-')}</div>
+                                ${(crawlerProbe.summary.metric_highlights || []).length
+                                    ? `<div class="subtle mt-2">指标覆盖：${escapeHtml((crawlerProbe.summary.metric_highlights || []).join(' ｜ '))}</div>`
+                                    : ''
+                                }
+                                ${(crawlerProbe.summary.suggested_actions || []).length
+                                    ? `<div class="subtle mt-2">下一步：${escapeHtml((crawlerProbe.summary.suggested_actions || []).join(' ｜ '))}</div>`
+                                    : ''
+                                }
+                            </div>
+                        ` : ''}
                         <div class="row g-2 mt-2">
                             ${(crawlerProbe.items || []).map((item) => `
                                 <div class="col-md-6 col-lg-4">

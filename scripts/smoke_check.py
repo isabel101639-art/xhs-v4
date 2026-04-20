@@ -77,6 +77,7 @@ def _run_runtime_diagnostics_checks(client):
     _assert('items' in crawler_probe, 'runtime-diagnostics should include crawler_probe items')
     _assert(isinstance(crawler_probe.get('items'), list), 'crawler_probe items should be a list')
     _assert(len(crawler_probe.get('items') or []) >= 5, 'crawler_probe should expose default probe slots')
+    _assert(isinstance(crawler_probe.get('summary') or {}, dict), 'crawler_probe summary should be a dict')
     existing_items = [item for item in (crawler_probe.get('items') or []) if item.get('exists')]
     for item in existing_items:
         _assert(isinstance(item.get('metric_sources') or {}, dict), 'crawler_probe metric_sources should be a dict when present')
