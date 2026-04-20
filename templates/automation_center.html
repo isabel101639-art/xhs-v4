@@ -3202,6 +3202,9 @@
             if (key === 'image_provider') {
                 return '<button class="btn btn-sm btn-outline-primary" onclick="pingImageProvider()">测试图片接口</button>';
             }
+            if (key === 'crawler_probe') {
+                return '<button class="btn btn-sm btn-outline-dark" onclick="loadDiagnostics()">刷新诊断</button><button class="btn btn-sm btn-outline-secondary" onclick="loadFirstRunPlaybooks()">刷新运行卡</button>';
+            }
             return '';
         }
 

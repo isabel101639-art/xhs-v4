@@ -1108,6 +1108,12 @@ def _build_first_run_playbooks_payload():
     hotword_ping = latest_ping_map.get('hotword', {})
     creator_ping = latest_ping_map.get('creator_sync', {})
     image_ping = latest_ping_map.get('image_provider', {})
+    crawler_probe = _build_crawler_probe_payload()
+    crawler_probe_items = {item.get('key'): item for item in (crawler_probe.get('items') or [])}
+    bundle_probe = crawler_probe_items.get('bundle_probe') or {}
+    login_verify_probe = crawler_probe_items.get('login_verify') or {}
+    trend_probe = crawler_probe_items.get('trend_probe_note_search') or {}
+    account_probe = crawler_probe_items.get('account_probe') or {}
 
     hotword_steps = [
         step_item(
@@ -1202,6 +1208,39 @@ def _build_first_run_playbooks_payload():
         ),
     ]
 
+    crawler_steps = [
+        step_item(
+            '保存 Playwright 登录态',
+            'ready' if bool((os.environ.get('PLAYWRIGHT_STORAGE_STATE_PATH') or '').strip()) else 'blocked',
+            '先运行 save_xhs_storage_state.py，把登录态保存到 PLAYWRIGHT_STORAGE_STATE_PATH。',
+            f"登录态文件：{os.environ.get('PLAYWRIGHT_STORAGE_STATE_PATH') or '-'}",
+        ),
+        step_item(
+            '验证登录态是否有效',
+            'ready' if login_verify_probe.get('status') == 'ready' else ('blocked' if login_verify_probe.get('exists') else 'pending'),
+            '运行 verify_xhs_login_state.py，确认首页/搜索页不再出现登录提示。',
+            login_verify_probe.get('summary') or '还没有登录态验证结果',
+        ),
+        step_item(
+            '执行热点探测脚本',
+            'ready' if trend_probe.get('status') == 'ready' else ('blocked' if trend_probe.get('exists') else 'pending'),
+            '运行 probe_xhs_trends.py，确认热点/爆款内容能抓到，至少阅读量和热度值有返回。',
+            trend_probe.get('summary') or '还没有热点探测结果',
+        ),
+        step_item(
+            '执行账号探测脚本',
+            'ready' if account_probe.get('status') == 'ready' else ('blocked' if account_probe.get('exists') else 'pending'),
+            '运行 probe_xhs_account_posts.py，确认账号主页、笔记列表和指标抓取正常。',
+            account_probe.get('summary') or '还没有账号探测结果',
+        ),
+        step_item(
+            '查看整包联调结论',
+            'ready' if bundle_probe.get('status') == 'ready' else ('blocked' if bundle_probe.get('exists') else 'pending'),
+            '最后运行 probe_xhs_bundle.py，并在后台诊断页确认联调结论卡为 ready。',
+            bundle_probe.get('summary') or crawler_probe.get('summary', {}).get('message') or '还没有整包联调结果',
+        ),
+    ]
+
     playbooks = [
         {
             'key': 'hotword',
@@ -1226,6 +1265,14 @@ def _build_first_run_playbooks_payload():
             'action_label': '测试图片接口',
             'action_key': 'image_provider',
             'steps': image_steps,
+        },
+        {
+            'key': 'crawler_probe',
+            'label': 'Playwright 真实联调运行卡',
+            'description': '把登录态验证、热点探测、账号探测和整包联调结果串成一条完整检查链。',
+            'action_label': '刷新诊断',
+            'action_key': 'crawler_probe',
+            'steps': crawler_steps,
         },
     ]
 
