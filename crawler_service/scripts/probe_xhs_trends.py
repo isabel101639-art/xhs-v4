@@ -55,6 +55,10 @@ async def main():
     summary = {
         'provider': settings.provider,
         'health': health,
+        'metric_support': {
+            'trend_views': health.get('supports_trend_views'),
+            'trend_hot_value': health.get('supports_trend_hot_value'),
+        },
         'trend_type': trend_type,
         'keyword_count': len(keywords),
         'item_count': len(result.get('items') or []),

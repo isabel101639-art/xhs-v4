@@ -65,6 +65,10 @@ async def main():
     summary = {
         'provider': settings.provider,
         'health': health,
+        'metric_support': {
+            'account_views': health.get('supports_account_views'),
+            'account_exposures': health.get('supports_account_exposures'),
+        },
         'target': {
             'profile_url': profile_url,
             'account_handle': account_handle,

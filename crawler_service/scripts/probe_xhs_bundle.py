@@ -38,6 +38,12 @@ async def main():
     summary = {
         'provider': settings.provider,
         'health': health,
+        'metric_support': {
+            'account_views': health.get('supports_account_views'),
+            'account_exposures': health.get('supports_account_exposures'),
+            'trend_views': health.get('supports_trend_views'),
+            'trend_hot_value': health.get('supports_trend_hot_value'),
+        },
         'trends': {'enabled': False, 'skipped': True},
         'account_posts': {'enabled': False, 'skipped': True},
     }

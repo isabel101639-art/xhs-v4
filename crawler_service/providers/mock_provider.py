@@ -17,6 +17,17 @@ def _deterministic_seed(*parts):
 
 
 class MockCrawlerProvider(BaseCrawlerProvider):
+    async def healthcheck(self):
+        return {
+            'provider': 'mock',
+            'ready': True,
+            'supports_account_views': True,
+            'supports_account_exposures': True,
+            'supports_trend_views': True,
+            'supports_trend_hot_value': True,
+            'metric_notes': 'mock provider 会返回模拟阅读量与传播量，用于联调链路，不代表真实小红书口径。',
+        }
+
     async def fetch_account_posts(self, payload):
         accounts = []
         posts = []

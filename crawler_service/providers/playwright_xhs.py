@@ -471,6 +471,11 @@ class PlaywrightXHSCrawlerProvider(BaseCrawlerProvider):
             'storage_state_required': True,
             'supports_account_posts': True,
             'supports_trends': True,
+            'supports_account_views': True,
+            'supports_account_exposures': False,
+            'supports_trend_views': True,
+            'supports_trend_hot_value': True,
+            'metric_notes': '当前 Playwright 版本可抓阅读量/热度；账号主页的传播量(exposures) 还没有稳定来源，真实返回先按 0 处理。',
             'search_url_template': self.settings.xhs_search_url_template,
             'post_card_selectors': _selector_candidates(
                 self.settings.xhs_post_card_selector,

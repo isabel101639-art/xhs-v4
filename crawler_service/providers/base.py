@@ -13,6 +13,11 @@ class BaseCrawlerProvider(ABC):
         return {
             'provider': self.name,
             'ready': True,
+            'supports_account_views': False,
+            'supports_account_exposures': False,
+            'supports_trend_views': False,
+            'supports_trend_hot_value': False,
+            'metric_notes': '',
         }
 
     @abstractmethod

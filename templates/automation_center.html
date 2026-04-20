@@ -2917,6 +2917,9 @@
                         <div class="subtle">Provider：${escapeHtml(hotwordCrawlerHealth.provider || '-')}</div>
                         <div class="subtle">登录态文件：${escapeHtml(hotwordCrawlerHealth.storage_state_path || '-')}</div>
                         <div class="subtle">登录态存在：${hotwordCrawlerHealth.storage_state_exists === true ? '是' : (hotwordCrawlerHealth.storage_state_exists === false ? '否' : '-')}</div>
+                        <div class="subtle">阅读量支持：${hotwordCrawlerHealth.supports_trend_views === true ? '是' : (hotwordCrawlerHealth.supports_trend_views === false ? '否' : '-')}</div>
+                        <div class="subtle">热度值支持：${hotwordCrawlerHealth.supports_trend_hot_value === true ? '是' : (hotwordCrawlerHealth.supports_trend_hot_value === false ? '否' : '-')}</div>
+                        ${hotwordCrawlerHealth.metric_notes ? `<div class="subtle mt-1">口径说明：${escapeHtml(hotwordCrawlerHealth.metric_notes)}</div>` : ''}
                     </div>
                     <div class="col-lg-3">
                         <strong>账号同步 API 健康</strong>
@@ -2928,6 +2931,9 @@
                         <div class="subtle">Provider：${escapeHtml(creatorCrawlerHealth.provider || '-')}</div>
                         <div class="subtle">登录态文件：${escapeHtml(creatorCrawlerHealth.storage_state_path || '-')}</div>
                         <div class="subtle">登录态存在：${creatorCrawlerHealth.storage_state_exists === true ? '是' : (creatorCrawlerHealth.storage_state_exists === false ? '否' : '-')}</div>
+                        <div class="subtle">笔记阅读量支持：${creatorCrawlerHealth.supports_account_views === true ? '是' : (creatorCrawlerHealth.supports_account_views === false ? '否' : '-')}</div>
+                        <div class="subtle">传播量支持：${creatorCrawlerHealth.supports_account_exposures === true ? '是' : (creatorCrawlerHealth.supports_account_exposures === false ? '否' : '-')}</div>
+                        ${creatorCrawlerHealth.metric_notes ? `<div class="subtle mt-1">口径说明：${escapeHtml(creatorCrawlerHealth.metric_notes)}</div>` : ''}
                     </div>
                     <div class="col-lg-3">
                         <strong>图片接口健康</strong>
