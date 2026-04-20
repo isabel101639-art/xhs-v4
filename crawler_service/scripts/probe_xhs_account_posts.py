@@ -12,6 +12,7 @@ if ROOT_DIR not in sys.path:
 
 async def main():
     from crawler_service.config import get_settings
+    from crawler_service.probe_diagnostics import build_account_probe_diagnosis
     from crawler_service.providers import build_provider
     from crawler_service.schemas import AccountPostsRequest, SyncTarget
 
@@ -61,7 +62,7 @@ async def main():
     output_path = output_dir / 'xhs_account_probe.json'
     output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
 
-    print(json.dumps({
+    summary = {
         'provider': settings.provider,
         'health': health,
         'target': {
@@ -74,7 +75,9 @@ async def main():
         'output_path': str(output_path),
         'sample_account': (result.get('accounts') or [])[:1],
         'sample_posts': (result.get('posts') or [])[:5],
-    }, ensure_ascii=False, indent=2))
+    }
+    summary['diagnosis'] = build_account_probe_diagnosis(summary)
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 
 if __name__ == '__main__':

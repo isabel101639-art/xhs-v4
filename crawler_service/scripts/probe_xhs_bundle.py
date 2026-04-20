@@ -19,6 +19,7 @@ def _env_flag(name, default=False):
 
 async def main():
     from crawler_service.config import get_settings
+    from crawler_service.probe_diagnostics import build_bundle_diagnosis
     from crawler_service.providers import build_provider
     from crawler_service.schemas import AccountPostsRequest, SyncTarget, TrendQueryRequest
 
@@ -122,6 +123,7 @@ async def main():
         }
 
     bundle_output_path = output_dir / 'xhs_probe_bundle.json'
+    summary['diagnosis'] = build_bundle_diagnosis(summary)
     bundle_output_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
     summary['output_path'] = str(bundle_output_path)
     print(json.dumps(summary, ensure_ascii=False, indent=2))

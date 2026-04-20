@@ -12,6 +12,7 @@ if ROOT_DIR not in sys.path:
 
 async def main():
     from crawler_service.config import get_settings
+    from crawler_service.probe_diagnostics import build_trend_probe_diagnosis
     from crawler_service.providers import build_provider
     from crawler_service.schemas import TrendQueryRequest
 
@@ -51,7 +52,7 @@ async def main():
     output_path = output_dir / f'xhs_trends_probe_{trend_type}.json'
     output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
 
-    print(json.dumps({
+    summary = {
         'provider': settings.provider,
         'health': health,
         'trend_type': trend_type,
@@ -59,7 +60,9 @@ async def main():
         'item_count': len(result.get('items') or []),
         'output_path': str(output_path),
         'sample_items': (result.get('items') or [])[:5],
-    }, ensure_ascii=False, indent=2))
+    }
+    summary['diagnosis'] = build_trend_probe_diagnosis(summary)
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 
 if __name__ == '__main__':

@@ -23,6 +23,7 @@ async def main():
         raise SystemExit('Playwright 未安装，请先执行 crawler_service/scripts/bootstrap_venv.sh') from exc
 
     from crawler_service.config import get_settings
+    from crawler_service.probe_diagnostics import build_login_state_diagnosis
     from crawler_service.providers.playwright_xhs import PlaywrightXHSCrawlerProvider
 
     settings = get_settings()
@@ -106,6 +107,7 @@ async def main():
                 not result['home']['login_prompt_detected'] and
                 not result['search']['login_prompt_detected']
             )
+            result['diagnosis'] = build_login_state_diagnosis(result)
             output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
             print(json.dumps(result, ensure_ascii=False, indent=2))
 
