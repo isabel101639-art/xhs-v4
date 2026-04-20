@@ -66,6 +66,18 @@ def _load_automation_config_preview(client):
     return data
 
 
+def _run_runtime_diagnostics_checks(client):
+    response = client.get('/api/admin/runtime-diagnostics')
+    data = response.get_json()
+    _assert(response.status_code == 200, f'runtime-diagnostics failed with {response.status_code}')
+    _assert(data and data.get('success'), f'runtime-diagnostics failed: {data}')
+    crawler_probe = data.get('crawler_probe') or {}
+    _assert('items' in crawler_probe, 'runtime-diagnostics should include crawler_probe items')
+    _assert(isinstance(crawler_probe.get('items'), list), 'crawler_probe items should be a list')
+    _assert(len(crawler_probe.get('items') or []) >= 5, 'crawler_probe should expose default probe slots')
+    _print_check('runtime_diagnostics_crawler_probe', json.dumps(crawler_probe, ensure_ascii=False))
+
+
 def _run_creator_sync_config_checks(client):
     base_payload = {
         'creator_sync_source_channel': 'SmokeCrawler',
@@ -443,6 +455,7 @@ def main():
         _enable_admin_session(client)
 
         _run_basic_endpoint_checks(client)
+        _run_runtime_diagnostics_checks(client)
         _run_creator_sync_config_checks(client)
         _run_hotword_local_crawler_config_checks(client)
         _run_xhs_trend_template_checks(client)

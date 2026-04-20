@@ -2841,6 +2841,7 @@
             const creatorSyncHealth = data.creator_sync_health || {};
             const creatorCrawlerHealth = creatorSyncHealth.response?.health || {};
             const imageHealth = data.image_health || {};
+            const crawlerProbe = data.crawler_probe || {};
             const serviceMatrix = data.service_matrix || [];
             const deploymentBlockers = data.deployment_blockers || [];
             const launchMilestones = data.launch_milestones || {};
@@ -2956,6 +2957,27 @@
                                     </div>
                                 </div>
                             `).join('') || '<div class="text-muted">暂无服务矩阵</div>'}
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <strong>最近 crawler 探测</strong>
+                        <div class="subtle mt-2">输出目录：${escapeHtml(crawlerProbe.debug_output_dir || '-')}</div>
+                        <div class="row g-2 mt-2">
+                            ${(crawlerProbe.items || []).map((item) => `
+                                <div class="col-md-6 col-lg-4">
+                                    <div class="detail-card h-100">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <strong>${escapeHtml(item.label || item.key || '-')}</strong>
+                                            <span class="badge ${item.exists ? (item.status === 'ready' ? 'bg-success' : (item.status === 'blocked' ? 'bg-danger' : 'bg-warning text-dark')) : 'bg-secondary'}">${item.exists ? escapeHtml(item.status || 'ready') : 'missing'}</span>
+                                        </div>
+                                        <div class="subtle">说明：${escapeHtml(item.summary || '-')}</div>
+                                        <div class="subtle mt-1">Provider：${escapeHtml(item.provider || '-')}</div>
+                                        <div class="subtle">时间：${escapeHtml(item.updated_at || '-')}</div>
+                                        <div class="subtle">文件：${escapeHtml(item.path || '-')}</div>
+                                        ${(item.suggested_actions || []).length ? `<div class="subtle mt-2">建议：${escapeHtml((item.suggested_actions || []).join(' ｜ '))}</div>` : ''}
+                                    </div>
+                                </div>
+                            `).join('') || '<div class="text-muted">暂无 crawler 探测记录</div>'}
                         </div>
                     </div>
                     <div class="col-12">

@@ -47,6 +47,7 @@ def register_automation_dashboard_routes(app, helpers):
     build_capacity_readiness_payload = helpers['build_capacity_readiness_payload']
     build_recent_failed_jobs_payload = helpers['build_recent_failed_jobs_payload']
     build_service_matrix_payload = helpers['build_service_matrix_payload']
+    build_crawler_probe_payload = helpers['build_crawler_probe_payload']
     automation_runtime_config = helpers['automation_runtime_config']
     hotword_runtime_settings = helpers['hotword_runtime_settings']
     creator_sync_runtime_settings = helpers['creator_sync_runtime_settings']
@@ -233,6 +234,7 @@ def register_automation_dashboard_routes(app, helpers):
             'creator_sync_health': creator_sync_health,
             'image_health': image_health,
             'service_matrix': build_service_matrix_payload(),
+            'crawler_probe': build_crawler_probe_payload(),
             'deployment_blockers': build_deployment_blockers_payload(),
             'launch_milestones': build_launch_milestones_payload(
                 hotword_health=hotword_health,

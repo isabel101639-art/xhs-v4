@@ -4751,6 +4751,59 @@ def _creator_sync_healthcheck(timeout_seconds=3):
         }
 
 
+def _read_crawler_probe_file(path):
+    current_path = (path or '').strip()
+    if not current_path or not os.path.exists(current_path):
+        return {}
+    try:
+        with open(current_path, 'r', encoding='utf-8') as handle:
+            payload = json.load(handle)
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def _build_crawler_probe_payload():
+    debug_output_dir = (os.environ.get('XHS_DEBUG_OUTPUT_DIR') or '/tmp/xhs_crawler_debug').strip() or '/tmp/xhs_crawler_debug'
+    probe_defs = [
+        ('login_verify', '登录态验证', 'xhs_login_verify.json'),
+        ('trend_probe_note_search', '热点探测-爆款笔记', 'xhs_trends_probe_note_search.json'),
+        ('trend_probe_hot_queries', '热点探测-热搜词', 'xhs_trends_probe_hot_queries.json'),
+        ('account_probe', '账号探测', 'xhs_account_probe.json'),
+        ('bundle_probe', '整包探测', 'xhs_probe_bundle.json'),
+    ]
+
+    items = []
+    for key, label, filename in probe_defs:
+        path = os.path.join(debug_output_dir, filename)
+        exists = os.path.exists(path)
+        payload = _read_crawler_probe_file(path) if exists else {}
+        diagnosis = payload.get('diagnosis') or {}
+        summary = diagnosis.get('summary') or ('已生成探测文件' if exists else '暂无探测结果')
+        provider = payload.get('provider') or (payload.get('health') or {}).get('provider') or ''
+        suggested_actions = diagnosis.get('suggested_actions') or []
+        updated_at = _format_datetime(datetime.fromtimestamp(os.path.getmtime(path))) if exists else ''
+        items.append({
+            'key': key,
+            'label': label,
+            'exists': exists,
+            'path': path,
+            'updated_at': updated_at,
+            'provider': provider,
+            'status': diagnosis.get('status') or ('ready' if exists else 'missing'),
+            'summary': summary,
+            'suggested_actions': suggested_actions[:5],
+        })
+
+    latest_success = next((item for item in items if item['exists']), None)
+    return {
+        'debug_output_dir': debug_output_dir,
+        'items': items,
+        'has_any_result': any(item['exists'] for item in items),
+        'latest_result_label': latest_success.get('label') if latest_success else '',
+    }
+
+
 def _build_recent_failed_jobs_payload(limit=10):
     safe_limit = min(max(_safe_int(limit, 10), 1), 50)
     items = []
@@ -9788,6 +9841,7 @@ register_automation_dashboard_routes(app, {
     'build_capacity_readiness_payload': _build_capacity_readiness_payload,
     'build_recent_failed_jobs_payload': _build_recent_failed_jobs_payload,
     'build_service_matrix_payload': _build_service_matrix_payload,
+    'build_crawler_probe_payload': _build_crawler_probe_payload,
     'automation_runtime_config': _automation_runtime_config,
     'hotword_runtime_settings': _hotword_runtime_settings,
     'creator_sync_runtime_settings': _creator_sync_runtime_settings,
