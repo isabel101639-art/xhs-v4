@@ -101,12 +101,40 @@ RELATED_QUERY_STATE_CANDIDATE_PATHS = [
     ('search', 'rec_query'),
 ]
 
+DEFAULT_VIEW_HINT_TOKENS = [
+    'view', 'read', 'browse', 'pv', 'reading', 'read_num', 'readcount', 'traffic',
+]
+
+DEFAULT_EXPOSURE_HINT_TOKENS = [
+    'impression', 'exposure', 'expo', 'reach', 'show', 'display', 'impr',
+]
+
+DEFAULT_HOT_HINT_TOKENS = [
+    'hot', 'score', 'heat', 'search_cnt', 'hotvalue', 'trend',
+]
+
 
 def _safe_int(value, default=0):
     try:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _token_list_from_env(name, defaults):
+    raw = (os.environ.get(name) or '').strip()
+    items = []
+    for token in list(defaults or []):
+        current = str(token or '').strip().lower()
+        if current and current not in items:
+            items.append(current)
+    if not raw:
+        return items
+    for chunk in re.split(r'[\s,，;；]+', raw):
+        current = chunk.strip().lower()
+        if current and current not in items:
+            items.append(current)
+    return items
 
 
 def _normalize_xhs_url(url):
@@ -399,6 +427,10 @@ def _normalize_search_feed_item(item, keyword, source_channel, rank):
         publish_time_dt = _parse_state_publish_time(_state_get(item, 'noteCard.time'))
     if not publish_time_dt:
         publish_time_dt = _parse_state_publish_time(_state_get(item, 'publish_time'))
+    view_hint_tokens = _token_list_from_env('XHS_VIEWS_HINT_TOKENS', DEFAULT_VIEW_HINT_TOKENS)
+    exposure_hint_tokens = _token_list_from_env('XHS_EXPOSURE_HINT_TOKENS', DEFAULT_EXPOSURE_HINT_TOKENS)
+    hot_hint_tokens = _token_list_from_env('XHS_HOT_HINT_TOKENS', DEFAULT_HOT_HINT_TOKENS)
+
     views, views_source = _state_count_with_source(item, [
         'view_count',
         'note_card.view_count',
@@ -449,21 +481,21 @@ def _normalize_search_feed_item(item, keyword, source_channel, rank):
     if not views:
         views, views_source = _state_count_fuzzy_with_source(
             item,
-            include_tokens=['view', 'read', 'browse', 'pv'],
+            include_tokens=view_hint_tokens,
             exclude_tokens=['like', 'comment', 'collect', 'favor', 'share', 'impress', 'exposure'],
             default=views,
         )
     if not exposures:
         exposures, exposures_source = _state_count_fuzzy_with_source(
             item,
-            include_tokens=['impression', 'exposure', 'expo', 'reach'],
+            include_tokens=exposure_hint_tokens,
             exclude_tokens=['like', 'comment', 'collect', 'favor', 'share'],
             default=exposures,
         )
     if hot_value_source == 'derived_from_engagement':
         fuzzy_hot_value, fuzzy_hot_value_source = _state_count_fuzzy_with_source(
             item,
-            include_tokens=['hot', 'score', 'heat', 'search_cnt'],
+            include_tokens=hot_hint_tokens,
             exclude_tokens=['like', 'comment', 'collect', 'favor', 'share'],
             default=0,
         )

@@ -161,6 +161,40 @@ def main():
     _assert((fuzzy_profile_feed.get('metric_sources') or {}).get('exposures') == 'note_card.metrics.reach_value', 'fuzzy profile feed normalization should expose fuzzy exposures source path')
     _print_check('fuzzy_profile_feed_normalization', json.dumps(fuzzy_profile_feed, ensure_ascii=False))
 
+    os.environ['XHS_EXPOSURE_HINT_TOKENS'] = 'spread,deliver'
+    custom_hint_profile_feed = _normalize_profile_feed_item(
+        item={
+            'id': 'profile_note_003',
+            'note_card': {
+                'title': '账号页自定义提示词标题',
+                'metrics': {
+                    'deliver_value': 34567,
+                    'reading_value': 7890,
+                },
+                'interact_info': {
+                    'liked_count': 9,
+                    'collected_count': 5,
+                    'comment_count': 2,
+                },
+            },
+        },
+        profile_url='https://www.xiaohongshu.com/user/profile/demo_account',
+        account_handle='demo_account',
+        target=type('Target', (), {
+            'owner_phone': '13800000000',
+            'owner_name': '测试账号',
+            'registration_id': 0,
+            'topic_id': 0,
+            'submission_id': 0,
+        })(),
+        source_channel='CrawlerSmoke',
+        rank=3,
+    )
+    _assert(custom_hint_profile_feed.get('exposures') == 34567, 'custom exposure hints should map deliver_value to exposures')
+    _assert((custom_hint_profile_feed.get('metric_sources') or {}).get('exposures') == 'note_card.metrics.deliver_value', 'custom exposure hints should expose custom source path')
+    _print_check('custom_hint_profile_feed_normalization', json.dumps(custom_hint_profile_feed, ensure_ascii=False))
+    os.environ.pop('XHS_EXPOSURE_HINT_TOKENS', None)
+
     normalized_query = _normalize_related_query_item(
         {'query': '脂肪肝体检', 'hot_value': 12345},
         keyword='脂肪肝',
