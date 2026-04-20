@@ -61,6 +61,7 @@ class CreatorPostRow(BaseModel):
     comments: int = 0
     shares: int = 0
     follower_delta: int = 0
+    metric_sources: dict = Field(default_factory=dict)
     source_channel: str = 'crawler_service'
 
 
@@ -110,10 +111,12 @@ class TrendItemRow(BaseModel):
     hot_value: int = 0
     rank: int = 0
     views: int = 0
+    exposures: int = 0
     likes: int = 0
     favorites: int = 0
     comments: int = 0
     publish_time: str = ''
+    metric_sources: dict = Field(default_factory=dict)
     source_channel: str = 'crawler_service'
 
 
