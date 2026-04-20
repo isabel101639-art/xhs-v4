@@ -99,6 +99,13 @@ class MockCrawlerProvider(BaseCrawlerProvider):
                     'comments': comments,
                     'shares': 0,
                     'follower_delta': post_seed % 20,
+                    'metric_sources': {
+                        'views': 'mock_seed.views',
+                        'exposures': 'mock_seed.views_x2',
+                        'likes': 'mock_seed.likes',
+                        'favorites': 'mock_seed.favorites',
+                        'comments': 'mock_seed.comments',
+                    },
                     'source_channel': payload.source_channel or 'mock_provider',
                 })
 
@@ -160,6 +167,9 @@ class MockCrawlerProvider(BaseCrawlerProvider):
                         'summary': f'模拟小红书相关热搜词，用于联调热点抓取链路。原始关键词：{keyword}',
                         'hot_value': 12000 - rank * 173 + (seed % 120),
                         'rank': rank,
+                        'metric_sources': {
+                            'hot_value': 'mock_seed.hot_query_rank',
+                        },
                         'source_channel': source_channel,
                     })
                 if len(items) >= max_related_queries:
@@ -199,6 +209,13 @@ class MockCrawlerProvider(BaseCrawlerProvider):
                         'views': views,
                         'rank': rank,
                         'publish_time': (datetime.now() - timedelta(days=index)).strftime('%Y-%m-%d %H:%M:%S'),
+                        'metric_sources': {
+                            'views': 'mock_seed.views',
+                            'hot_value': 'derived_from_mock_engagement',
+                            'likes': 'mock_seed.likes',
+                            'favorites': 'mock_seed.favorites',
+                            'comments': 'mock_seed.comments',
+                        },
                         'source_channel': source_channel,
                     })
                 if len(items) >= page_size:

@@ -2980,6 +2980,10 @@
                                         <div class="subtle mt-1">Provider：${escapeHtml(item.provider || '-')}</div>
                                         <div class="subtle">时间：${escapeHtml(item.updated_at || '-')}</div>
                                         <div class="subtle">文件：${escapeHtml(item.path || '-')}</div>
+                                        ${(item.metric_sources && Object.keys(item.metric_sources).length)
+                                            ? `<div class="subtle mt-1">命中来源：${escapeHtml(Object.entries(item.metric_sources).map(([key, value]) => `${key}=${value || '-'}`).join(' ｜ '))}</div>`
+                                            : ''
+                                        }
                                         ${(item.suggested_actions || []).length ? `<div class="subtle mt-2">建议：${escapeHtml((item.suggested_actions || []).join(' ｜ '))}</div>` : ''}
                                     </div>
                                 </div>

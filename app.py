@@ -4774,6 +4774,21 @@ def _build_crawler_probe_payload():
     ]
 
     items = []
+
+    def resolve_metric_sources(payload):
+        metric_sources = payload.get('metric_sources') or {}
+        if metric_sources:
+            return metric_sources
+        for key in ['sample_items', 'sample_posts']:
+            rows = payload.get(key) or []
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                row_sources = row.get('metric_sources') or {}
+                if row_sources:
+                    return row_sources
+        return {}
+
     for key, label, filename in probe_defs:
         path = os.path.join(debug_output_dir, filename)
         exists = os.path.exists(path)
@@ -4782,6 +4797,7 @@ def _build_crawler_probe_payload():
         summary = diagnosis.get('summary') or ('已生成探测文件' if exists else '暂无探测结果')
         provider = payload.get('provider') or (payload.get('health') or {}).get('provider') or ''
         suggested_actions = diagnosis.get('suggested_actions') or []
+        metric_sources = resolve_metric_sources(payload)
         updated_at = _format_datetime(datetime.fromtimestamp(os.path.getmtime(path))) if exists else ''
         items.append({
             'key': key,
@@ -4793,6 +4809,7 @@ def _build_crawler_probe_payload():
             'status': diagnosis.get('status') or ('ready' if exists else 'missing'),
             'summary': summary,
             'suggested_actions': suggested_actions[:5],
+            'metric_sources': metric_sources,
         })
 
     latest_success = next((item for item in items if item['exists']), None)

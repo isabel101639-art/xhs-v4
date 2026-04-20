@@ -10,6 +10,16 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 
+def _first_metric_sources(items):
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        metric_sources = item.get('metric_sources') or {}
+        if metric_sources:
+            return metric_sources
+    return {}
+
+
 async def main():
     from crawler_service.config import get_settings
     from crawler_service.probe_diagnostics import build_trend_probe_diagnosis
@@ -46,12 +56,6 @@ async def main():
         date_to=date_to,
     )
 
-    result = await provider.fetch_trends(payload)
-    output_dir = Path(settings.xhs_debug_output_dir or '/tmp/xhs_crawler_debug')
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / f'xhs_trends_probe_{trend_type}.json'
-    output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
-
     summary = {
         'provider': settings.provider,
         'health': health,
@@ -61,11 +65,21 @@ async def main():
         },
         'trend_type': trend_type,
         'keyword_count': len(keywords),
-        'item_count': len(result.get('items') or []),
-        'output_path': str(output_path),
-        'sample_items': (result.get('items') or [])[:5],
+        'item_count': 0,
+        'output_path': '',
+        'sample_items': [],
+        'metric_sources': {},
     }
+    result = await provider.fetch_trends(payload)
+    output_dir = Path(settings.xhs_debug_output_dir or '/tmp/xhs_crawler_debug')
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / f'xhs_trends_probe_{trend_type}.json'
+    summary['item_count'] = len(result.get('items') or [])
+    summary['output_path'] = str(output_path)
+    summary['sample_items'] = (result.get('items') or [])[:5]
+    summary['metric_sources'] = _first_metric_sources(result.get('items') or [])
     summary['diagnosis'] = build_trend_probe_diagnosis(summary)
+    output_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 
