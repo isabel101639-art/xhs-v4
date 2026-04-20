@@ -24,6 +24,7 @@ def main():
     from crawler_service.config import get_settings
     from crawler_service.providers import build_provider
     from crawler_service.providers.playwright_xhs import (
+        _normalize_profile_feed_item,
         _normalize_related_query_item,
         _normalize_search_feed_item,
     )
@@ -90,6 +91,39 @@ def main():
     _assert(normalized_feed.get('author') == '状态树作者', 'state feed normalization should map nested author')
     _assert(normalized_feed.get('likes') == 321, 'state feed normalization should map likes')
     _print_check('state_feed_normalization', json.dumps(normalized_feed, ensure_ascii=False))
+
+    normalized_profile_feed = _normalize_profile_feed_item(
+        item={
+            'id': 'profile_note_001',
+            'xsec_token': 'token_profile',
+            'note_card': {
+                'title': '账号页状态树笔记标题',
+                'desc': '账号页状态树摘要',
+                'interact_info': {
+                    'liked_count': 66,
+                    'collected_count': 22,
+                    'comment_count': 8,
+                },
+                'view_count': 4567,
+                'impression_cnt': 12345,
+                'time': 1713590400000,
+            },
+        },
+        profile_url='https://www.xiaohongshu.com/user/profile/demo_account',
+        account_handle='demo_account',
+        target=type('Target', (), {
+            'owner_phone': '13800000000',
+            'owner_name': '测试账号',
+            'registration_id': 0,
+            'topic_id': 0,
+            'submission_id': 0,
+        })(),
+        source_channel='CrawlerSmoke',
+        rank=1,
+    )
+    _assert(normalized_profile_feed.get('views') == 4567, 'profile feed normalization should map view_count to views')
+    _assert(normalized_profile_feed.get('exposures') == 12345, 'profile feed normalization should map impression_cnt to exposures')
+    _print_check('profile_feed_normalization', json.dumps(normalized_profile_feed, ensure_ascii=False))
 
     normalized_query = _normalize_related_query_item(
         {'query': '脂肪肝体检', 'hot_value': 12345},

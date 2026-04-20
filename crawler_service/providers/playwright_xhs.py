@@ -341,6 +341,14 @@ def _normalize_search_feed_item(item, keyword, source_channel, rank):
         'impression_cnt',
         'exposure_count',
     ])
+    exposures = _state_count(item, [
+        'impression_cnt',
+        'exposure_count',
+        'note_card.impression_cnt',
+        'noteCard.impression_cnt',
+        'note_card.exposure_count',
+        'noteCard.exposure_count',
+    ])
     likes = _state_count(item, [
         'interact_info.liked_count',
         'note_card.interact_info.liked_count',
@@ -383,10 +391,47 @@ def _normalize_search_feed_item(item, keyword, source_channel, rank):
         'hot_value': views + likes * 3 + favorites * 4 + comments * 5 + max(0, 100 - rank * 3),
         'rank': rank,
         'views': views,
+        'exposures': exposures,
         'likes': likes,
         'favorites': favorites,
         'comments': comments,
         'publish_time': publish_time_dt.strftime('%Y-%m-%d %H:%M:%S') if publish_time_dt else _state_text(item, ['publish_time', 'note_card.time', 'noteCard.time']),
+        'source_channel': source_channel,
+    }
+
+
+def _normalize_profile_feed_item(item, profile_url, account_handle, target, source_channel, rank):
+    normalized = _normalize_search_feed_item(
+        item=item,
+        keyword='',
+        source_channel=source_channel,
+        rank=rank,
+    )
+    if not normalized:
+        return {}
+    post_url = normalized.get('link') or ''
+    platform_post_id = _extract_post_id(post_url)
+    return {
+        'platform': 'xhs',
+        'account_handle': account_handle,
+        'owner_phone': target.owner_phone or '',
+        'owner_name': target.owner_name or '',
+        'profile_url': profile_url,
+        'registration_id': _safe_int(target.registration_id),
+        'topic_id': _safe_int(target.topic_id),
+        'submission_id': _safe_int(target.submission_id),
+        'platform_post_id': platform_post_id,
+        'title': normalized.get('title') or f'未命名笔记 {rank}',
+        'post_url': post_url,
+        'publish_time': normalized.get('publish_time') or '',
+        'topic_title': '',
+        'views': normalized.get('views') or 0,
+        'exposures': normalized.get('exposures') or 0,
+        'likes': normalized.get('likes') or 0,
+        'favorites': normalized.get('favorites') or 0,
+        'comments': normalized.get('comments') or 0,
+        'shares': 0,
+        'follower_delta': 0,
         'source_channel': source_channel,
     }
 
@@ -472,10 +517,10 @@ class PlaywrightXHSCrawlerProvider(BaseCrawlerProvider):
             'supports_account_posts': True,
             'supports_trends': True,
             'supports_account_views': True,
-            'supports_account_exposures': False,
+            'supports_account_exposures': True,
             'supports_trend_views': True,
             'supports_trend_hot_value': True,
-            'metric_notes': '当前 Playwright 版本可抓阅读量/热度；账号主页的传播量(exposures) 还没有稳定来源，真实返回先按 0 处理。',
+            'metric_notes': '当前 Playwright 版本可抓阅读量/热度；如果账号页状态树里包含 impression_cnt/exposure_count，也会回填传播量(exposures)，否则仍回退为 0。',
             'search_url_template': self.settings.xhs_search_url_template,
             'post_card_selectors': _selector_candidates(
                 self.settings.xhs_post_card_selector,
@@ -809,6 +854,23 @@ class PlaywrightXHSCrawlerProvider(BaseCrawlerProvider):
     async def _extract_posts(self, page, target, profile_url, account_handle, source_channel, max_posts=20, date_from=None, date_to=None):
         rows = []
         seen_urls = set()
+        state_rows = await self._extract_profile_posts_from_state(
+            page=page,
+            target=target,
+            profile_url=profile_url,
+            account_handle=account_handle,
+            source_channel=source_channel,
+            max_posts=max_posts,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        for row in state_rows:
+            post_url = row.get('post_url') or ''
+            if post_url:
+                seen_urls.add(post_url)
+            rows.append(row)
+            if len(rows) >= max_posts:
+                return rows[:max_posts]
         reached_older_posts = False
         previous_seen_count = -1
         for _ in range(8):
@@ -860,6 +922,45 @@ class PlaywrightXHSCrawlerProvider(BaseCrawlerProvider):
             previous_seen_count = current_seen_count
             await page.mouse.wheel(0, 2400)
             await page.wait_for_timeout(1200)
+        return rows
+
+    async def _extract_profile_posts_from_state(self, page, target, profile_url, account_handle, source_channel, max_posts=20, date_from=None, date_to=None):
+        state = await self._read_page_state(page)
+        if not state:
+            return []
+        feed_list = _find_state_list(
+            state,
+            SEARCH_STATE_CANDIDATE_PATHS,
+            lambda rows: any(_looks_like_search_feed_item(item) for item in rows),
+        )
+        if not feed_list:
+            feed_list = [item for item in _walk_dicts(state) if _looks_like_search_feed_item(item)]
+        rows = []
+        seen_urls = set()
+        for feed in feed_list:
+            normalized = _normalize_profile_feed_item(
+                item=feed,
+                profile_url=profile_url,
+                account_handle=account_handle,
+                target=target,
+                source_channel=source_channel,
+                rank=len(rows) + 1,
+            )
+            if not normalized:
+                continue
+            publish_time_dt = _parse_publish_time_value(normalized.get('publish_time') or '')
+            if date_from and publish_time_dt and publish_time_dt < date_from:
+                continue
+            if date_to and publish_time_dt and publish_time_dt > date_to:
+                continue
+            post_url = normalized.get('post_url') or ''
+            if post_url and post_url in seen_urls:
+                continue
+            if post_url:
+                seen_urls.add(post_url)
+            rows.append(normalized)
+            if len(rows) >= max_posts:
+                break
         return rows
 
     def _build_search_url(self, keyword):
