@@ -248,6 +248,10 @@
         <div class="panel p-4 mb-4">
             <div class="section-title">自动化运维配置</div>
             <div class="subtle mb-3">这里管理热点默认参数、图片提供方参数和图片提示词补充。`API Key` 仍建议放在 Zeabur 环境变量中。</div>
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                <button class="btn btn-outline-dark btn-sm" type="button" onclick="applyLocalCrawlerBundle('note_search')">本地 crawler 爆款联调</button>
+                <button class="btn btn-outline-dark btn-sm" type="button" onclick="applyLocalCrawlerBundle('hot_queries')">本地 crawler 热搜联调</button>
+            </div>
             <div class="row g-3">
                 <div class="col-lg-4">
                     <label class="form-label subtle">热点默认平台</label>
@@ -1641,6 +1645,51 @@
             document.getElementById('configHotwordPageSize').value = config.hotword_page_size || 20;
             document.getElementById('configHotwordMaxRelatedQueries').value = config.hotword_max_related_queries || 20;
             document.getElementById('automationConfigNote').textContent = `已套用热点接口预设：${current.label}`;
+            loadAutomationConfigPreview();
+        }
+
+        function applyLocalCrawlerBundle(trendType = 'note_search') {
+            const presetKey = trendType === 'hot_queries'
+                ? 'crawler_xhs_hot_queries_local'
+                : 'crawler_xhs_note_search_local';
+            const presetSelect = document.getElementById('configHotwordRemotePreset');
+            if (presetSelect) {
+                presetSelect.value = presetKey;
+            }
+            applyHotwordRemotePreset();
+
+            document.getElementById('configHotwordPlatform').value = '小红书';
+            document.getElementById('configHotwordChannel').value = 'Crawler热点';
+            document.getElementById('configHotwordFetchMode').value = 'remote';
+            document.getElementById('configHotwordApiUrl').value = 'http://127.0.0.1:8081/xhs/trends';
+            document.getElementById('configHotwordApiMethod').value = 'POST';
+            document.getElementById('configHotwordResultPath').value = 'items';
+            document.getElementById('configHotwordKeywordParam').value = 'keywords';
+            document.getElementById('configHotwordTrendType').value = trendType;
+            if (trendType === 'hot_queries') {
+                document.getElementById('configHotwordTemplate').value = 'xhs_hot_queries';
+                document.getElementById('configHotwordPageSize').value = 20;
+                document.getElementById('configHotwordMaxRelatedQueries').value = 20;
+            } else {
+                document.getElementById('configHotwordTemplate').value = 'xhs_note_search';
+                document.getElementById('configHotwordPageSize').value = 20;
+                document.getElementById('configHotwordMaxRelatedQueries').value = 20;
+            }
+
+            document.getElementById('configCreatorSyncChannel').value = 'Crawler服务';
+            document.getElementById('configCreatorSyncFetchMode').value = 'remote';
+            document.getElementById('configCreatorSyncApiUrl').value = 'http://127.0.0.1:8081/xhs/account_posts';
+            document.getElementById('configCreatorSyncApiMethod').value = 'POST';
+            document.getElementById('configCreatorSyncResultPath').value = '';
+
+            document.getElementById('hotwordSourcePlatform').value = '小红书';
+            document.getElementById('hotwordSourceChannel').value = 'Crawler热点';
+            document.getElementById('trendTemplateKey').value = trendType === 'hot_queries' ? 'xhs_hot_queries' : 'xhs_note_search';
+            document.getElementById('trendSandboxTemplateKey').value = trendType === 'hot_queries' ? 'xhs_hot_queries' : 'xhs_note_search';
+
+            document.getElementById('automationConfigNote').textContent = trendType === 'hot_queries'
+                ? '已套用本地 crawler 热搜联调配置，保存后可直接测试热点接口'
+                : '已套用本地 crawler 爆款联调配置，保存后可直接测试热点接口和账号同步接口';
             loadAutomationConfigPreview();
         }
 
