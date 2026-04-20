@@ -2838,6 +2838,7 @@
             const worker = data.worker || {};
             const hotwordHealth = data.hotword_health || {};
             const creatorSyncHealth = data.creator_sync_health || {};
+            const creatorCrawlerHealth = creatorSyncHealth.response?.health || {};
             const imageHealth = data.image_health || {};
             const serviceMatrix = data.service_matrix || [];
             const deploymentBlockers = data.deployment_blockers || [];
@@ -2919,6 +2920,9 @@
                         <div class="subtle">Health URL：${escapeHtml(creatorSyncHealth.health_url || '-')}</div>
                         <div class="subtle">HTTP：${creatorSyncHealth.status_code || '-'}</div>
                         <div class="subtle">说明：${escapeHtml(creatorSyncHealth.message || '-')}</div>
+                        <div class="subtle">Provider：${escapeHtml(creatorCrawlerHealth.provider || '-')}</div>
+                        <div class="subtle">登录态文件：${escapeHtml(creatorCrawlerHealth.storage_state_path || '-')}</div>
+                        <div class="subtle">登录态存在：${creatorCrawlerHealth.storage_state_exists === true ? '是' : (creatorCrawlerHealth.storage_state_exists === false ? '否' : '-')}</div>
                     </div>
                     <div class="col-lg-3">
                         <strong>图片接口健康</strong>
