@@ -4846,6 +4846,10 @@ def _build_crawler_probe_payload():
 
     items = []
     payload_map = {}
+    debug_hints = {
+        'search': {},
+        'profile': {},
+    }
 
     def resolve_metric_sources(payload):
         metric_sources = payload.get('metric_sources') or {}
@@ -4887,6 +4891,25 @@ def _build_crawler_probe_payload():
             'metric_source_summary_text': _metric_source_summary_text(metric_sources),
             'metric_coverage': metric_coverage if isinstance(metric_coverage, dict) else {},
         })
+
+    def resolve_debug_metric_candidates(payload):
+        candidates = payload.get('state_metric_candidates') or []
+        return candidates if isinstance(candidates, list) else []
+
+    search_debug_payload = _read_crawler_probe_file(os.path.join(debug_output_dir, 'xhs_search_debug.json'))
+    profile_debug_payload = _read_crawler_probe_file(os.path.join(debug_output_dir, 'xhs_profile_debug.json'))
+    debug_hints['search'] = {
+        'exists': bool(search_debug_payload),
+        'path': os.path.join(debug_output_dir, 'xhs_search_debug.json'),
+        'metric_candidates': resolve_debug_metric_candidates(search_debug_payload)[:15],
+        'state_note_metric_sources': (search_debug_payload.get('state_note_metric_sources') or [])[:5] if isinstance(search_debug_payload, dict) else [],
+    }
+    debug_hints['profile'] = {
+        'exists': bool(profile_debug_payload),
+        'path': os.path.join(debug_output_dir, 'xhs_profile_debug.json'),
+        'metric_candidates': resolve_debug_metric_candidates(profile_debug_payload)[:15],
+        'state_post_metric_sources': (profile_debug_payload.get('state_post_metric_sources') or [])[:5] if isinstance(profile_debug_payload, dict) else [],
+    }
 
     latest_success = next((item for item in items if item['exists']), None)
     existing_items = [item for item in items if item['exists']]
@@ -4933,6 +4956,7 @@ def _build_crawler_probe_payload():
         'items': items,
         'has_any_result': any(item['exists'] for item in items),
         'latest_result_label': latest_success.get('label') if latest_success else '',
+        'debug_hints': debug_hints,
         'summary': {
             'status': summary_status,
             'message': summary_message,
