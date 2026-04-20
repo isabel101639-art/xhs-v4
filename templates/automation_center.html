@@ -2981,8 +2981,8 @@
                                         <div class="subtle">时间：${escapeHtml(item.updated_at || '-')}</div>
                                         <div class="subtle">文件：${escapeHtml(item.path || '-')}</div>
                                         ${item.metric_source_summary_text ? `<div class="subtle mt-1">口径：${escapeHtml(item.metric_source_summary_text)}</div>` : ''}
-                                        ${(item.metric_sources && Object.keys(item.metric_sources).length)
-                                            ? `<div class="subtle mt-1">命中来源：${escapeHtml(Object.entries(item.metric_sources).map(([key, value]) => `${key}=${value || '-'}`).join(' ｜ '))}</div>`
+                                        ${(item.metric_source_summary && item.metric_source_summary.length)
+                                            ? `<div class="subtle mt-1">命中来源：${escapeHtml(item.metric_source_summary.map((row) => `${row.key}=${row.mode_label}(${row.source || '-'})`).join(' ｜ '))}</div>`
                                             : ''
                                         }
                                         ${(item.metric_coverage && Object.keys(item.metric_coverage).length)
@@ -3895,8 +3895,8 @@
                         ${item.link ? `<a href="${escapeHtml(item.link)}" target="_blank">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)}
                         <div class="subtle">${escapeHtml((item.summary || '').slice(0, 60))}</div>
                         ${item.metric_source_summary_text ? `<div class="subtle">口径：${escapeHtml(item.metric_source_summary_text)}</div>` : ''}
-                        ${(item.metric_sources && Object.keys(item.metric_sources).length)
-                            ? `<div class="subtle">来源：${escapeHtml(Object.entries(item.metric_sources).map(([key, value]) => `${key}=${value || '-'}`).join(' ｜ '))}</div>`
+                        ${(item.metric_source_summary && item.metric_source_summary.length)
+                            ? `<div class="subtle">来源：${escapeHtml(item.metric_source_summary.map((row) => `${row.key}=${row.mode_label}(${row.source || '-'})`).join(' ｜ '))}</div>`
                             : ''
                         }
                     </td>
