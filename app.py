@@ -2553,6 +2553,8 @@ def _serialize_trend_note(note):
         'score': note.hot_score or _trend_score(note),
         'summary': note.summary or '',
         'metric_sources': metric_sources if isinstance(metric_sources, dict) else {},
+        'metric_source_summary': _metric_source_summary(metric_sources, preferred_keys=['views', 'exposures', 'hot_value', 'likes', 'favorites', 'comments']),
+        'metric_source_summary_text': _metric_source_summary_text(metric_sources, preferred_keys=['views', 'exposures', 'hot_value', 'likes', 'favorites', 'comments']),
         'pool_status': note.pool_status or 'reserve',
         'pool_status_label': _pool_status_label(note.pool_status or 'reserve'),
         'created_at': note.created_at.strftime('%Y-%m-%d %H:%M:%S') if note.created_at else '',
@@ -2726,6 +2728,65 @@ def _is_sqlite_backend():
         return app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite')
 
 
+KNOWN_DIRECT_METRIC_SOURCE_SUFFIXES = {
+    'view_count',
+    'impression_cnt',
+    'exposure_count',
+    'liked_count',
+    'collected_count',
+    'comment_count',
+    'hot_value',
+    'hotscore',
+    'score',
+    'search_cnt',
+}
+
+
+def _metric_source_mode(source):
+    raw = (source or '').strip()
+    lowered = raw.lower()
+    if not lowered:
+        return {'key': 'missing', 'label': '未命中'}
+    if 'mock_seed' in lowered or lowered.startswith('mock_') or lowered.startswith('mockseed'):
+        return {'key': 'mock', 'label': '模拟'}
+    if 'derived' in lowered or 'fallback' in lowered:
+        return {'key': 'derived', 'label': '推导'}
+    for suffix in KNOWN_DIRECT_METRIC_SOURCE_SUFFIXES:
+        if lowered == suffix or lowered.endswith(f'.{suffix}'):
+            return {'key': 'direct', 'label': '直取'}
+    return {'key': 'fuzzy', 'label': '模糊命中'}
+
+
+def _metric_source_summary(metric_sources, preferred_keys=None):
+    if not isinstance(metric_sources, dict):
+        return []
+    preferred_keys = preferred_keys or ['views', 'exposures', 'hot_value', 'likes', 'favorites', 'comments']
+    rows = []
+    seen = set()
+    for key in list(preferred_keys) + [item for item in metric_sources.keys() if item not in preferred_keys]:
+        if key in seen:
+            continue
+        seen.add(key)
+        mode = _metric_source_mode(metric_sources.get(key))
+        rows.append({
+            'key': key,
+            'source': metric_sources.get(key) or '',
+            'mode_key': mode['key'],
+            'mode_label': mode['label'],
+        })
+    return rows
+
+
+def _metric_source_summary_text(metric_sources, preferred_keys=None):
+    rows = _metric_source_summary(metric_sources, preferred_keys=preferred_keys)
+    items = []
+    for row in rows:
+        if row['mode_key'] == 'missing':
+            continue
+        items.append(f"{row['key']}={row['mode_label']}")
+    return ' ｜ '.join(items)
+
+
 def _serialize_topic_idea(idea):
     return {
         'id': idea.id,
@@ -2797,6 +2858,8 @@ def _serialize_creator_post(post):
         'interactions': interactions,
         'is_viral': bool(post.is_viral),
         'metric_sources': metric_sources if isinstance(metric_sources, dict) else {},
+        'metric_source_summary': _metric_source_summary(metric_sources, preferred_keys=['views', 'exposures', 'likes', 'favorites', 'comments']),
+        'metric_source_summary_text': _metric_source_summary_text(metric_sources, preferred_keys=['views', 'exposures', 'likes', 'favorites', 'comments']),
         'source_channel': post.source_channel or '',
         'created_at': post.created_at.strftime('%Y-%m-%d %H:%M:%S') if post.created_at else '',
     }
@@ -4819,6 +4882,7 @@ def _build_crawler_probe_payload():
             'summary': summary,
             'suggested_actions': suggested_actions[:5],
             'metric_sources': metric_sources,
+            'metric_source_summary_text': _metric_source_summary_text(metric_sources),
             'metric_coverage': metric_coverage if isinstance(metric_coverage, dict) else {},
         })
 

@@ -2295,6 +2295,7 @@
                 <tr>
                     <td>
                         ${item.post_url ? `<a href="${item.post_url}" target="_blank">${item.title}</a>` : item.title}
+                        ${item.metric_source_summary_text ? `<div class="text-muted small mt-1">口径：${escapeHtml(item.metric_source_summary_text)}</div>` : ''}
                         ${(item.metric_sources && Object.keys(item.metric_sources).length)
                             ? `<div class="text-muted small mt-1">来源：${Object.entries(item.metric_sources).map(([key, value]) => `${escapeHtml(key)}=${escapeHtml(value || '-')}`).join(' ｜ ')}</div>`
                             : ''
