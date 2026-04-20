@@ -117,7 +117,7 @@
                                 <div class="col-md-6">
                                     <div class="platform-card platform-xhs">
                                         <div class="p-title">小红书</div>
-                                        <div class="p-metric">传播量：{{ reg.submission.xhs_views or 0 }} ｜ 点赞量：{{ reg.submission.xhs_likes or 0 }}</div>
+                                        <div class="p-metric">曝光量：{{ reg.submission.xhs_views or 0 }} ｜ 点赞量：{{ reg.submission.xhs_likes or 0 }}</div>
                                         <div class="p-metric">收藏量：{{ reg.submission.xhs_favorites or 0 }} ｜ 评论量：{{ reg.submission.xhs_comments or 0 }}</div>
                                     </div>
                                 </div>
@@ -212,7 +212,7 @@ xhs_comments: {{ reg.submission.xhs_comments or 0 if reg.submission else 0 }}
                         <tr>
                             <th>平台</th>
                             <th>链接</th>
-                            <th>传播量</th>
+                            <th>曝光量</th>
                             <th>点赞量</th>
                             <th>收藏量</th>
                             <th>评论量</th>
@@ -277,7 +277,7 @@ xhs_comments: {{ reg.submission.xhs_comments or 0 if reg.submission else 0 }}
                             <input type="url" name="xhs_profile_link" class="form-control mb-2" placeholder="小红书账号主页链接（只需填写一次）" value="{{ registration.submission.xhs_profile_link if registration.submission and registration.submission.xhs_profile_link else ((tracking_summaries.get(registration.id).profile_url) if tracking_summaries and tracking_summaries.get(registration.id) else '') }}">
                             <input type="url" name="xhs_link" class="form-control mb-2" placeholder="小红书链接">
                             <div class="row g-2 mb-3 align-items-end">
-                                <div class="col"><label class="form-label small mb-1">传播量</label><input type="number" name="xhs_views" class="form-control" min="0" value="0" placeholder="传播量"></div>
+                                <div class="col"><label class="form-label small mb-1">曝光量</label><input type="number" name="xhs_views" class="form-control" min="0" value="0" placeholder="曝光量"></div>
                                 <div class="col"><label class="form-label small mb-1">点赞量</label><input type="number" name="xhs_likes" class="form-control" min="0" value="0" placeholder="点赞量"></div>
                                 <div class="col"><label class="form-label small mb-1">收藏量</label><input type="number" name="xhs_favorites" class="form-control" min="0" value="0" placeholder="收藏量"></div>
                                 <div class="col"><label class="form-label small mb-1">评论量</label><input type="number" name="xhs_comments" class="form-control" min="0" value="0" placeholder="评论量"></div>
@@ -308,7 +308,7 @@ xhs_comments: {{ reg.submission.xhs_comments or 0 if reg.submission else 0 }}
                             <div class="col-12"><strong>小红书</strong></div>
  <div class="col-12"><label class="form-label small">账号主页链接</label><input type="url" class="form-control" id="u_xhs_profile_link" placeholder="https://..."></div>
  <div class="col-12"><label class="form-label small">链接</label><input type="url" class="form-control" id="u_xhs_link" placeholder="https://..."></div>
-                            <div class="col-md-3"><label class="form-label small">传播量</label><input type="number" class="form-control" id="u_xhs_views" min="0" value="0"></div>
+                            <div class="col-md-3"><label class="form-label small">曝光量</label><input type="number" class="form-control" id="u_xhs_views" min="0" value="0"></div>
                             <div class="col-md-3"><label class="form-label small">点赞量</label><input type="number" class="form-control" id="u_xhs_likes" min="0" value="0"></div>
                             <div class="col-md-3"><label class="form-label small">收藏量</label><input type="number" class="form-control" id="u_xhs_favorites" min="0" value="0"></div>
                             <div class="col-md-3"><label class="form-label small">评论量</label><input type="number" class="form-control" id="u_xhs_comments" min="0" value="0"></div>

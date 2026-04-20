@@ -10,7 +10,7 @@ HOTWORD_SOURCE_TEMPLATE_OPTIONS = [
         'key': 'generic_lines',
         'label': '通用行文本',
         'source_platform': '手工整理',
-        'description': '每行一条，按“关键词|标题|链接|点赞|收藏|评论|传播量|作者|摘要”粘贴',
+        'description': '每行一条，按“关键词|标题|链接|点赞|收藏|评论|曝光量|作者|摘要”粘贴',
     },
     {
         'key': 'generic_json',

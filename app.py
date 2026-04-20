@@ -7142,7 +7142,7 @@ def _build_dashboard_stats(activity_id, args):
         '总发布条数 = 任一平台有链接算1条',
         '平台发布条数 = 该平台有链接',
         '总互动 = 点赞 + 收藏 + 评论',
-        '互动率分母为传播量，传播量=0时显示“-”',
+        '互动率分母为曝光量，曝光量=0时显示“-”',
         '时间筛选按参与活跃时间统计：报名时间或提交更新时间命中筛选区间即纳入统计',
     ]
 
@@ -7212,7 +7212,7 @@ def _build_report_markdown(activity, stats, report_type='weekly'):
         for idx, row in enumerate(stats['personal_rankings']['all_platform'][:20], 1)
     ]
     platform_lines = [
-        f"- {platform['label']}：参与人数{platform['participants']}，发布条数{platform['published_count']}，传播量{platform['views']}，互动率{platform['interaction_rate_display']}"
+        f"- {platform['label']}：参与人数{platform['participants']}，发布条数{platform['published_count']}，曝光量{platform['views']}，互动率{platform['interaction_rate_display']}"
         for platform in stats['platforms'].values()
     ]
     type_line = '、'.join([
@@ -7244,7 +7244,7 @@ def _build_report_markdown(activity, stats, report_type='weekly'):
         f"- 总参与人数：{stats['overview']['total_participants']}",
         f"- 总发布条数：{stats['overview']['total_published']}",
         f"- 总体发布率：{stats['overview']['publish_rate_display']}",
-        f"- 总传播量：{stats['total_views']}",
+        f"- 总曝光量：{stats['total_views']}",
         f"- 总互动：{stats['total_interactions']}（点赞{stats['total_likes']} + 收藏{stats['total_favorites']} + 评论{stats['total_comments']}）",
         '',
         '## 三、平台分层',
@@ -8325,7 +8325,7 @@ def _validate_partial_platform_data(data, require_at_least_one_link=False):
         metric_keys = [f'{key}_views', f'{key}_likes', f'{key}_favorites', f'{key}_comments']
         has_any_metric = any((mk in data and str(data.get(mk)).strip() != '') for mk in metric_keys)
         if has_link or has_any_metric:
-            normalized[f'{key}_views'] = _to_non_negative_int(data.get(f'{key}_views', 0), f'{label}传播量')
+            normalized[f'{key}_views'] = _to_non_negative_int(data.get(f'{key}_views', 0), f'{label}曝光量')
             normalized[f'{key}_likes'] = _to_non_negative_int(data.get(f'{key}_likes', 0), f'{label}点赞量')
             normalized[f'{key}_favorites'] = _to_non_negative_int(data.get(f'{key}_favorites', 0), f'{label}收藏量')
             normalized[f'{key}_comments'] = _to_non_negative_int(data.get(f'{key}_comments', 0), f'{label}评论量')
@@ -8610,7 +8610,7 @@ def _validate_platform_metrics_only(data):
 
     normalized = {}
     for key, label in platform_defs:
-        normalized[f'{key}_views'] = _to_non_negative_int(data.get(f'{key}_views', 0), f'{label}传播量')
+        normalized[f'{key}_views'] = _to_non_negative_int(data.get(f'{key}_views', 0), f'{label}曝光量')
         normalized[f'{key}_likes'] = _to_non_negative_int(data.get(f'{key}_likes', 0), f'{label}点赞量')
         normalized[f'{key}_favorites'] = _to_non_negative_int(data.get(f'{key}_favorites', 0), f'{label}收藏量')
         normalized[f'{key}_comments'] = _to_non_negative_int(data.get(f'{key}_comments', 0), f'{label}评论量')
@@ -11874,7 +11874,7 @@ def export_data(activity_id):
     registrations = Registration.query.filter(Registration.topic_id.in_(topic_ids)).all()
 
     # 生成CSV（多平台）
-    csv_content = "姓名,小组号,小红书账号,联系方式,话题,小红书链接,小红书传播量,小红书点赞量,小红书收藏量,小红书评论量,抖音链接,抖音传播量,抖音点赞量,抖音收藏量,抖音评论量,视频号链接,视频号传播量,视频号点赞量,视频号收藏量,视频号评论量,微博链接,微博传播量,微博点赞量,微博收藏量,微博评论量\n"
+    csv_content = "姓名,小组号,小红书账号,联系方式,话题,小红书链接,小红书曝光量,小红书点赞量,小红书收藏量,小红书评论量,抖音链接,抖音曝光量,抖音点赞量,抖音收藏量,抖音评论量,视频号链接,视频号曝光量,视频号点赞量,视频号收藏量,视频号评论量,微博链接,微博曝光量,微博点赞量,微博收藏量,微博评论量\n"
     for reg in registrations:
         topic = reg.topic
         sub = reg.submission

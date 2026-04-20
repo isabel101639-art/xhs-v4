@@ -129,12 +129,12 @@ def build_account_probe_diagnosis(summary):
         if has_nonzero_views and not has_nonzero_exposures:
             return {
                 'status': 'partial',
-                'summary': f'已成功抓到 {account_count} 个账号、{post_count} 条笔记，阅读量已回流，但传播量仍未命中',
+                'summary': f'已成功抓到 {account_count} 个账号、{post_count} 条笔记，阅读量已回流，但曝光量仍未命中',
                 'issues': ['账号页状态树或 DOM 里还没有稳定提取到 impression_cnt / exposure_count'],
                 'suggested_actions': _unique([
                     '先运行 crawler_service/scripts/debug_xhs_profile.py 检查账号页 HTML 和状态树',
                     '重点查找 impression_cnt、exposure_count、view_count 之外的曝光字段命名',
-                    '如果账号页根本不返回传播量字段，就先接受 exposures=0 的回退口径',
+                    '如果账号页根本不返回曝光量字段，就先接受 exposures=0 的回退口径',
                 ]),
             }
         return {

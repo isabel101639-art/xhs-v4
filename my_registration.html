@@ -80,14 +80,14 @@
                                 <div class="col-md-6">
                                     <div class="platform-card platform-xhs">
                                         <div class="p-title">小红书</div>
-                                        <div class="p-metric">传播量：{{ reg.submission.xhs_views or 0 }} ｜ 点赞量：{{ reg.submission.xhs_likes or 0 }}</div>
+                                        <div class="p-metric">曝光量：{{ reg.submission.xhs_views or 0 }} ｜ 点赞量：{{ reg.submission.xhs_likes or 0 }}</div>
                                         <div class="p-metric">收藏量：{{ reg.submission.xhs_favorites or 0 }} ｜ 评论量：{{ reg.submission.xhs_comments or 0 }}</div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="platform-card platform-dy">
                                         <div class="p-title">抖音</div>
-                                        <div class="p-metric">传播量：{{ reg.submission.douyin_views or 0 }} ｜ 点赞量：{{ reg.submission.douyin_likes or 0 }}</div>
+                                        <div class="p-metric">曝光量：{{ reg.submission.douyin_views or 0 }} ｜ 点赞量：{{ reg.submission.douyin_likes or 0 }}</div>
                                         <div class="p-metric">收藏量：{{ reg.submission.douyin_favorites or 0 }} ｜ 评论量：{{ reg.submission.douyin_comments or 0 }}</div>
                                     </div>
                                 </div>
@@ -96,14 +96,14 @@
                                 <div class="col-md-6">
                                     <div class="platform-card platform-video">
                                         <div class="p-title">视频号</div>
-                                        <div class="p-metric">传播量：{{ reg.submission.video_views or 0 }} ｜ 点赞量：{{ reg.submission.video_likes or 0 }}</div>
+                                        <div class="p-metric">曝光量：{{ reg.submission.video_views or 0 }} ｜ 点赞量：{{ reg.submission.video_likes or 0 }}</div>
                                         <div class="p-metric">收藏量：{{ reg.submission.video_favorites or 0 }} ｜ 评论量：{{ reg.submission.video_comments or 0 }}</div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="platform-card platform-weibo">
                                         <div class="p-title">微博</div>
-                                        <div class="p-metric">传播量：{{ reg.submission.weibo_views or 0 }} ｜ 点赞量：{{ reg.submission.weibo_likes or 0 }}</div>
+                                        <div class="p-metric">曝光量：{{ reg.submission.weibo_views or 0 }} ｜ 点赞量：{{ reg.submission.weibo_likes or 0 }}</div>
                                         <div class="p-metric">收藏量：{{ reg.submission.weibo_favorites or 0 }} ｜ 评论量：{{ reg.submission.weibo_comments or 0 }}</div>
                                     </div>
                                 </div>
@@ -161,7 +161,7 @@
                         <tr>
                             <th>平台</th>
                             <th>链接</th>
-                            <th>传播量</th>
+                            <th>曝光量</th>
                             <th>点赞量</th>
                             <th>收藏量</th>
                             <th>评论量</th>
@@ -225,7 +225,7 @@
                             <h6 class="text-danger">小红书（必填）</h6>
                             <input type="url" name="xhs_link" class="form-control mb-2" placeholder="小红书链接" required>
                             <div class="row g-2 mb-3 align-items-end">
-                                <div class="col"><label class="form-label small mb-1">传播量</label><input type="number" name="xhs_views" class="form-control" min="0" value="0" placeholder="传播量" required></div>
+                                <div class="col"><label class="form-label small mb-1">曝光量</label><input type="number" name="xhs_views" class="form-control" min="0" value="0" placeholder="曝光量" required></div>
                                 <div class="col"><label class="form-label small mb-1">点赞量</label><input type="number" name="xhs_likes" class="form-control" min="0" value="0" placeholder="点赞量" required></div>
                                 <div class="col"><label class="form-label small mb-1">收藏量</label><input type="number" name="xhs_favorites" class="form-control" min="0" value="0" placeholder="收藏量" required></div>
                                 <div class="col"><label class="form-label small mb-1">评论量</label><input type="number" name="xhs_comments" class="form-control" min="0" value="0" placeholder="评论量" required></div>
@@ -234,7 +234,7 @@
                             <h6>抖音（必填）</h6>
                             <input type="url" name="douyin_link" class="form-control mb-2" placeholder="抖音链接" required>
                             <div class="row g-2 mb-3 align-items-end">
-                                <div class="col"><label class="form-label small mb-1">传播量</label><input type="number" name="douyin_views" class="form-control" min="0" value="0" placeholder="传播量" required></div>
+                                <div class="col"><label class="form-label small mb-1">曝光量</label><input type="number" name="douyin_views" class="form-control" min="0" value="0" placeholder="曝光量" required></div>
                                 <div class="col"><label class="form-label small mb-1">点赞量</label><input type="number" name="douyin_likes" class="form-control" min="0" value="0" placeholder="点赞量" required></div>
                                 <div class="col"><label class="form-label small mb-1">收藏量</label><input type="number" name="douyin_favorites" class="form-control" min="0" value="0" placeholder="收藏量" required></div>
                                 <div class="col"><label class="form-label small mb-1">评论量</label><input type="number" name="douyin_comments" class="form-control" min="0" value="0" placeholder="评论量" required></div>
@@ -243,7 +243,7 @@
                             <h6>视频号（必填）</h6>
                             <input type="url" name="video_link" class="form-control mb-2" placeholder="视频号链接" required>
                             <div class="row g-2 mb-3 align-items-end">
-                                <div class="col"><label class="form-label small mb-1">传播量</label><input type="number" name="video_views" class="form-control" min="0" value="0" placeholder="传播量" required></div>
+                                <div class="col"><label class="form-label small mb-1">曝光量</label><input type="number" name="video_views" class="form-control" min="0" value="0" placeholder="曝光量" required></div>
                                 <div class="col"><label class="form-label small mb-1">点赞量</label><input type="number" name="video_likes" class="form-control" min="0" value="0" placeholder="点赞量" required></div>
                                 <div class="col"><label class="form-label small mb-1">收藏量</label><input type="number" name="video_favorites" class="form-control" min="0" value="0" placeholder="收藏量" required></div>
                                 <div class="col"><label class="form-label small mb-1">评论量</label><input type="number" name="video_comments" class="form-control" min="0" value="0" placeholder="评论量" required></div>
@@ -252,7 +252,7 @@
                             <h6>微博（必填）</h6>
                             <input type="url" name="weibo_link" class="form-control mb-2" placeholder="微博链接" required>
                             <div class="row g-2 mb-3 align-items-end">
-                                <div class="col"><label class="form-label small mb-1">传播量</label><input type="number" name="weibo_views" class="form-control" min="0" value="0" placeholder="传播量" required></div>
+                                <div class="col"><label class="form-label small mb-1">曝光量</label><input type="number" name="weibo_views" class="form-control" min="0" value="0" placeholder="曝光量" required></div>
                                 <div class="col"><label class="form-label small mb-1">点赞量</label><input type="number" name="weibo_likes" class="form-control" min="0" value="0" placeholder="点赞量" required></div>
                                 <div class="col"><label class="form-label small mb-1">收藏量</label><input type="number" name="weibo_favorites" class="form-control" min="0" value="0" placeholder="收藏量" required></div>
                                 <div class="col"><label class="form-label small mb-1">评论量</label><input type="number" name="weibo_comments" class="form-control" min="0" value="0" placeholder="评论量" required></div>
@@ -281,28 +281,28 @@
                         <input type="hidden" id="update_registration_id">
                         <div class="row g-2 mb-3">
                             <div class="col-12"><strong>小红书</strong></div>
-                            <div class="col-md-3"><label class="form-label small">传播量</label><input type="number" class="form-control" id="u_xhs_views" min="0" value="0" required></div>
+                            <div class="col-md-3"><label class="form-label small">曝光量</label><input type="number" class="form-control" id="u_xhs_views" min="0" value="0" required></div>
                             <div class="col-md-3"><label class="form-label small">点赞量</label><input type="number" class="form-control" id="u_xhs_likes" min="0" value="0" required></div>
                             <div class="col-md-3"><label class="form-label small">收藏量</label><input type="number" class="form-control" id="u_xhs_favorites" min="0" value="0" required></div>
                             <div class="col-md-3"><label class="form-label small">评论量</label><input type="number" class="form-control" id="u_xhs_comments" min="0" value="0" required></div>
                         </div>
                         <div class="row g-2 mb-3">
                             <div class="col-12"><strong>抖音</strong></div>
-                            <div class="col-md-3"><label class="form-label small">传播量</label><input type="number" class="form-control" id="u_douyin_views" min="0" value="0" required></div>
+                            <div class="col-md-3"><label class="form-label small">曝光量</label><input type="number" class="form-control" id="u_douyin_views" min="0" value="0" required></div>
                             <div class="col-md-3"><label class="form-label small">点赞量</label><input type="number" class="form-control" id="u_douyin_likes" min="0" value="0" required></div>
                             <div class="col-md-3"><label class="form-label small">收藏量</label><input type="number" class="form-control" id="u_douyin_favorites" min="0" value="0" required></div>
                             <div class="col-md-3"><label class="form-label small">评论量</label><input type="number" class="form-control" id="u_douyin_comments" min="0" value="0" required></div>
                         </div>
                         <div class="row g-2 mb-3">
                             <div class="col-12"><strong>视频号</strong></div>
-                            <div class="col-md-3"><label class="form-label small">传播量</label><input type="number" class="form-control" id="u_video_views" min="0" value="0" required></div>
+                            <div class="col-md-3"><label class="form-label small">曝光量</label><input type="number" class="form-control" id="u_video_views" min="0" value="0" required></div>
                             <div class="col-md-3"><label class="form-label small">点赞量</label><input type="number" class="form-control" id="u_video_likes" min="0" value="0" required></div>
                             <div class="col-md-3"><label class="form-label small">收藏量</label><input type="number" class="form-control" id="u_video_favorites" min="0" value="0" required></div>
                             <div class="col-md-3"><label class="form-label small">评论量</label><input type="number" class="form-control" id="u_video_comments" min="0" value="0" required></div>
                         </div>
                         <div class="row g-2 mb-1">
                             <div class="col-12"><strong>微博</strong></div>
-                            <div class="col-md-3"><label class="form-label small">传播量</label><input type="number" class="form-control" id="u_weibo_views" min="0" value="0" required></div>
+                            <div class="col-md-3"><label class="form-label small">曝光量</label><input type="number" class="form-control" id="u_weibo_views" min="0" value="0" required></div>
                             <div class="col-md-3"><label class="form-label small">点赞量</label><input type="number" class="form-control" id="u_weibo_likes" min="0" value="0" required></div>
                             <div class="col-md-3"><label class="form-label small">收藏量</label><input type="number" class="form-control" id="u_weibo_favorites" min="0" value="0" required></div>
                             <div class="col-md-3"><label class="form-label small">评论量</label><input type="number" class="form-control" id="u_weibo_comments" min="0" value="0" required></div>

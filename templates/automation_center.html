@@ -505,7 +505,7 @@
             <div class="col-lg-6">
                 <div class="panel p-4 h-100">
                     <div class="section-title">热点导入</div>
-                    <div class="subtle mb-3">支持两种格式：1. JSON数组；2. 每行一条，按“关键词|标题|链接|点赞|收藏|评论|传播量|作者|摘要”粘贴。</div>
+                    <div class="subtle mb-3">支持两种格式：1. JSON数组；2. 每行一条，按“关键词|标题|链接|点赞|收藏|评论|曝光量|作者|摘要”粘贴。</div>
 
                     <div class="row g-3 mb-3">
                 <div class="col-md-4">
@@ -1468,7 +1468,7 @@
                             <th>状态</th>
                             <th>评分</th>
                             <th>互动</th>
-                            <th>传播量</th>
+                            <th>曝光量</th>
                             <th>作者</th>
                             <th>批次</th>
                             <th>操作</th>
@@ -2932,7 +2932,7 @@
                         <div class="subtle">登录态文件：${escapeHtml(creatorCrawlerHealth.storage_state_path || '-')}</div>
                         <div class="subtle">登录态存在：${creatorCrawlerHealth.storage_state_exists === true ? '是' : (creatorCrawlerHealth.storage_state_exists === false ? '否' : '-')}</div>
                         <div class="subtle">笔记阅读量支持：${creatorCrawlerHealth.supports_account_views === true ? '是' : (creatorCrawlerHealth.supports_account_views === false ? '否' : '-')}</div>
-                        <div class="subtle">传播量支持：${creatorCrawlerHealth.supports_account_exposures === true ? '是' : (creatorCrawlerHealth.supports_account_exposures === false ? '否' : '-')}</div>
+                        <div class="subtle">曝光量支持：${creatorCrawlerHealth.supports_account_exposures === true ? '是' : (creatorCrawlerHealth.supports_account_exposures === false ? '否' : '-')}</div>
                         ${creatorCrawlerHealth.metric_notes ? `<div class="subtle mt-1">口径说明：${escapeHtml(creatorCrawlerHealth.metric_notes)}</div>` : ''}
                     </div>
                     <div class="col-lg-3">
@@ -4128,7 +4128,7 @@
                                 <th>关键词</th>
                                 <th>标题</th>
                                 <th>互动</th>
-                                <th>传播量</th>
+                                <th>曝光量</th>
                                 <th>评分</th>
                             </tr>
                         </thead>
@@ -4188,7 +4188,7 @@
                                 <th>关键词</th>
                                 <th>标题</th>
                                 <th>互动</th>
-                                <th>传播量</th>
+                                <th>曝光量</th>
                                 <th>评分</th>
                             </tr>
                         </thead>

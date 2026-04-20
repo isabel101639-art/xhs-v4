@@ -520,7 +520,7 @@ class PlaywrightXHSCrawlerProvider(BaseCrawlerProvider):
             'supports_account_exposures': True,
             'supports_trend_views': True,
             'supports_trend_hot_value': True,
-            'metric_notes': '当前 Playwright 版本可抓阅读量/热度；如果账号页状态树里包含 impression_cnt/exposure_count，也会回填传播量(exposures)，否则仍回退为 0。',
+            'metric_notes': '当前 Playwright 版本可抓阅读量/热度；如果账号页状态树里包含 impression_cnt/exposure_count，也会回填曝光量(exposures)，否则仍回退为 0。',
             'search_url_template': self.settings.xhs_search_url_template,
             'post_card_selectors': _selector_candidates(
                 self.settings.xhs_post_card_selector,

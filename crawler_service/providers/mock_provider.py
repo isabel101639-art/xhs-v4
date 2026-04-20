@@ -25,7 +25,7 @@ class MockCrawlerProvider(BaseCrawlerProvider):
             'supports_account_exposures': True,
             'supports_trend_views': True,
             'supports_trend_hot_value': True,
-            'metric_notes': 'mock provider 会返回模拟阅读量与传播量，用于联调链路，不代表真实小红书口径。',
+            'metric_notes': 'mock provider 会返回模拟阅读量与曝光量，用于联调链路，不代表真实小红书口径。',
         }
 
     async def fetch_account_posts(self, payload):
