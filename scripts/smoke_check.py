@@ -20,9 +20,11 @@ def _assert(condition, message):
 def _bootstrap_smoke_env():
     temp_dir = tempfile.mkdtemp(prefix='xhs_v4_smoke_')
     db_path = os.path.join(temp_dir, 'smoke_check.db')
+    probe_dir = os.path.join(temp_dir, 'crawler_debug')
     os.environ['DATABASE_URL'] = f'sqlite:///{db_path}'
     os.environ.setdefault('SECRET_KEY', 'xhs_v4_smoke_secret')
     os.environ.setdefault('INLINE_AUTOMATION_JOBS', 'true')
+    os.environ['XHS_DEBUG_OUTPUT_DIR'] = probe_dir
     return temp_dir
 
 
@@ -75,6 +77,9 @@ def _run_runtime_diagnostics_checks(client):
     _assert('items' in crawler_probe, 'runtime-diagnostics should include crawler_probe items')
     _assert(isinstance(crawler_probe.get('items'), list), 'crawler_probe items should be a list')
     _assert(len(crawler_probe.get('items') or []) >= 5, 'crawler_probe should expose default probe slots')
+    existing_items = [item for item in (crawler_probe.get('items') or []) if item.get('exists')]
+    for item in existing_items:
+        _assert(isinstance(item.get('metric_sources') or {}, dict), 'crawler_probe metric_sources should be a dict when present')
     _print_check('runtime_diagnostics_crawler_probe', json.dumps(crawler_probe, ensure_ascii=False))
 
 

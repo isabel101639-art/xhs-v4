@@ -3889,11 +3889,15 @@
                     <td>
                         ${item.link ? `<a href="${escapeHtml(item.link)}" target="_blank">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)}
                         <div class="subtle">${escapeHtml((item.summary || '').slice(0, 60))}</div>
+                        ${(item.metric_sources && Object.keys(item.metric_sources).length)
+                            ? `<div class="subtle">来源：${escapeHtml(Object.entries(item.metric_sources).map(([key, value]) => `${key}=${value || '-'}`).join(' ｜ '))}</div>`
+                            : ''
+                        }
                     </td>
                     <td><span class="badge ${poolStatusClass(item.pool_status)}">${escapeHtml(item.pool_status_label || item.pool_status || '储备池')}</span></td>
                     <td>${item.hot_score || item.score || 0}</td>
                     <td>${item.interactions || 0}</td>
-                    <td>${item.views || 0}</td>
+                    <td>${item.exposures || item.views || 0}</td>
                     <td>${escapeHtml(item.author || '-')}</td>
                     <td>${escapeHtml(item.import_batch || '-')}</td>
                     <td>

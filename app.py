@@ -2528,6 +2528,9 @@ def _build_corpus_insights_payload(pool_status='', category=''):
 
 
 def _serialize_trend_note(note):
+    payload = _load_json_value(note.raw_payload, {})
+    metric_sources = payload.get('metric_sources') if isinstance(payload, dict) else {}
+    exposures = _safe_int(payload.get('exposures')) if isinstance(payload, dict) else 0
     return {
         'id': note.id,
         'source_platform': note.source_platform,
@@ -2540,6 +2543,7 @@ def _serialize_trend_note(note):
         'author': note.author or '',
         'link': note.link or '',
         'views': note.views or 0,
+        'exposures': exposures,
         'likes': note.likes or 0,
         'favorites': note.favorites or 0,
         'comments': note.comments or 0,
@@ -2548,6 +2552,7 @@ def _serialize_trend_note(note):
         'source_rank': note.source_rank or 0,
         'score': note.hot_score or _trend_score(note),
         'summary': note.summary or '',
+        'metric_sources': metric_sources if isinstance(metric_sources, dict) else {},
         'pool_status': note.pool_status or 'reserve',
         'pool_status_label': _pool_status_label(note.pool_status or 'reserve'),
         'created_at': note.created_at.strftime('%Y-%m-%d %H:%M:%S') if note.created_at else '',
@@ -2769,6 +2774,8 @@ def _infer_viral_post(views=0, likes=0, favorites=0, comments=0, exposures=0):
 
 def _serialize_creator_post(post):
     interactions = _creator_post_interactions(post)
+    payload = _load_json_value(post.raw_payload, {})
+    metric_sources = payload.get('metric_sources') if isinstance(payload, dict) else {}
     return {
         'id': post.id,
         'creator_account_id': post.creator_account_id,
@@ -2789,6 +2796,7 @@ def _serialize_creator_post(post):
         'follower_delta': post.follower_delta or 0,
         'interactions': interactions,
         'is_viral': bool(post.is_viral),
+        'metric_sources': metric_sources if isinstance(metric_sources, dict) else {},
         'source_channel': post.source_channel or '',
         'created_at': post.created_at.strftime('%Y-%m-%d %H:%M:%S') if post.created_at else '',
     }

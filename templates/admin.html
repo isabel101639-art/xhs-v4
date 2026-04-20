@@ -2293,7 +2293,13 @@
 
             document.getElementById('creatorPostTableBody').innerHTML = posts.map((item) => `
                 <tr>
-                    <td>${item.post_url ? `<a href="${item.post_url}" target="_blank">${item.title}</a>` : item.title}</td>
+                    <td>
+                        ${item.post_url ? `<a href="${item.post_url}" target="_blank">${item.title}</a>` : item.title}
+                        ${(item.metric_sources && Object.keys(item.metric_sources).length)
+                            ? `<div class="text-muted small mt-1">来源：${Object.entries(item.metric_sources).map(([key, value]) => `${escapeHtml(key)}=${escapeHtml(value || '-')}`).join(' ｜ ')}</div>`
+                            : ''
+                        }
+                    </td>
                     <td>${item.topic_title || '-'}</td>
                     <td>${item.publish_time || '-'}</td>
                     <td>${item.views || 0}</td>
