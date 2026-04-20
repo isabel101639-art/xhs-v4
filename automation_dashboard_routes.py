@@ -12,6 +12,7 @@ from models import (
     Settings,
     TopicIdea,
     TrendNote,
+    db,
 )
 
 
@@ -46,6 +47,7 @@ def register_automation_dashboard_routes(app, helpers):
     build_capacity_readiness_payload = helpers['build_capacity_readiness_payload']
     build_recent_failed_jobs_payload = helpers['build_recent_failed_jobs_payload']
     build_service_matrix_payload = helpers['build_service_matrix_payload']
+    automation_runtime_config = helpers['automation_runtime_config']
     hotword_runtime_settings = helpers['hotword_runtime_settings']
     creator_sync_runtime_settings = helpers['creator_sync_runtime_settings']
     image_provider_capabilities = helpers['image_provider_capabilities']
@@ -206,12 +208,19 @@ def register_automation_dashboard_routes(app, helpers):
                 'hotword_api_url': hotword_settings.get('hotword_api_url') or '',
                 'hotword_api_method': hotword_settings.get('hotword_api_method') or 'GET',
                 'hotword_result_path': hotword_settings.get('hotword_result_path') or '',
+                'hotword_trend_type': hotword_settings.get('hotword_trend_type') or 'note_search',
+                'hotword_page_size': hotword_settings.get('hotword_page_size') or 20,
+                'hotword_max_related_queries': hotword_settings.get('hotword_max_related_queries') or 20,
                 'hotword_auto_generate_topic_ideas': bool(hotword_settings.get('hotword_auto_generate_topic_ideas')),
                 'hotword_auto_generate_topic_count': hotword_settings.get('hotword_auto_generate_topic_count') or 20,
                 'creator_sync_fetch_mode': resolved_creator_sync_mode(creator_sync_settings),
                 'creator_sync_api_url': creator_sync_settings.get('creator_sync_api_url') or '',
                 'creator_sync_api_method': creator_sync_settings.get('creator_sync_api_method') or 'POST',
                 'creator_sync_result_path': creator_sync_settings.get('creator_sync_result_path') or '',
+                'creator_sync_current_month_only': bool(creator_sync_settings.get('creator_sync_current_month_only')),
+                'creator_sync_date_from': creator_sync_settings.get('creator_sync_date_from') or '',
+                'creator_sync_date_to': creator_sync_settings.get('creator_sync_date_to') or '',
+                'creator_sync_max_posts_per_account': creator_sync_settings.get('creator_sync_max_posts_per_account') or 60,
             },
             'worker': {
                 'broker_ready': bool((helpers['os'].environ.get('CELERY_BROKER_URL') or '').strip()),
@@ -398,7 +407,7 @@ def register_automation_dashboard_routes(app, helpers):
 
         if request.method == 'POST':
             data = request.json or {}
-            current = _automation_runtime_config()
+            current = automation_runtime_config()
             next_config = dict(current)
             next_config['hotword_source_platform'] = (data.get('hotword_source_platform') or current['hotword_source_platform']).strip()[:50]
             next_config['hotword_source_template'] = (data.get('hotword_source_template') or current['hotword_source_template']).strip()[:50]
@@ -413,6 +422,9 @@ def register_automation_dashboard_routes(app, helpers):
             next_config['hotword_result_path'] = (data.get('hotword_result_path') or current.get('hotword_result_path') or '').strip()[:200]
             next_config['hotword_keyword_param'] = (data.get('hotword_keyword_param') or current.get('hotword_keyword_param') or 'keyword').strip()[:50]
             next_config['hotword_timeout_seconds'] = min(max(safe_int(data.get('hotword_timeout_seconds'), current.get('hotword_timeout_seconds') or 30), 5), 120)
+            next_config['hotword_trend_type'] = (data.get('hotword_trend_type') or current.get('hotword_trend_type') or 'note_search').strip()[:30]
+            next_config['hotword_page_size'] = min(max(safe_int(data.get('hotword_page_size'), current.get('hotword_page_size') or 20), 1), 50)
+            next_config['hotword_max_related_queries'] = min(max(safe_int(data.get('hotword_max_related_queries'), current.get('hotword_max_related_queries') or 20), 1), 50)
             next_config['hotword_auto_generate_topic_ideas'] = helpers['coerce_bool'](data.get('hotword_auto_generate_topic_ideas'))
             next_config['hotword_auto_generate_topic_count'] = min(max(safe_int(data.get('hotword_auto_generate_topic_count'), current.get('hotword_auto_generate_topic_count') or 20), 1), 120)
             next_config['hotword_auto_generate_topic_activity_id'] = max(safe_int(data.get('hotword_auto_generate_topic_activity_id'), current.get('hotword_auto_generate_topic_activity_id') or 0), 0)
@@ -427,6 +439,25 @@ def register_automation_dashboard_routes(app, helpers):
             next_config['creator_sync_result_path'] = (data.get('creator_sync_result_path') or current.get('creator_sync_result_path') or '').strip()[:200]
             next_config['creator_sync_timeout_seconds'] = min(max(safe_int(data.get('creator_sync_timeout_seconds'), current.get('creator_sync_timeout_seconds') or 60), 5), 300)
             next_config['creator_sync_batch_limit'] = min(max(safe_int(data.get('creator_sync_batch_limit'), current.get('creator_sync_batch_limit') or 20), 1), 200)
+            next_config['creator_sync_current_month_only'] = helpers['coerce_bool'](
+                data.get('creator_sync_current_month_only')
+                if 'creator_sync_current_month_only' in data
+                else current.get('creator_sync_current_month_only')
+            )
+            next_config['creator_sync_date_from'] = (
+                data.get('creator_sync_date_from')
+                if 'creator_sync_date_from' in data
+                else current.get('creator_sync_date_from') or ''
+            ).strip()[:20]
+            next_config['creator_sync_date_to'] = (
+                data.get('creator_sync_date_to')
+                if 'creator_sync_date_to' in data
+                else current.get('creator_sync_date_to') or ''
+            ).strip()[:20]
+            next_config['creator_sync_max_posts_per_account'] = min(max(
+                safe_int(data.get('creator_sync_max_posts_per_account'), current.get('creator_sync_max_posts_per_account') or 60),
+                1,
+            ), 100)
             next_config['image_provider'] = (data.get('image_provider') or current['image_provider']).strip()[:50]
             next_config['image_api_base'] = (data.get('image_api_base') or current['image_api_base']).strip()[:500]
             next_config['image_api_url'] = (data.get('image_api_url') or current['image_api_url']).strip()[:500]
@@ -488,6 +519,9 @@ def register_automation_dashboard_routes(app, helpers):
             'result_path': runtime_config.get('hotword_result_path') or '',
             'keyword_param': runtime_config.get('hotword_keyword_param') or 'keyword',
             'timeout_seconds': runtime_config.get('hotword_timeout_seconds') or 30,
+            'trend_type': runtime_config.get('hotword_trend_type') or 'note_search',
+            'page_size': runtime_config.get('hotword_page_size') or 20,
+            'max_related_queries': runtime_config.get('hotword_max_related_queries') or 20,
             'auto_generate_topic_ideas': bool(runtime_config.get('hotword_auto_generate_topic_ideas')),
             'auto_generate_topic_count': runtime_config.get('hotword_auto_generate_topic_count') or 20,
             'auto_generate_topic_activity_id': runtime_config.get('hotword_auto_generate_topic_activity_id') or 0,
@@ -518,6 +552,10 @@ def register_automation_dashboard_routes(app, helpers):
             'result_path': creator_runtime_config.get('creator_sync_result_path') or '',
             'timeout_seconds': creator_runtime_config.get('creator_sync_timeout_seconds') or 60,
             'batch_limit': creator_runtime_config.get('creator_sync_batch_limit') or 20,
+            'current_month_only': bool(creator_runtime_config.get('creator_sync_current_month_only')),
+            'date_from': creator_runtime_config.get('creator_sync_date_from') or '',
+            'date_to': creator_runtime_config.get('creator_sync_date_to') or '',
+            'max_posts_per_account': creator_runtime_config.get('creator_sync_max_posts_per_account') or 60,
             'target_count': len(creator_sync_targets),
             'sample_targets': creator_sync_targets[:3],
         }
@@ -531,6 +569,10 @@ def register_automation_dashboard_routes(app, helpers):
                     source_channel=creator_sync_preview['source_channel'],
                     batch_name='preview_creator_sync',
                 )
+                creator_sync_preview['current_month_only'] = creator_sync_request_preview.get('current_month_only', creator_sync_preview['current_month_only'])
+                creator_sync_preview['date_from'] = creator_sync_request_preview.get('date_from', creator_sync_preview['date_from'])
+                creator_sync_preview['date_to'] = creator_sync_request_preview.get('date_to', creator_sync_preview['date_to'])
+                creator_sync_preview['max_posts_per_account'] = creator_sync_request_preview.get('max_posts_per_account', creator_sync_preview['max_posts_per_account'])
             except Exception as exc:
                 creator_sync_preview_error = str(exc)
         image_prompt_preview = asset_prompt_from_context(

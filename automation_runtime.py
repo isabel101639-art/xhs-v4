@@ -17,6 +17,9 @@ AUTOMATION_RUNTIME_CONFIG_DEFAULTS = {
     'hotword_result_path': '',
     'hotword_keyword_param': 'keyword',
     'hotword_timeout_seconds': 30,
+    'hotword_trend_type': 'note_search',
+    'hotword_page_size': 20,
+    'hotword_max_related_queries': 20,
     'hotword_auto_generate_topic_ideas': False,
     'hotword_auto_generate_topic_count': 20,
     'hotword_auto_generate_topic_activity_id': 0,
@@ -31,6 +34,10 @@ AUTOMATION_RUNTIME_CONFIG_DEFAULTS = {
     'creator_sync_result_path': '',
     'creator_sync_timeout_seconds': 60,
     'creator_sync_batch_limit': 20,
+    'creator_sync_current_month_only': True,
+    'creator_sync_date_from': '',
+    'creator_sync_date_to': '',
+    'creator_sync_max_posts_per_account': 60,
     'image_provider': 'svg_fallback',
     'image_api_url': '',
     'image_api_base': '',
@@ -554,11 +561,18 @@ def _hotword_runtime_settings():
         'hotword_api_body_json': (os.environ.get('HOTWORD_API_BODY_JSON') or '').strip(),
         'hotword_result_path': (os.environ.get('HOTWORD_RESULT_PATH') or '').strip(),
         'hotword_keyword_param': (os.environ.get('HOTWORD_KEYWORD_PARAM') or '').strip(),
+        'hotword_trend_type': (os.environ.get('HOTWORD_TREND_TYPE') or '').strip(),
         'hotword_auto_generate_topic_ideas': (os.environ.get('HOTWORD_AUTO_GENERATE_TOPIC_IDEAS') or '').strip(),
     }
     timeout_value = (os.environ.get('HOTWORD_TIMEOUT_SECONDS') or '').strip()
     if timeout_value:
         env_overrides['hotword_timeout_seconds'] = _safe_int(timeout_value, config.get('hotword_timeout_seconds', 30))
+    page_size_value = (os.environ.get('HOTWORD_PAGE_SIZE') or '').strip()
+    if page_size_value:
+        env_overrides['hotword_page_size'] = _safe_int(page_size_value, config.get('hotword_page_size', 20))
+    max_related_queries_value = (os.environ.get('HOTWORD_MAX_RELATED_QUERIES') or '').strip()
+    if max_related_queries_value:
+        env_overrides['hotword_max_related_queries'] = _safe_int(max_related_queries_value, config.get('hotword_max_related_queries', 20))
     auto_generate_count = (os.environ.get('HOTWORD_AUTO_GENERATE_TOPIC_COUNT') or '').strip()
     if auto_generate_count:
         env_overrides['hotword_auto_generate_topic_count'] = _safe_int(auto_generate_count, config.get('hotword_auto_generate_topic_count', 20))
@@ -576,6 +590,11 @@ def _hotword_runtime_settings():
     config['hotword_fetch_mode'] = (config.get('hotword_fetch_mode') or 'auto').strip().lower() or 'auto'
     config['hotword_api_method'] = (config.get('hotword_api_method') or 'GET').strip().upper() or 'GET'
     config['hotword_keyword_param'] = (config.get('hotword_keyword_param') or 'keyword').strip() or 'keyword'
+    config['hotword_trend_type'] = (config.get('hotword_trend_type') or 'note_search').strip().lower() or 'note_search'
+    if config['hotword_trend_type'] not in {'note_search', 'hot_queries'}:
+        config['hotword_trend_type'] = 'note_search'
+    config['hotword_page_size'] = min(max(_safe_int(config.get('hotword_page_size'), 20), 1), 50)
+    config['hotword_max_related_queries'] = min(max(_safe_int(config.get('hotword_max_related_queries'), 20), 1), 50)
     config['hotword_auto_generate_topic_ideas'] = str(config.get('hotword_auto_generate_topic_ideas') or '').strip().lower() in {'1', 'true', 'yes', 'y', 'on'}
     config['hotword_auto_generate_topic_count'] = min(max(_safe_int(config.get('hotword_auto_generate_topic_count'), 20), 1), 120)
     config['hotword_auto_generate_topic_activity_id'] = max(_safe_int(config.get('hotword_auto_generate_topic_activity_id'), 0), 0)
@@ -610,6 +629,18 @@ def _creator_sync_runtime_settings():
     batch_limit_value = (os.environ.get('CREATOR_SYNC_BATCH_LIMIT') or '').strip()
     if batch_limit_value:
         env_overrides['creator_sync_batch_limit'] = _safe_int(batch_limit_value, config.get('creator_sync_batch_limit', 20))
+    current_month_only_value = (os.environ.get('CREATOR_SYNC_CURRENT_MONTH_ONLY') or '').strip()
+    if current_month_only_value:
+        env_overrides['creator_sync_current_month_only'] = current_month_only_value
+    date_from_value = (os.environ.get('CREATOR_SYNC_DATE_FROM') or '').strip()
+    if date_from_value:
+        env_overrides['creator_sync_date_from'] = date_from_value
+    date_to_value = (os.environ.get('CREATOR_SYNC_DATE_TO') or '').strip()
+    if date_to_value:
+        env_overrides['creator_sync_date_to'] = date_to_value
+    max_posts_value = (os.environ.get('CREATOR_SYNC_MAX_POSTS_PER_ACCOUNT') or '').strip()
+    if max_posts_value:
+        env_overrides['creator_sync_max_posts_per_account'] = _safe_int(max_posts_value, config.get('creator_sync_max_posts_per_account', 60))
 
     for key, value in env_overrides.items():
         if value not in [None, '']:
@@ -619,6 +650,10 @@ def _creator_sync_runtime_settings():
     config['creator_sync_api_method'] = (config.get('creator_sync_api_method') or 'POST').strip().upper() or 'POST'
     config['creator_sync_timeout_seconds'] = min(max(_safe_int(config.get('creator_sync_timeout_seconds'), 60), 5), 300)
     config['creator_sync_batch_limit'] = min(max(_safe_int(config.get('creator_sync_batch_limit'), 20), 1), 200)
+    config['creator_sync_current_month_only'] = str(config.get('creator_sync_current_month_only', 'true')).strip().lower() in {'1', 'true', 'yes', 'y', 'on'}
+    config['creator_sync_date_from'] = (config.get('creator_sync_date_from') or '').strip()
+    config['creator_sync_date_to'] = (config.get('creator_sync_date_to') or '').strip()
+    config['creator_sync_max_posts_per_account'] = min(max(_safe_int(config.get('creator_sync_max_posts_per_account'), 60), 1), 100)
     return config
 
 

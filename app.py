@@ -2533,6 +2533,7 @@ def _serialize_trend_note(note):
         'source_platform': note.source_platform,
         'source_channel': note.source_channel,
         'source_template_key': note.source_template_key or 'generic_lines',
+        'source_template_label': _hotword_source_template_meta(note.source_template_key or 'generic_lines').get('label'),
         'import_batch': note.import_batch or '',
         'keyword': note.keyword or '',
         'title': note.title,
@@ -3879,6 +3880,9 @@ def _deployment_config_value(key, runtime_config=None):
         'HOTWORD_RESULT_PATH': 'hotword_result_path',
         'HOTWORD_KEYWORD_PARAM': 'hotword_keyword_param',
         'HOTWORD_TIMEOUT_SECONDS': 'hotword_timeout_seconds',
+        'HOTWORD_TREND_TYPE': 'hotword_trend_type',
+        'HOTWORD_PAGE_SIZE': 'hotword_page_size',
+        'HOTWORD_MAX_RELATED_QUERIES': 'hotword_max_related_queries',
         'HOTWORD_AUTO_GENERATE_TOPIC_IDEAS': 'hotword_auto_generate_topic_ideas',
         'HOTWORD_AUTO_GENERATE_TOPIC_COUNT': 'hotword_auto_generate_topic_count',
         'HOTWORD_AUTO_GENERATE_TOPIC_ACTIVITY_ID': 'hotword_auto_generate_topic_activity_id',
@@ -3893,6 +3897,10 @@ def _deployment_config_value(key, runtime_config=None):
         'CREATOR_SYNC_RESULT_PATH': 'creator_sync_result_path',
         'CREATOR_SYNC_TIMEOUT_SECONDS': 'creator_sync_timeout_seconds',
         'CREATOR_SYNC_BATCH_LIMIT': 'creator_sync_batch_limit',
+        'CREATOR_SYNC_CURRENT_MONTH_ONLY': 'creator_sync_current_month_only',
+        'CREATOR_SYNC_DATE_FROM': 'creator_sync_date_from',
+        'CREATOR_SYNC_DATE_TO': 'creator_sync_date_to',
+        'CREATOR_SYNC_MAX_POSTS_PER_ACCOUNT': 'creator_sync_max_posts_per_account',
         'ASSET_IMAGE_PROVIDER': 'image_provider',
         'ASSET_IMAGE_API_BASE': 'image_api_base',
         'ASSET_IMAGE_API_URL': 'image_api_url',
@@ -3973,8 +3981,8 @@ def _build_deployment_helper_payload():
         },
         'HOTWORD_API_URL': {
             'label': '热点 API URL',
-            'purpose': '第三方热点接口入口地址。',
-            'example': 'https://api.example.com/hotwords',
+            'purpose': '热点接口入口地址，可填第三方接口，也可直接填 crawler 服务的 /xhs/trends。',
+            'example': 'http://crawler:8081/xhs/trends',
         },
         'HOTWORD_RESULT_PATH': {
             'label': '热点结果路径',
@@ -3995,6 +4003,21 @@ def _build_deployment_helper_payload():
             'label': '热点 Body JSON',
             'purpose': '第三方接口要求 POST Body 时填写。',
             'example': '{"keyword":"医疗"}',
+        },
+        'HOTWORD_TREND_TYPE': {
+            'label': '热点抓取类型',
+            'purpose': '本地 crawler 抓热点时，用 note_search 抓爆款笔记，用 hot_queries 抓相关热搜词。',
+            'example': 'note_search',
+        },
+        'HOTWORD_PAGE_SIZE': {
+            'label': '热点搜索结果条数',
+            'purpose': '本地 crawler 抓爆款笔记时，限制每轮返回的搜索结果条数。',
+            'example': '20',
+        },
+        'HOTWORD_MAX_RELATED_QUERIES': {
+            'label': '热点相关搜索词条数',
+            'purpose': '本地 crawler 抓热搜词时，限制每轮返回的相关搜索词条数。',
+            'example': '20',
         },
         'CREATOR_SYNC_FETCH_MODE': {
             'label': '账号同步模式',
@@ -4056,6 +4079,21 @@ def _build_deployment_helper_payload():
             'purpose': '真实抓小红书账号时复用登录态，减少人工扫码。',
             'example': '/app/crawler_service/.state/xhs_storage_state.json',
         },
+        'XHS_SEARCH_URL_TEMPLATE': {
+            'label': '小红书搜索 URL 模板',
+            'purpose': 'crawler 抓热点/爆款笔记时使用的搜索地址模板。',
+            'example': 'https://www.xiaohongshu.com/search_result?keyword={keyword}&source=web_explore_feed',
+        },
+        'XHS_POST_AUTHOR_SELECTOR': {
+            'label': '笔记作者选择器',
+            'purpose': 'Playwright 抓爆款笔记时提取作者昵称的自定义选择器。',
+            'example': '[class*="author"]',
+        },
+        'XHS_SEARCH_RELATED_QUERY_SELECTOR': {
+            'label': '相关搜索词选择器',
+            'purpose': 'Playwright 抓热搜词时提取相关搜索词的自定义选择器。',
+            'example': '[class*="related"] a',
+        },
     }
     sensitive_keys = {
         'SECRET_KEY',
@@ -4087,6 +4125,9 @@ def _build_deployment_helper_payload():
         'HOTWORD_RESULT_PATH': (hotword_settings.get('hotword_result_path') or ''),
         'HOTWORD_KEYWORD_PARAM': (hotword_settings.get('hotword_keyword_param') or 'keyword'),
         'HOTWORD_TIMEOUT_SECONDS': str(hotword_settings.get('hotword_timeout_seconds') or 30),
+        'HOTWORD_TREND_TYPE': (hotword_settings.get('hotword_trend_type') or 'note_search'),
+        'HOTWORD_PAGE_SIZE': str(hotword_settings.get('hotword_page_size') or 20),
+        'HOTWORD_MAX_RELATED_QUERIES': str(hotword_settings.get('hotword_max_related_queries') or 20),
         'HOTWORD_AUTO_GENERATE_TOPIC_IDEAS': 'true' if hotword_settings.get('hotword_auto_generate_topic_ideas') else 'false',
         'HOTWORD_AUTO_GENERATE_TOPIC_COUNT': str(hotword_settings.get('hotword_auto_generate_topic_count') or 20),
         'HOTWORD_AUTO_GENERATE_TOPIC_ACTIVITY_ID': str(hotword_settings.get('hotword_auto_generate_topic_activity_id') or 0),
@@ -4101,6 +4142,10 @@ def _build_deployment_helper_payload():
         'CREATOR_SYNC_RESULT_PATH': (creator_sync_settings.get('creator_sync_result_path') or ''),
         'CREATOR_SYNC_TIMEOUT_SECONDS': str(creator_sync_settings.get('creator_sync_timeout_seconds') or 60),
         'CREATOR_SYNC_BATCH_LIMIT': str(creator_sync_settings.get('creator_sync_batch_limit') or 20),
+        'CREATOR_SYNC_CURRENT_MONTH_ONLY': 'true' if creator_sync_settings.get('creator_sync_current_month_only') else 'false',
+        'CREATOR_SYNC_DATE_FROM': (creator_sync_settings.get('creator_sync_date_from') or ''),
+        'CREATOR_SYNC_DATE_TO': (creator_sync_settings.get('creator_sync_date_to') or ''),
+        'CREATOR_SYNC_MAX_POSTS_PER_ACCOUNT': str(creator_sync_settings.get('creator_sync_max_posts_per_account') or 60),
         'CRAWLER_PROVIDER': os.environ.get('CRAWLER_PROVIDER', 'mock') or 'mock',
         'CRAWLER_PORT': os.environ.get('CRAWLER_PORT', '8081') or '8081',
         'CRAWLER_REQUEST_TIMEOUT_SECONDS': os.environ.get('CRAWLER_REQUEST_TIMEOUT_SECONDS', '60') or '60',
@@ -4188,6 +4233,9 @@ def _build_deployment_helper_payload():
                 env_item('HOTWORD_RESULT_PATH', required=False),
                 env_item('HOTWORD_KEYWORD_PARAM', required=False),
                 env_item('HOTWORD_TIMEOUT_SECONDS', required=False),
+                env_item('HOTWORD_TREND_TYPE', required=False),
+                env_item('HOTWORD_PAGE_SIZE', required=False),
+                env_item('HOTWORD_MAX_RELATED_QUERIES', required=False),
                 env_item('ASSET_IMAGE_PROVIDER', required=False),
                 env_item('ASSET_IMAGE_API_BASE', required=False),
                 env_item('ASSET_IMAGE_API_URL', required=False),
@@ -4220,6 +4268,9 @@ def _build_deployment_helper_payload():
                 env_item('HOTWORD_RESULT_PATH', required=False),
                 env_item('HOTWORD_KEYWORD_PARAM', required=False),
                 env_item('HOTWORD_TIMEOUT_SECONDS', required=False),
+                env_item('HOTWORD_TREND_TYPE', required=False),
+                env_item('HOTWORD_PAGE_SIZE', required=False),
+                env_item('HOTWORD_MAX_RELATED_QUERIES', required=False),
                 env_item('ASSET_IMAGE_PROVIDER', required=False),
                 env_item('ASSET_IMAGE_API_BASE', required=False),
                 env_item('ASSET_IMAGE_API_URL', required=False),
@@ -4259,6 +4310,7 @@ def _build_deployment_helper_payload():
             'optional_envs': [
                 env_item('CRAWLER_REQUEST_TIMEOUT_SECONDS', required=False),
                 env_item('XHS_PROFILE_URL_TEMPLATE', required=False),
+                env_item('XHS_SEARCH_URL_TEMPLATE', required=False),
                 env_item('PLAYWRIGHT_HEADLESS', required=False),
                 env_item('PLAYWRIGHT_NAVIGATION_TIMEOUT_MS', required=False),
                 env_item('PLAYWRIGHT_STORAGE_STATE_PATH', required=False),
@@ -4270,11 +4322,13 @@ def _build_deployment_helper_payload():
                 env_item('XHS_POST_CARD_SELECTOR', required=False),
                 env_item('XHS_POST_LINK_SELECTOR', required=False),
                 env_item('XHS_POST_TITLE_SELECTOR', required=False),
+                env_item('XHS_POST_AUTHOR_SELECTOR', required=False),
                 env_item('XHS_POST_LIKES_SELECTOR', required=False),
                 env_item('XHS_POST_COMMENTS_SELECTOR', required=False),
                 env_item('XHS_POST_FAVORITES_SELECTOR', required=False),
                 env_item('XHS_POST_VIEWS_SELECTOR', required=False),
                 env_item('XHS_POST_TIME_SELECTOR', required=False),
+                env_item('XHS_SEARCH_RELATED_QUERY_SELECTOR', required=False),
                 env_item('XHS_MAX_POSTS_PER_ACCOUNT', required=False),
                 env_item('MOCK_POSTS_PER_ACCOUNT', required=False),
             ],
@@ -5251,6 +5305,13 @@ def _apply_creator_post_range(query, args):
         end_dt = datetime.combine(date_to, datetime.max.time())
         query = query.filter(or_(CreatorPost.publish_time.is_(None), CreatorPost.publish_time <= end_dt))
     return query, date_from, date_to
+
+
+def _current_month_date_range(now=None):
+    current = now or datetime.now()
+    start_date = current.replace(day=1).date()
+    end_date = current.date()
+    return start_date, end_date
 
 
 def _build_creator_account_query(args):
@@ -8676,11 +8737,19 @@ def _build_hotword_request_config(payload=None):
         'hotword_result_path',
         'hotword_keyword_param',
         'hotword_timeout_seconds',
+        'hotword_trend_type',
+        'hotword_page_size',
+        'hotword_max_related_queries',
     ]
     for key in override_keys:
         if payload.get(key) not in [None, '']:
             merged[key] = payload.get(key)
     merged['hotword_timeout_seconds'] = min(max(_safe_int(merged.get('hotword_timeout_seconds'), 30), 5), 120)
+    merged['hotword_trend_type'] = (merged.get('hotword_trend_type') or 'note_search').strip().lower() or 'note_search'
+    if merged['hotword_trend_type'] not in {'note_search', 'hot_queries'}:
+        merged['hotword_trend_type'] = 'note_search'
+    merged['hotword_page_size'] = min(max(_safe_int(merged.get('hotword_page_size'), 20), 1), 50)
+    merged['hotword_max_related_queries'] = min(max(_safe_int(merged.get('hotword_max_related_queries'), 20), 1), 50)
     merged['hotword_fetch_mode'] = _resolved_hotword_mode(merged)
     merged['hotword_api_method'] = (merged.get('hotword_api_method') or 'GET').strip().upper() or 'GET'
     return merged
@@ -8699,6 +8768,9 @@ def _build_hotword_remote_preview(payload=None, keywords=None, source_platform='
             'result_path': request_config.get('hotword_result_path'),
             'keyword_param': request_config.get('hotword_keyword_param'),
             'timeout_seconds': request_config.get('hotword_timeout_seconds'),
+            'trend_type': request_config.get('hotword_trend_type'),
+            'page_size': request_config.get('hotword_page_size'),
+            'max_related_queries': request_config.get('hotword_max_related_queries'),
         },
         keywords,
         source_platform=source_platform,
@@ -8725,6 +8797,9 @@ def _resolve_hotword_rows(task_record, params, keywords):
                 'result_path': params.get('hotword_result_path'),
                 'keyword_param': params.get('hotword_keyword_param'),
                 'timeout_seconds': params.get('hotword_timeout_seconds'),
+                'trend_type': params.get('hotword_trend_type'),
+                'page_size': params.get('hotword_page_size'),
+                'max_related_queries': params.get('hotword_max_related_queries'),
             },
             keywords,
             source_platform=source_platform,
@@ -8859,13 +8934,28 @@ def _build_creator_sync_request_config(payload=None):
         'creator_sync_result_path',
         'creator_sync_timeout_seconds',
         'creator_sync_batch_limit',
+        'creator_sync_current_month_only',
+        'creator_sync_date_from',
+        'creator_sync_date_to',
+        'creator_sync_max_posts_per_account',
     ]
+    allow_blank_override_keys = {'creator_sync_date_from', 'creator_sync_date_to'}
     for key in override_keys:
-        if payload.get(key) not in [None, '']:
-            merged[key] = payload.get(key)
+        if key not in payload:
+            continue
+        value = payload.get(key)
+        if value is None:
+            continue
+        if value == '' and key not in allow_blank_override_keys:
+            continue
+        merged[key] = value
     merged['creator_sync_source_channel'] = (merged.get('creator_sync_source_channel') or 'Crawler服务').strip()[:50] or 'Crawler服务'
     merged['creator_sync_timeout_seconds'] = min(max(_safe_int(merged.get('creator_sync_timeout_seconds'), 60), 5), 300)
     merged['creator_sync_batch_limit'] = min(max(_safe_int(merged.get('creator_sync_batch_limit'), 20), 1), 200)
+    merged['creator_sync_current_month_only'] = _coerce_bool(merged.get('creator_sync_current_month_only')) if 'creator_sync_current_month_only' in merged else True
+    merged['creator_sync_date_from'] = (merged.get('creator_sync_date_from') or '').strip()
+    merged['creator_sync_date_to'] = (merged.get('creator_sync_date_to') or '').strip()
+    merged['creator_sync_max_posts_per_account'] = min(max(_safe_int(merged.get('creator_sync_max_posts_per_account'), 60), 1), 100)
     merged['creator_sync_fetch_mode'] = _resolved_creator_sync_mode(merged)
     merged['creator_sync_api_method'] = (merged.get('creator_sync_api_method') or 'POST').strip().upper() or 'POST'
     return merged
@@ -8883,10 +8973,10 @@ def _build_creator_sync_remote_preview(payload=None, targets=None, source_channe
             'body_json': request_config.get('creator_sync_api_body_json'),
             'result_path': request_config.get('creator_sync_result_path'),
             'timeout_seconds': request_config.get('creator_sync_timeout_seconds'),
-            'current_month_only': payload.get('current_month_only', True),
-            'date_from': payload.get('date_from', ''),
-            'date_to': payload.get('date_to', ''),
-            'max_posts_per_account': payload.get('max_posts_per_account', 60),
+            'current_month_only': request_config.get('creator_sync_current_month_only', True),
+            'date_from': request_config.get('creator_sync_date_from', ''),
+            'date_to': request_config.get('creator_sync_date_to', ''),
+            'max_posts_per_account': request_config.get('creator_sync_max_posts_per_account', 60),
         },
         targets,
         source_channel=source_channel or request_config.get('creator_sync_source_channel') or 'Crawler服务',
@@ -9085,6 +9175,9 @@ def _dispatch_hotword_sync(payload, actor='system'):
             'hotword_result_path': request_config.get('hotword_result_path'),
             'hotword_keyword_param': request_config.get('hotword_keyword_param'),
             'hotword_timeout_seconds': request_config.get('hotword_timeout_seconds'),
+            'hotword_trend_type': request_config.get('hotword_trend_type'),
+            'hotword_page_size': request_config.get('hotword_page_size'),
+            'hotword_max_related_queries': request_config.get('hotword_max_related_queries'),
             'hotword_auto_generate_topic_ideas': auto_generate_topic_ideas,
             'hotword_auto_generate_topic_count': auto_generate_topic_count,
             'hotword_auto_generate_topic_activity_id': auto_generate_topic_activity_id,
@@ -9147,12 +9240,27 @@ def _dispatch_creator_account_sync(payload, actor='system'):
     source_platform = (payload.get('source_platform') or '小红书').strip() or '小红书'
     source_channel = (payload.get('source_channel') or request_config.get('creator_sync_source_channel') or 'Crawler服务').strip() or 'Crawler服务'
     batch_limit = min(max(_safe_int(payload.get('batch_limit'), request_config.get('creator_sync_batch_limit') or 20), 1), 200)
-    max_posts_per_account = min(max(_safe_int(payload.get('max_posts_per_account'), 60), 1), 100)
+    max_posts_per_account = min(max(_safe_int(payload.get('max_posts_per_account'), request_config.get('creator_sync_max_posts_per_account') or 60), 1), 100)
     now = datetime.now()
     default_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    current_month_only = _coerce_bool(payload.get('current_month_only')) if 'current_month_only' in payload else True
-    date_from = (payload.get('date_from') or default_month_start.strftime('%Y-%m-%d')).strip()[:19]
-    date_to = (payload.get('date_to') or now.strftime('%Y-%m-%d')).strip()[:19]
+    current_month_only = (
+        _coerce_bool(payload.get('current_month_only'))
+        if 'current_month_only' in payload
+        else _coerce_bool(request_config.get('creator_sync_current_month_only'))
+    )
+    date_from = (
+        (payload.get('date_from') if 'date_from' in payload else request_config.get('creator_sync_date_from'))
+        or ''
+    ).strip()[:19]
+    date_to = (
+        (payload.get('date_to') if 'date_to' in payload else request_config.get('creator_sync_date_to'))
+        or ''
+    ).strip()[:19]
+    if current_month_only:
+        if not date_from:
+            date_from = default_month_start.strftime('%Y-%m-%d')
+        if not date_to:
+            date_to = now.strftime('%Y-%m-%d')
     batch_name = (payload.get('batch_name') or datetime.now().strftime('creator_sync_%Y%m%d_%H%M%S')).strip()[:120]
     registration_id = _safe_int(payload.get('registration_id'), 0)
     creator_account_id = _safe_int(payload.get('creator_account_id'), 0)
@@ -9165,7 +9273,13 @@ def _dispatch_creator_account_sync(payload, actor='system'):
         raise ValueError('当前没有可同步的报名人账号，请先填写账号主页链接并提交一次笔记')
 
     remote_preview = _build_creator_sync_remote_preview(
-        request_config,
+        {
+            **request_config,
+            'creator_sync_current_month_only': current_month_only,
+            'creator_sync_date_from': date_from,
+            'creator_sync_date_to': date_to,
+            'creator_sync_max_posts_per_account': max_posts_per_account,
+        },
         targets,
         source_channel=source_channel,
         batch_name=batch_name,
@@ -9656,6 +9770,7 @@ register_automation_dashboard_routes(app, {
     'build_capacity_readiness_payload': _build_capacity_readiness_payload,
     'build_recent_failed_jobs_payload': _build_recent_failed_jobs_payload,
     'build_service_matrix_payload': _build_service_matrix_payload,
+    'automation_runtime_config': _automation_runtime_config,
     'hotword_runtime_settings': _hotword_runtime_settings,
     'creator_sync_runtime_settings': _creator_sync_runtime_settings,
     'image_provider_capabilities': _image_provider_capabilities,
@@ -9900,6 +10015,7 @@ def list_trends():
 
     keyword = (request.args.get('keyword') or '').strip()
     source_platform = (request.args.get('source_platform') or '').strip()
+    source_template_key = (request.args.get('source_template_key') or '').strip()
     pool_status = (request.args.get('pool_status') or '').strip()
     query = TrendNote.query
     if keyword:
@@ -9910,6 +10026,8 @@ def list_trends():
         ))
     if source_platform:
         query = query.filter_by(source_platform=source_platform)
+    if source_template_key:
+        query = query.filter_by(source_template_key=source_template_key)
     if pool_status:
         query = query.filter_by(pool_status=pool_status)
 
@@ -10415,6 +10533,12 @@ def creator_accounts_analytics():
         snapshots = snapshot_query.order_by(CreatorAccountSnapshot.snapshot_date.asc(), CreatorAccountSnapshot.created_at.asc()).all()
 
     analytics = _build_creator_analytics_payload(posts, snapshots, date_from=date_from, date_to=date_to)
+    month_from, month_to = _current_month_date_range()
+    current_month_posts = [
+        post for post in posts
+        if post.publish_time and month_from <= post.publish_time.date() <= month_to
+    ]
+    current_month_account_ids = {post.creator_account_id for post in current_month_posts if post.creator_account_id}
 
     platform_map = defaultdict(lambda: {
         'account_count': 0,
@@ -10460,8 +10584,20 @@ def creator_accounts_analytics():
     account_rows.sort(key=lambda item: (item['total_interactions'], item['total_views'], item['post_count']), reverse=True)
 
     analytics['overview']['account_count'] = len(accounts)
+    analytics['overview']['current_month_label'] = month_from.strftime('%Y-%m')
+    analytics['overview']['current_month_account_count'] = len(current_month_account_ids)
+    analytics['overview']['current_month_post_count'] = len(current_month_posts)
+    analytics['overview']['current_month_total_views'] = sum(post.views or 0 for post in current_month_posts)
+    analytics['overview']['current_month_total_interactions'] = sum((post.likes or 0) + (post.favorites or 0) + (post.comments or 0) for post in current_month_posts)
     analytics['platforms'] = platform_rows
     analytics['top_accounts'] = account_rows[:10]
+    analytics['current_month_top_posts'] = [
+        _serialize_creator_post(post) for post in sorted(
+            current_month_posts,
+            key=lambda item: ((item.views or 0), ((item.likes or 0) + (item.favorites or 0) + (item.comments or 0)), (item.follower_delta or 0)),
+            reverse=True,
+        )[:10]
+    ]
     return jsonify({
         'success': True,
         **analytics,
@@ -10831,6 +10967,11 @@ def creator_account_analytics(account_id):
     total_interactions = sum((post.likes or 0) + (post.favorites or 0) + (post.comments or 0) for post in posts)
     total_follower_delta = sum(post.follower_delta or 0 for post in posts)
     viral_posts = len([post for post in posts if post.is_viral])
+    month_from, month_to = _current_month_date_range()
+    current_month_posts = [
+        post for post in posts
+        if post.publish_time and month_from <= post.publish_time.date() <= month_to
+    ]
     best_post = sorted(
         posts,
         key=lambda item: ((item.views or 0), ((item.likes or 0) + (item.favorites or 0) + (item.comments or 0)), (item.follower_delta or 0)),
@@ -10849,6 +10990,10 @@ def creator_account_analytics(account_id):
         'best_post': _serialize_creator_post(best_post) if best_post else None,
         'date_from': date_from.isoformat() if date_from else '',
         'date_to': date_to.isoformat() if date_to else '',
+        'current_month_label': month_from.strftime('%Y-%m'),
+        'current_month_post_count': len(current_month_posts),
+        'current_month_total_views': sum(post.views or 0 for post in current_month_posts),
+        'current_month_total_interactions': sum((post.likes or 0) + (post.favorites or 0) + (post.comments or 0) for post in current_month_posts),
     }
 
     return jsonify({
@@ -10858,6 +11003,7 @@ def creator_account_analytics(account_id):
         'daily_posts': daily_rows,
         'daily_snapshots': snapshot_rows,
         'top_topics': top_topics[:10],
+        'current_month_posts': [_serialize_creator_post(post) for post in current_month_posts[:20]],
     })
 
 # 活动管理

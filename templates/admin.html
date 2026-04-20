@@ -675,10 +675,17 @@
                 <div class="card mb-3">
                     <div class="card-body">
                         <h6 class="mb-3">批量导入账号数据</h6>
-                        <div class="text-muted small mb-3">支持粘贴 JSON，结构可为 `{"accounts":[],"posts":[],"snapshots":[]}`，也支持只传其中一段。适合把真实账号、笔记表现和快照一次性灌进系统。</div>
+                        <div class="text-muted small mb-3">支持两种导入方式：1. 粘贴 JSON，结构可为 `{"accounts":[],"posts":[],"snapshots":[]}`；2. 直接粘贴 Excel 表格内容，系统会自动识别账号、笔记链接、互动数据、粉丝数据等列。</div>
                         <div class="row g-3">
                             <div class="col-md-12">
-                                <textarea id="creatorImportPayload" class="form-control" rows="8" placeholder='{
+                                <label class="form-label">上传 CSV / XLSX 文件</label>
+                                <input id="creatorImportFile" type="file" class="form-control mb-3" accept=".csv,.tsv,.txt,.xlsx">
+                                <textarea id="creatorImportPayload" class="form-control" rows="8" placeholder='可粘贴 JSON，或直接粘贴 Excel/表格内容，例如：
+平台	小红书ID	笔记链接	浏览量	点赞量	收藏量	评论量	粉丝量
+小红书	test123	https://www.xiaohongshu.com/explore/abc123	9800	320	120	45	5600
+
+或使用 JSON：
+{
   "accounts": [
     {
       "platform": "xhs",
@@ -1994,15 +2001,26 @@
 
         async function previewCreatorImport() {
             const rawPayload = document.getElementById('creatorImportPayload').value.trim();
-            if (!rawPayload) {
-                document.getElementById('creatorImportMsg').textContent = '请先粘贴导入 JSON';
+            const file = document.getElementById('creatorImportFile').files?.[0];
+            if (!rawPayload && !file) {
+                document.getElementById('creatorImportMsg').textContent = '请先粘贴导入内容或选择文件';
                 return;
             }
-            const res = await fetch('/api/creator_accounts/import_preview', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ raw_payload: rawPayload })
-            });
+            let res;
+            if (file) {
+                const form = new FormData();
+                form.append('file', file);
+                res = await fetch('/api/creator_accounts/import_preview', {
+                    method: 'POST',
+                    body: form
+                });
+            } else {
+                res = await fetch('/api/creator_accounts/import_preview', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ raw_payload: rawPayload })
+                });
+            }
             const data = await res.json();
             document.getElementById('creatorImportMsg').textContent = data.message || '已处理';
             if (!data.success) {
@@ -2017,17 +2035,28 @@
 
         async function importCreatorBundle() {
             const rawPayload = document.getElementById('creatorImportPayload').value.trim();
-            if (!rawPayload) {
-                document.getElementById('creatorImportMsg').textContent = '请先粘贴导入 JSON';
+            const file = document.getElementById('creatorImportFile').files?.[0];
+            if (!rawPayload && !file) {
+                document.getElementById('creatorImportMsg').textContent = '请先粘贴导入内容或选择文件';
                 return;
             }
             const confirmed = window.confirm('确认把这批账号 / 笔记 / 快照数据导入系统吗？');
             if (!confirmed) return;
-            const res = await fetch('/api/creator_accounts/import', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ raw_payload: rawPayload })
-            });
+            let res;
+            if (file) {
+                const form = new FormData();
+                form.append('file', file);
+                res = await fetch('/api/creator_accounts/import', {
+                    method: 'POST',
+                    body: form
+                });
+            } else {
+                res = await fetch('/api/creator_accounts/import', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ raw_payload: rawPayload })
+                });
+            }
             const data = await res.json();
             document.getElementById('creatorImportMsg').textContent = data.message || '已处理';
             if (!data.success) {
@@ -2035,6 +2064,7 @@
                 return;
             }
             document.getElementById('creatorImportPreview').textContent = JSON.stringify(data.summary || {}, null, 2);
+            document.getElementById('creatorImportFile').value = '';
             loadCreatorAccounts();
             resetCreatorAccountForm();
         }
@@ -2092,6 +2122,10 @@
                     <div class="col-md-3"><div class="mini-card">发文数<br><strong>${overview.post_count || 0}</strong></div></div>
                     <div class="col-md-3"><div class="mini-card">总阅读<br><strong>${overview.total_views || 0}</strong></div></div>
                     <div class="col-md-3"><div class="mini-card">总互动<br><strong>${overview.total_interactions || 0}</strong></div></div>
+                    <div class="col-md-3"><div class="mini-card">${overview.current_month_label || '本月'}活跃账号<br><strong>${overview.current_month_account_count || 0}</strong></div></div>
+                    <div class="col-md-3"><div class="mini-card">${overview.current_month_label || '本月'}发文<br><strong>${overview.current_month_post_count || 0}</strong></div></div>
+                    <div class="col-md-3"><div class="mini-card">${overview.current_month_label || '本月'}阅读<br><strong>${overview.current_month_total_views || 0}</strong></div></div>
+                    <div class="col-md-3"><div class="mini-card">${overview.current_month_label || '本月'}互动<br><strong>${overview.current_month_total_interactions || 0}</strong></div></div>
                 </div>
             `;
 
@@ -2215,12 +2249,17 @@
             const filteredViews = overview.total_views || 0;
             const filteredInteractions = overview.total_interactions || 0;
             const filteredBestPost = overview.best_post || null;
+            const currentMonthLabel = overview.current_month_label || '本月';
+            const currentMonthPosts = overview.current_month_post_count || 0;
+            const currentMonthViews = overview.current_month_total_views || 0;
+            const currentMonthInteractions = overview.current_month_total_interactions || 0;
 
             fillCreatorAccountForm(account);
             document.getElementById('creatorAccountDetail').innerHTML = `
                 <div><strong>${account.owner_name || '-'}</strong> · ${creatorPlatformLabel(account.platform)}</div>
                 <div class="text-muted small mt-1">账号：${account.display_name || account.account_handle || '-'} ｜ 粉丝：${account.follower_count || 0}</div>
                 <div class="text-muted small">发文数：${filteredPostCount} ｜ 爆款数：${filteredViralCount} ｜ 总阅读：${filteredViews} ｜ 总互动：${filteredInteractions}</div>
+                <div class="text-muted small">${currentMonthLabel}发文：${currentMonthPosts} ｜ ${currentMonthLabel}阅读：${currentMonthViews} ｜ ${currentMonthLabel}互动：${currentMonthInteractions}</div>
                 <div class="text-muted small">最佳笔记：${filteredBestPost ? filteredBestPost.title : '暂无'} ｜ 上次同步：${account.last_synced_at || '-'}</div>
                 <div class="text-muted small">统计区间：${dateFrom || '-'} ~ ${dateTo || '-'}</div>
             `;
@@ -2233,6 +2272,22 @@
                     <div class="col-md-3"><div class="mini-card">总涨粉<br><strong>${overview.total_follower_delta || 0}</strong></div></div>
                     <div class="col-md-6"><div class="mini-card">平均阅读<br><strong>${overview.avg_views || 0}</strong><div class="subtle mt-1">总阅读 ${overview.total_views || 0}</div></div></div>
                     <div class="col-md-6"><div class="mini-card">平均互动<br><strong>${overview.avg_interactions || 0}</strong><div class="subtle mt-1">总互动 ${overview.total_interactions || 0}</div></div></div>
+                    <div class="col-md-6"><div class="mini-card">${currentMonthLabel}发文<br><strong>${currentMonthPosts}</strong><div class="subtle mt-1">${currentMonthLabel}阅读 ${currentMonthViews}</div></div></div>
+                    <div class="col-md-6"><div class="mini-card">${currentMonthLabel}互动<br><strong>${currentMonthInteractions}</strong><div class="subtle mt-1">默认口径按账号当月全部笔记</div></div></div>
+                </div>
+                <div class="mt-3">
+                    <strong>${currentMonthLabel} 已同步笔记</strong>
+                    <div class="small text-muted mt-1">
+                        ${(analyticsData.current_month_posts || []).length
+                            ? (analyticsData.current_month_posts || []).map((item) => `
+                                <div class="mb-1">
+                                    ${item.post_url ? `<a href="${item.post_url}" target="_blank">${item.title || '未命名笔记'}</a>` : (item.title || '未命名笔记')}
+                                    ｜ 阅读 ${item.views || 0} ｜ 点赞 ${item.likes || 0} ｜ 收藏 ${item.favorites || 0} ｜ 评论 ${item.comments || 0}
+                                </div>
+                            `).join('')
+                            : `<div>${currentMonthLabel} 暂无同步笔记</div>`
+                        }
+                    </div>
                 </div>
             `;
 

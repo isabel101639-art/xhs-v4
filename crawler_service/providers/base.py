@@ -18,3 +18,7 @@ class BaseCrawlerProvider(ABC):
     @abstractmethod
     async def fetch_account_posts(self, payload):
         raise NotImplementedError
+
+    @abstractmethod
+    async def fetch_trends(self, payload):
+        raise NotImplementedError

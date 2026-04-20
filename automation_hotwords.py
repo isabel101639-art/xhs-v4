@@ -25,6 +25,18 @@ HOTWORD_SOURCE_TEMPLATE_OPTIONS = [
         'description': '适配抖音热点词/热榜类接口的 words、sentence_id、hot_value 结构',
     },
     {
+        'key': 'xhs_hot_queries',
+        'label': '小红书热搜词接口',
+        'source_platform': '小红书',
+        'description': '适配小红书热搜词/搜索词榜接口，常见字段为 query、keyword、hot_value、rank、summary',
+    },
+    {
+        'key': 'xhs_note_search',
+        'label': '小红书爆款笔记接口',
+        'source_platform': '小红书',
+        'description': '适配小红书搜索结果、爆款笔记接口或第三方导出，支持 note_card/user/interact_info 等嵌套字段',
+    },
+    {
         'key': 'qiangua_notes',
         'label': '千瓜笔记导出',
         'source_platform': '千瓜数据',
@@ -76,6 +88,74 @@ HOTWORD_REMOTE_SOURCE_PRESETS = [
             'hotword_api_body_json': '',
             'hotword_result_path': 'data.word_list',
             'hotword_keyword_param': 'keyword',
+        },
+    },
+    {
+        'key': 'xhs_hot_queries_api',
+        'label': '小红书热搜词接口',
+        'description': '适合第三方小红书热搜/搜索词榜接口，默认按小红书热搜词字段做归一化，常见结果路径是 data.items。',
+        'source_platform': '小红书',
+        'template_key': 'xhs_hot_queries',
+        'config': {
+            'hotword_fetch_mode': 'remote',
+            'hotword_api_method': 'GET',
+            'hotword_api_query_json': '{"keyword":"{{first_keyword}}","page_size":20}',
+            'hotword_api_body_json': '',
+            'hotword_result_path': 'data.items',
+            'hotword_keyword_param': 'keyword',
+        },
+    },
+    {
+        'key': 'xhs_note_search_api',
+        'label': '小红书爆款笔记接口',
+        'description': '适合第三方小红书搜索/爆款笔记接口，默认按笔记结果字段做归一化，常见结果路径是 data.items。',
+        'source_platform': '小红书',
+        'template_key': 'xhs_note_search',
+        'config': {
+            'hotword_fetch_mode': 'remote',
+            'hotword_api_method': 'POST',
+            'hotword_api_query_json': '',
+            'hotword_api_body_json': '{"keyword":"{{first_keyword}}","page_size":20,"sort":"general"}',
+            'hotword_result_path': 'data.items',
+            'hotword_keyword_param': 'keyword',
+        },
+    },
+    {
+        'key': 'crawler_xhs_hot_queries_local',
+        'label': '本地 crawler 小红书热搜词',
+        'description': '直接调用本地 crawler_service 的 /xhs/trends 接口，适合 mock 或 Playwright 小红书相关搜索词抓取。',
+        'source_platform': '小红书',
+        'template_key': 'xhs_hot_queries',
+        'config': {
+            'hotword_fetch_mode': 'remote',
+            'hotword_api_url': 'http://127.0.0.1:8081/xhs/trends',
+            'hotword_api_method': 'POST',
+            'hotword_api_query_json': '',
+            'hotword_api_body_json': '',
+            'hotword_result_path': 'items',
+            'hotword_keyword_param': 'keywords',
+            'hotword_trend_type': 'hot_queries',
+            'hotword_page_size': 20,
+            'hotword_max_related_queries': 20,
+        },
+    },
+    {
+        'key': 'crawler_xhs_note_search_local',
+        'label': '本地 crawler 小红书爆款笔记',
+        'description': '直接调用本地 crawler_service 的 /xhs/trends 接口，适合 mock 或 Playwright 搜索爆款笔记抓取。',
+        'source_platform': '小红书',
+        'template_key': 'xhs_note_search',
+        'config': {
+            'hotword_fetch_mode': 'remote',
+            'hotword_api_url': 'http://127.0.0.1:8081/xhs/trends',
+            'hotword_api_method': 'POST',
+            'hotword_api_query_json': '',
+            'hotword_api_body_json': '',
+            'hotword_result_path': 'items',
+            'hotword_keyword_param': 'keywords',
+            'hotword_trend_type': 'note_search',
+            'hotword_page_size': 20,
+            'hotword_max_related_queries': 20,
         },
     },
     {
@@ -168,9 +248,26 @@ def parse_trend_payload(raw_payload):
     return items
 
 
+def _extract_value_by_path(row, path):
+    current = row
+    for token in [item for item in str(path or '').split('.') if item]:
+        if isinstance(current, dict):
+            current = current.get(token)
+        elif isinstance(current, list):
+            try:
+                current = current[int(token)]
+            except (TypeError, ValueError, IndexError):
+                return None
+        else:
+            return None
+        if current is None:
+            return None
+    return current
+
+
 def _extract_first_non_empty(row, keys, default=''):
     for key in keys:
-        value = row.get(key)
+        value = _extract_value_by_path(row, key)
         if value is None:
             continue
         text = str(value).strip()
@@ -181,7 +278,7 @@ def _extract_first_non_empty(row, keys, default=''):
 
 def _extract_first_number(row, keys, default=0):
     for key in keys:
-        value = row.get(key)
+        value = _extract_value_by_path(row, key)
         if value in [None, '']:
             continue
         number = safe_int(value, None)
@@ -208,6 +305,73 @@ def normalize_trend_items(items, template_key='generic_lines', source_platform='
             favorites = _extract_first_number(row, ['favorites', 'collect_count', 'favorite_count'])
             comments = _extract_first_number(row, ['comments', 'comment_count'])
             publish_time = _extract_first_non_empty(row, ['publish_time', 'create_time'])
+        elif template['key'] == 'xhs_hot_queries':
+            keyword = _extract_first_non_empty(row, ['query', 'keyword', 'hot_word', 'word', 'search_word'])
+            title = _extract_first_non_empty(row, ['title', 'query', 'keyword', 'word']) or keyword
+            link = _extract_first_non_empty(row, ['link', 'url', 'share_url'])
+            author = _extract_first_non_empty(row, ['board_name', 'source', 'author'])
+            summary = _extract_first_non_empty(row, ['summary', 'desc', 'description', 'display_text', 'subtitle'])
+            views = _extract_first_number(row, ['hot_value', 'search_volume', 'search_cnt', 'hot_score', 'trend_score'])
+            likes = _extract_first_number(row, ['like_count', 'likes'])
+            favorites = _extract_first_number(row, ['collect_count', 'favorites'])
+            comments = _extract_first_number(row, ['comment_count', 'comments'])
+            publish_time = _extract_first_non_empty(row, ['publish_time', 'event_time', 'create_time', 'updated_at'])
+        elif template['key'] == 'xhs_note_search':
+            keyword = _extract_first_non_empty(row, ['keyword', 'query', 'search_word', 'tag'])
+            title = _extract_first_non_empty(row, ['display_title', 'title', 'note_card.display_title', 'note_card.title', 'note_card.note_title'])
+            link = _extract_first_non_empty(row, ['link', 'note_url', 'share_url', 'url', 'note_card.share_url', 'note_card.url'])
+            author = _extract_first_non_empty(row, [
+                'author',
+                'nickname',
+                'user.nickname',
+                'user.nick_name',
+                'note_card.user.nickname',
+                'account_name',
+            ])
+            summary = _extract_first_non_empty(row, [
+                'summary',
+                'desc',
+                'description',
+                'content',
+                'note_card.desc',
+                'note_card.display_desc',
+            ])
+            views = _extract_first_number(row, [
+                'views',
+                'view_count',
+                'read_count',
+                'impression_cnt',
+                'exposure_count',
+                'note_card.view_count',
+            ])
+            likes = _extract_first_number(row, [
+                'likes',
+                'like_count',
+                'liked_count',
+                'interact_info.liked_count',
+                'note_card.interact_info.liked_count',
+            ])
+            favorites = _extract_first_number(row, [
+                'favorites',
+                'collect_count',
+                'favorite_count',
+                'collected_count',
+                'interact_info.collected_count',
+                'note_card.interact_info.collected_count',
+            ])
+            comments = _extract_first_number(row, [
+                'comments',
+                'comment_count',
+                'interact_info.comment_count',
+                'note_card.interact_info.comment_count',
+            ])
+            publish_time = _extract_first_non_empty(row, [
+                'publish_time',
+                'create_time',
+                'time',
+                'last_update_time',
+                'note_card.time',
+            ])
         elif template['key'] == 'douyin_hotwords':
             keyword = _extract_first_non_empty(row, ['word', 'hot_word', 'keyword', 'sentence'])
             title = _extract_first_non_empty(row, ['sentence', 'title', 'word']) or keyword
@@ -252,7 +416,7 @@ def normalize_trend_items(items, template_key='generic_lines', source_platform='
             'import_batch': batch_name,
             'topic_category': template['label'],
             'raw_payload': row,
-            'normalized_rank': index,
+            'normalized_rank': _extract_first_number(row, ['rank', 'position', 'index', 'source_rank', 'note_rank'], index),
         }
         normalized_row['interactions'] = likes + favorites + comments
         score_seed = (
@@ -318,6 +482,9 @@ def _render_template_value(value, context):
         '{{source_platform}}': context.get('source_platform', ''),
         '{{source_channel}}': context.get('source_channel', ''),
         '{{batch_name}}': context.get('batch_name', ''),
+        '{{trend_type}}': context.get('trend_type', 'note_search'),
+        '{{page_size}}': context.get('page_size', 20),
+        '{{max_related_queries}}': context.get('max_related_queries', 20),
     }
     if value in exact_match_map:
         return exact_match_map[value]
@@ -330,6 +497,9 @@ def _render_template_value(value, context):
         '{{source_platform}}': context.get('source_platform', ''),
         '{{source_channel}}': context.get('source_channel', ''),
         '{{batch_name}}': context.get('batch_name', ''),
+        '{{trend_type}}': str(context.get('trend_type', 'note_search')),
+        '{{page_size}}': str(context.get('page_size', 20)),
+        '{{max_related_queries}}': str(context.get('max_related_queries', 20)),
     }
     for old, new in replacements.items():
         text = text.replace(old, new)
@@ -378,6 +548,11 @@ def build_remote_hotword_request_preview(config, keywords, source_platform='', s
     body_json = _load_json_config(config.get('body_json'), {})
     headers_json = _load_json_config(config.get('headers_json'), {})
     timeout_seconds = max(safe_int(config.get('timeout_seconds'), 30), 5)
+    trend_type = (config.get('trend_type') or 'note_search').strip().lower() or 'note_search'
+    if trend_type not in {'note_search', 'hot_queries'}:
+        trend_type = 'note_search'
+    page_size = min(max(safe_int(config.get('page_size'), 20), 1), 50)
+    max_related_queries = min(max(safe_int(config.get('max_related_queries'), 20), 1), 50)
     context = {
         'keywords_joined': ','.join(keywords),
         'keywords_list': list(keywords),
@@ -386,6 +561,9 @@ def build_remote_hotword_request_preview(config, keywords, source_platform='', s
         'source_platform': source_platform,
         'source_channel': source_channel,
         'batch_name': batch_name,
+        'trend_type': trend_type,
+        'page_size': page_size,
+        'max_related_queries': max_related_queries,
     }
     rendered_headers = _render_template_value(headers_json, context) if isinstance(headers_json, dict) else {}
     rendered_query = _render_template_value(query_json, context) if isinstance(query_json, dict) else {}
@@ -394,7 +572,17 @@ def build_remote_hotword_request_preview(config, keywords, source_platform='', s
     if not rendered_query and api_method == 'GET' and keywords:
         rendered_query = {keyword_param: ','.join(keywords)}
     if not rendered_body and api_method != 'GET' and keywords:
-        rendered_body = {keyword_param: list(keywords)}
+        if api_url.rstrip('/').endswith('/xhs/trends'):
+            rendered_body = {
+                'keywords': list(keywords),
+                'trend_type': trend_type,
+                'page_size': page_size,
+                'max_related_queries': max_related_queries,
+                'source_channel': source_channel,
+                'batch_name': batch_name,
+            }
+        else:
+            rendered_body = {keyword_param: list(keywords)}
 
     return {
         'api_url': api_url,
@@ -405,6 +593,9 @@ def build_remote_hotword_request_preview(config, keywords, source_platform='', s
         'body': rendered_body,
         'timeout_seconds': timeout_seconds,
         'result_path': (config.get('result_path') or '').strip(),
+        'trend_type': trend_type,
+        'page_size': page_size,
+        'max_related_queries': max_related_queries,
     }
 
 

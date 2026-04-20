@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 
 import requests
 
@@ -104,6 +105,12 @@ def build_creator_sync_request_preview(config, targets, source_channel='', batch
     date_from = (config.get('date_from') or '').strip()
     date_to = (config.get('date_to') or '').strip()
     max_posts_per_account = max(safe_int(config.get('max_posts_per_account'), 60), 1)
+    if current_month_only:
+        now = datetime.now()
+        if not date_from:
+            date_from = now.replace(day=1).strftime('%Y-%m-%d')
+        if not date_to:
+            date_to = now.strftime('%Y-%m-%d')
     targets = targets or []
     context = {
         'targets': list(targets),
@@ -148,6 +155,10 @@ def build_creator_sync_request_preview(config, targets, source_channel='', batch
         'body': rendered_body,
         'timeout_seconds': timeout_seconds,
         'result_path': (config.get('result_path') or '').strip(),
+        'current_month_only': current_month_only,
+        'date_from': date_from,
+        'date_to': date_to,
+        'max_posts_per_account': max_posts_per_account,
         'target_count': len(targets),
     }
 

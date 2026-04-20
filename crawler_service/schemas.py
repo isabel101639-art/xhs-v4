@@ -87,3 +87,41 @@ class AccountPostsResponse(BaseModel):
     posts: List[CreatorPostRow] = Field(default_factory=list)
     snapshots: List[CreatorSnapshotRow] = Field(default_factory=list)
     meta: dict = Field(default_factory=dict)
+
+
+class TrendQueryRequest(BaseModel):
+    keywords: List[str] = Field(default_factory=list)
+    batch_name: str = ''
+    source_channel: str = 'Crawler服务'
+    trend_type: str = 'note_search'
+    page_size: int = 20
+    max_related_queries: int = 20
+    date_from: str = ''
+    date_to: str = ''
+
+
+class TrendItemRow(BaseModel):
+    keyword: str = ''
+    query: str = ''
+    title: str = ''
+    link: str = ''
+    author: str = ''
+    summary: str = ''
+    hot_value: int = 0
+    rank: int = 0
+    views: int = 0
+    likes: int = 0
+    favorites: int = 0
+    comments: int = 0
+    publish_time: str = ''
+    source_channel: str = 'crawler_service'
+
+
+class TrendQueryResponse(BaseModel):
+    success: bool = True
+    provider: str = 'mock'
+    batch_name: str = ''
+    source_channel: str = 'Crawler服务'
+    trend_type: str = 'note_search'
+    items: List[TrendItemRow] = Field(default_factory=list)
+    meta: dict = Field(default_factory=dict)

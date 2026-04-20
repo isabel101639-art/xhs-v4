@@ -2,7 +2,7 @@ import os
 import re
 import tempfile
 from datetime import datetime, timedelta
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from crawler_service.providers.base import BaseCrawlerProvider
 
@@ -39,6 +39,13 @@ DEFAULT_POST_TITLE_SELECTORS = [
     'img[alt]',
 ]
 
+DEFAULT_POST_AUTHOR_SELECTORS = [
+    '[class*="author"]',
+    '[class*="user"]',
+    '[class*="nickname"]',
+    '[data-testid*="author"]',
+]
+
 DEFAULT_POST_LIKES_SELECTORS = [
     '[class*="like"]',
     '[data-testid*="like"]',
@@ -65,6 +72,33 @@ DEFAULT_POST_TIME_SELECTORS = [
     'time',
     '[class*="time"]',
     '[class*="date"]',
+]
+
+DEFAULT_SEARCH_RELATED_QUERY_SELECTORS = [
+    '[class*="related"] a',
+    '[class*="recommend"] a',
+    '[class*="suggest"] a',
+    '[class*="hot"] a',
+]
+
+SEARCH_STATE_CANDIDATE_PATHS = [
+    ('search', 'feeds', 'value'),
+    ('search', 'feedList', 'value'),
+    ('search', 'noteList', 'items'),
+    ('search', 'items'),
+]
+
+RELATED_QUERY_STATE_CANDIDATE_PATHS = [
+    ('search', 'relatedQueries'),
+    ('search', 'related_queries'),
+    ('search', 'hotQuery'),
+    ('search', 'hot_query'),
+    ('search', 'queryList'),
+    ('search', 'query_list'),
+    ('search', 'suggestQueries'),
+    ('search', 'suggest_queries'),
+    ('search', 'recQuery'),
+    ('search', 'rec_query'),
 ]
 
 
@@ -95,6 +129,8 @@ def _extract_post_id(url):
 
 
 def _parse_count(text):
+    if isinstance(text, (int, float)):
+        return int(text)
     raw = (text or '').strip().lower().replace(',', '')
     if not raw:
         return 0
@@ -162,6 +198,218 @@ def _resolve_post_date_window(payload):
     return date_from, date_to
 
 
+def _state_get(value, path, default=None):
+    current = value
+    for token in [item for item in str(path or '').split('.') if item]:
+        if isinstance(current, dict):
+            current = current.get(token)
+        elif isinstance(current, list):
+            try:
+                current = current[int(token)]
+            except (TypeError, ValueError, IndexError):
+                return default
+        else:
+            return default
+        if current is None:
+            return default
+    return current
+
+
+def _state_text(value, paths, default=''):
+    for path in paths:
+        current = _state_get(value, path)
+        if current in [None, '']:
+            continue
+        text = str(current).strip()
+        if text:
+            return text
+    return default
+
+
+def _state_count(value, paths, default=0):
+    for path in paths:
+        current = _state_get(value, path)
+        if current in [None, '']:
+            continue
+        count = _parse_count(current)
+        if count:
+            return count
+    return default
+
+
+def _looks_like_search_feed_item(value):
+    if not isinstance(value, dict):
+        return False
+    if any(key in value for key in ['note_card', 'noteCard']):
+        return True
+    return bool(_state_get(value, 'id') and (
+        _state_get(value, 'title') or
+        _state_get(value, 'display_title') or
+        _state_get(value, 'note_card.title') or
+        _state_get(value, 'noteCard.title')
+    ))
+
+
+def _walk_dicts(value):
+    if isinstance(value, dict):
+        yield value
+        for child in value.values():
+            yield from _walk_dicts(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _walk_dicts(child)
+
+
+def _find_state_list(value, candidate_paths, predicate):
+    for path_tokens in candidate_paths:
+        current = value
+        for token in path_tokens:
+            if isinstance(current, dict):
+                current = current.get(token)
+            else:
+                current = None
+                break
+        if isinstance(current, list) and current:
+            if predicate(current):
+                return current
+    return []
+
+
+def _parse_state_publish_time(raw_value):
+    if raw_value in [None, '']:
+        return None
+    if isinstance(raw_value, (int, float)):
+        timestamp = float(raw_value)
+        if timestamp > 10**12:
+            timestamp = timestamp / 1000.0
+        if timestamp > 10**9:
+            return datetime.fromtimestamp(timestamp)
+    text = str(raw_value).strip()
+    if text.isdigit():
+        return _parse_state_publish_time(int(text))
+    return _parse_publish_time_value(text)
+
+
+def _build_search_result_url(item):
+    direct_url = _state_text(item, [
+        'link',
+        'url',
+        'note_card.share_url',
+        'note_card.url',
+        'noteCard.share_url',
+        'noteCard.url',
+    ])
+    if direct_url:
+        return _normalize_xhs_url(direct_url)
+    note_id = _state_text(item, [
+        'id',
+        'note_id',
+        'noteCard.note_id',
+        'note_card.note_id',
+    ])
+    if not note_id:
+        return ''
+    xsec_token = _state_text(item, ['xsec_token', 'xsecToken'])
+    if xsec_token:
+        return _normalize_xhs_url(
+            f'https://www.xiaohongshu.com/explore/{note_id}?xsec_token={quote(xsec_token)}&xsec_source=pc_search'
+        )
+    return _normalize_xhs_url(f'https://www.xiaohongshu.com/explore/{note_id}')
+
+
+def _normalize_search_feed_item(item, keyword, source_channel, rank):
+    title = _state_text(item, [
+        'note_card.display_title',
+        'note_card.title',
+        'noteCard.display_title',
+        'noteCard.title',
+        'display_title',
+        'title',
+    ])
+    post_url = _build_search_result_url(item)
+    if not (title or post_url):
+        return {}
+    publish_time_dt = _parse_state_publish_time(_state_get(item, 'note_card.time'))
+    if not publish_time_dt:
+        publish_time_dt = _parse_state_publish_time(_state_get(item, 'noteCard.time'))
+    if not publish_time_dt:
+        publish_time_dt = _parse_state_publish_time(_state_get(item, 'publish_time'))
+    views = _state_count(item, [
+        'view_count',
+        'note_card.view_count',
+        'noteCard.view_count',
+        'impression_cnt',
+        'exposure_count',
+    ])
+    likes = _state_count(item, [
+        'interact_info.liked_count',
+        'note_card.interact_info.liked_count',
+        'noteCard.interact_info.liked_count',
+        'likes',
+        'like_count',
+    ])
+    favorites = _state_count(item, [
+        'interact_info.collected_count',
+        'note_card.interact_info.collected_count',
+        'noteCard.interact_info.collected_count',
+        'favorites',
+        'collect_count',
+    ])
+    comments = _state_count(item, [
+        'interact_info.comment_count',
+        'note_card.interact_info.comment_count',
+        'noteCard.interact_info.comment_count',
+        'comments',
+        'comment_count',
+    ])
+    return {
+        'keyword': keyword,
+        'query': keyword,
+        'title': title or f'{keyword} 搜索结果 {rank}',
+        'link': post_url,
+        'author': _state_text(item, [
+            'note_card.user.nickname',
+            'noteCard.user.nickname',
+            'user.nickname',
+            'author.nickname',
+            'author',
+        ]),
+        'summary': _state_text(item, [
+            'note_card.desc',
+            'noteCard.desc',
+            'desc',
+            'description',
+        ]),
+        'hot_value': views + likes * 3 + favorites * 4 + comments * 5 + max(0, 100 - rank * 3),
+        'rank': rank,
+        'views': views,
+        'likes': likes,
+        'favorites': favorites,
+        'comments': comments,
+        'publish_time': publish_time_dt.strftime('%Y-%m-%d %H:%M:%S') if publish_time_dt else _state_text(item, ['publish_time', 'note_card.time', 'noteCard.time']),
+        'source_channel': source_channel,
+    }
+
+
+def _normalize_related_query_item(item, keyword, source_channel, rank):
+    if isinstance(item, str):
+        query = re.sub(r'\s+', ' ', item).strip()
+    else:
+        query = _state_text(item, ['query', 'keyword', 'text', 'display_text', 'search_word', 'word', 'title'])
+    if not query or len(query) > 24:
+        return {}
+    hot_value = _state_count(item, ['hot_value', 'hotScore', 'score', 'search_cnt'], max(0, 10000 - rank * 131))
+    return {
+        'keyword': keyword,
+        'query': query,
+        'title': query,
+        'summary': f'由小红书搜索页状态数据提取，原始关键词：{keyword}',
+        'hot_value': hot_value,
+        'rank': rank,
+        'source_channel': source_channel,
+    }
+
+
 def _parse_publish_time_value(raw_text, now=None):
     current = now or datetime.now()
     text = (raw_text or '').strip()
@@ -219,6 +467,7 @@ class PlaywrightXHSCrawlerProvider(BaseCrawlerProvider):
             'provider': 'playwright_xhs',
             'ready': playwright_ready,
             'storage_state_path': self.settings.playwright_storage_state_path,
+            'search_url_template': self.settings.xhs_search_url_template,
             'post_card_selectors': _selector_candidates(
                 self.settings.xhs_post_card_selector,
                 DEFAULT_POST_CARD_SELECTORS,
@@ -346,6 +595,82 @@ class PlaywrightXHSCrawlerProvider(BaseCrawlerProvider):
             },
         }
 
+    async def fetch_trends(self, payload):
+        try:
+            from playwright.async_api import TimeoutError as PlaywrightTimeoutError, async_playwright
+        except ImportError as exc:
+            raise RuntimeError('未安装 Playwright，请先在 crawler_service 环境执行 playwright install') from exc
+
+        keywords = [str(item or '').strip() for item in getattr(payload, 'keywords', []) if str(item or '').strip()]
+        if not keywords:
+            keywords = ['脂肪肝']
+        trend_type = (getattr(payload, 'trend_type', 'note_search') or 'note_search').strip().lower() or 'note_search'
+        page_size = min(max(_safe_int(getattr(payload, 'page_size', 20), 20), 1), 50)
+        max_related_queries = min(max(_safe_int(getattr(payload, 'max_related_queries', 20), 20), 1), 50)
+        source_channel = getattr(payload, 'source_channel', '') or 'playwright_xhs'
+        date_from = _parse_date_boundary(getattr(payload, 'date_from', ''), start=True)
+        date_to = _parse_date_boundary(getattr(payload, 'date_to', ''), start=False)
+
+        async with async_playwright() as playwright:
+            launch_kwargs = {'headless': self.settings.playwright_headless}
+            if self.settings.playwright_headless:
+                launch_kwargs['headless'] = True
+                launch_kwargs['args'] = ['--headless=new', '--disable-crashpad', '--disable-crash-reporter', '--disable-breakpad']
+            temp_home = tempfile.mkdtemp(prefix='xhs-pw-home-')
+            launch_kwargs['env'] = {
+                **os.environ,
+                'HOME': temp_home,
+                'TMPDIR': temp_home,
+                'XDG_CONFIG_HOME': temp_home,
+                'XDG_CACHE_HOME': temp_home,
+            }
+            if self.settings.playwright_browser_channel:
+                launch_kwargs['channel'] = self.settings.playwright_browser_channel
+            browser = await playwright.chromium.launch(**launch_kwargs)
+            context_kwargs = {}
+            storage_path = self.settings.playwright_storage_state_path
+            if storage_path and os.path.exists(storage_path):
+                context_kwargs['storage_state'] = storage_path
+            context = await browser.new_context(**context_kwargs)
+            try:
+                if trend_type == 'hot_queries':
+                    items = await self._extract_hot_queries(
+                        context=context,
+                        keywords=keywords,
+                        source_channel=source_channel,
+                        max_related_queries=max_related_queries,
+                    )
+                else:
+                    items = await self._extract_search_notes(
+                        context=context,
+                        keywords=keywords,
+                        source_channel=source_channel,
+                        page_size=page_size,
+                        date_from=date_from,
+                        date_to=date_to,
+                    )
+            except PlaywrightTimeoutError as exc:
+                raise RuntimeError(f'打开小红书搜索页超时：{exc}') from exc
+            finally:
+                await context.close()
+                await browser.close()
+
+        return {
+            'success': True,
+            'provider': 'playwright_xhs',
+            'batch_name': getattr(payload, 'batch_name', ''),
+            'source_channel': source_channel,
+            'trend_type': trend_type,
+            'items': items,
+            'meta': {
+                'keyword_count': len(keywords),
+                'item_count': len(items),
+                'trend_type': trend_type,
+                'date_from': getattr(payload, 'date_from', ''),
+                'date_to': getattr(payload, 'date_to', ''),
+            },
+        }
+
     async def _extract_display_name(self, page, account_handle, owner_name):
         for selector in _selector_candidates(self.settings.xhs_profile_name_selector, DEFAULT_PROFILE_NAME_SELECTORS):
             text = await self._read_text(page, selector)
@@ -392,6 +717,22 @@ class PlaywrightXHSCrawlerProvider(BaseCrawlerProvider):
         value = await locator.first.get_attribute(attr_name)
         return (value or '').strip()
 
+    async def _read_page_state(self, page):
+        candidate_expressions = [
+            'window.__INITIAL_STATE__',
+            'window.__INITIAL_SSR_STATE__',
+            'window.__INITIAL_DATA__',
+            'window.__REDUX_STATE__',
+        ]
+        for expression in candidate_expressions:
+            try:
+                value = await page.evaluate(f'() => {expression} || null')
+            except Exception:
+                value = None
+            if isinstance(value, (dict, list)) and value:
+                return value
+        return {}
+
     async def _candidate_cards(self, page):
         candidates = []
         for selector in _selector_candidates(self.settings.xhs_post_card_selector, DEFAULT_POST_CARD_SELECTORS):
@@ -431,6 +772,13 @@ class PlaywrightXHSCrawlerProvider(BaseCrawlerProvider):
                 return text
         fallback_text = (await card.text_content() or '').strip()
         return re.sub(r'\s+', ' ', fallback_text)[:60]
+
+    async def _extract_author(self, card):
+        for selector in _selector_candidates(self.settings.xhs_post_author_selector, DEFAULT_POST_AUTHOR_SELECTORS):
+            text = await self._read_text(card, selector)
+            if text:
+                return text
+        return ''
 
     async def _extract_metric(self, card, custom_selector, default_selectors, keyword):
         for selector in _selector_candidates(custom_selector, default_selectors):
@@ -504,3 +852,226 @@ class PlaywrightXHSCrawlerProvider(BaseCrawlerProvider):
             await page.mouse.wheel(0, 2400)
             await page.wait_for_timeout(1200)
         return rows
+
+    def _build_search_url(self, keyword):
+        safe_keyword = quote((keyword or '').strip())
+        template = self.settings.xhs_search_url_template or 'https://www.xiaohongshu.com/search_result?keyword={keyword}&source=web_explore_feed'
+        return template.format(keyword=safe_keyword)
+
+    async def _open_search_page(self, context, keyword):
+        page = await context.new_page()
+        await page.goto(
+            self._build_search_url(keyword),
+            wait_until='domcontentloaded',
+            timeout=self.settings.playwright_navigation_timeout_ms,
+        )
+        await page.wait_for_load_state('networkidle', timeout=self.settings.playwright_navigation_timeout_ms)
+        return page
+
+    async def _extract_search_notes(self, context, keywords, source_channel, page_size=20, date_from=None, date_to=None):
+        items = []
+        seen_urls = set()
+        for keyword in keywords:
+            page = await self._open_search_page(context, keyword)
+            try:
+                state_items = await self._extract_search_notes_from_state(
+                    page=page,
+                    keyword=keyword,
+                    source_channel=source_channel,
+                    page_size=page_size,
+                    date_from=date_from,
+                    date_to=date_to,
+                )
+                for item in state_items:
+                    item_url = item.get('link') or ''
+                    if item_url and item_url in seen_urls:
+                        continue
+                    if item_url:
+                        seen_urls.add(item_url)
+                    items.append(item)
+                    if len(items) >= page_size:
+                        return items[:page_size]
+
+                previous_seen_count = -1
+                reached_limit = False
+                reached_older_posts = False
+                for _ in range(8):
+                    cards = await self._candidate_cards(page)
+                    for card in cards:
+                        post_url = await self._extract_post_url(card)
+                        if not post_url or post_url in seen_urls:
+                            continue
+                        seen_urls.add(post_url)
+                        publish_time_text = await self._extract_publish_time(card)
+                        publish_time_dt = _parse_publish_time_value(publish_time_text)
+                        if date_from and publish_time_dt and publish_time_dt < date_from:
+                            reached_older_posts = True
+                            continue
+                        if date_to and publish_time_dt and publish_time_dt > date_to:
+                            continue
+                        title = await self._extract_title(card)
+                        if not title:
+                            continue
+                        rank = len(items) + 1
+                        likes = await self._extract_metric(card, self.settings.xhs_post_likes_selector, DEFAULT_POST_LIKES_SELECTORS, '点赞')
+                        favorites = await self._extract_metric(card, self.settings.xhs_post_favorites_selector, DEFAULT_POST_FAVORITES_SELECTORS, '收藏')
+                        comments = await self._extract_metric(card, self.settings.xhs_post_comments_selector, DEFAULT_POST_COMMENTS_SELECTORS, '评论')
+                        views = await self._extract_metric(card, self.settings.xhs_post_views_selector, DEFAULT_POST_VIEWS_SELECTORS, '浏览|阅读')
+                        items.append({
+                            'keyword': keyword,
+                            'query': keyword,
+                            'title': title,
+                            'link': post_url,
+                            'author': await self._extract_author(card),
+                            'summary': re.sub(r'\s+', ' ', (await card.text_content() or '').strip())[:120],
+                            'hot_value': views + likes * 3 + favorites * 4 + comments * 5 + max(0, 100 - rank * 3),
+                            'rank': rank,
+                            'views': views,
+                            'likes': likes,
+                            'favorites': favorites,
+                            'comments': comments,
+                            'publish_time': publish_time_dt.strftime('%Y-%m-%d %H:%M:%S') if publish_time_dt else publish_time_text,
+                            'source_channel': source_channel,
+                        })
+                        if len(items) >= page_size:
+                            reached_limit = True
+                            break
+                    if reached_limit or reached_older_posts:
+                        break
+                    current_seen_count = len(seen_urls)
+                    if current_seen_count == previous_seen_count:
+                        break
+                    previous_seen_count = current_seen_count
+                    await page.mouse.wheel(0, 2400)
+                    await page.wait_for_timeout(1200)
+                if len(items) >= page_size:
+                    break
+            finally:
+                await page.close()
+        return items[:page_size]
+
+    async def _extract_hot_queries(self, context, keywords, source_channel, max_related_queries=20):
+        items = []
+        seen_queries = set()
+        for keyword in keywords:
+            page = await self._open_search_page(context, keyword)
+            try:
+                state_items = await self._extract_hot_queries_from_state(
+                    page=page,
+                    keyword=keyword,
+                    source_channel=source_channel,
+                    max_related_queries=max_related_queries,
+                )
+                for item in state_items:
+                    query = item.get('query') or ''
+                    if query and query in seen_queries:
+                        continue
+                    if query:
+                        seen_queries.add(query)
+                    items.append(item)
+                    if len(items) >= max_related_queries:
+                        return items[:max_related_queries]
+
+                found_any = False
+                selectors = _selector_candidates(
+                    self.settings.xhs_search_related_query_selector,
+                    DEFAULT_SEARCH_RELATED_QUERY_SELECTORS,
+                )
+                for selector in selectors:
+                    locator = page.locator(selector)
+                    try:
+                        count = await locator.count()
+                    except Exception:
+                        continue
+                    for index in range(min(count, max_related_queries * 2)):
+                        text = (await locator.nth(index).text_content() or '').strip()
+                        text = re.sub(r'\s+', ' ', text)
+                        if not text or len(text) > 24 or text in seen_queries:
+                            continue
+                        seen_queries.add(text)
+                        found_any = True
+                        rank = len(items) + 1
+                        items.append({
+                            'keyword': keyword,
+                            'query': text,
+                            'title': text,
+                            'summary': f'由小红书搜索页相关搜索词提取，原始关键词：{keyword}',
+                            'hot_value': max(0, 10000 - rank * 131),
+                            'rank': rank,
+                            'source_channel': source_channel,
+                        })
+                        if len(items) >= max_related_queries:
+                            return items
+                if not found_any and keyword not in seen_queries:
+                    seen_queries.add(keyword)
+                    rank = len(items) + 1
+                    items.append({
+                        'keyword': keyword,
+                        'query': keyword,
+                        'title': keyword,
+                        'summary': '未解析到相关热搜词，先回退为输入关键词，便于联调热点链路。',
+                        'hot_value': max(0, 10000 - rank * 131),
+                        'rank': rank,
+                        'source_channel': source_channel,
+                    })
+                    if len(items) >= max_related_queries:
+                        return items
+            finally:
+                await page.close()
+        return items[:max_related_queries]
+
+    async def _extract_search_notes_from_state(self, page, keyword, source_channel, page_size=20, date_from=None, date_to=None):
+        state = await self._read_page_state(page)
+        if not state:
+            return []
+        feed_list = _find_state_list(
+            state,
+            SEARCH_STATE_CANDIDATE_PATHS,
+            lambda rows: any(_looks_like_search_feed_item(item) for item in rows),
+        )
+        if not feed_list:
+            feed_list = [item for item in _walk_dicts(state) if _looks_like_search_feed_item(item)]
+        items = []
+        seen_urls = set()
+        for feed in feed_list:
+            normalized = _normalize_search_feed_item(feed, keyword, source_channel, len(items) + 1)
+            if not normalized:
+                continue
+            publish_time_dt = _parse_publish_time_value(normalized.get('publish_time') or '')
+            if date_from and publish_time_dt and publish_time_dt < date_from:
+                continue
+            if date_to and publish_time_dt and publish_time_dt > date_to:
+                continue
+            post_url = normalized.get('link') or ''
+            if post_url and post_url in seen_urls:
+                continue
+            if post_url:
+                seen_urls.add(post_url)
+            items.append(normalized)
+            if len(items) >= page_size:
+                break
+        return items
+
+    async def _extract_hot_queries_from_state(self, page, keyword, source_channel, max_related_queries=20):
+        state = await self._read_page_state(page)
+        if not state:
+            return []
+        related_list = _find_state_list(
+            state,
+            RELATED_QUERY_STATE_CANDIDATE_PATHS,
+            lambda rows: bool(rows),
+        )
+        if not related_list:
+            return []
+        items = []
+        seen_queries = set()
+        for raw_item in related_list:
+            normalized = _normalize_related_query_item(raw_item, keyword, source_channel, len(items) + 1)
+            query = normalized.get('query') if normalized else ''
+            if not query or query in seen_queries:
+                continue
+            seen_queries.add(query)
+            items.append(normalized)
+            if len(items) >= max_related_queries:
+                break
+        return items

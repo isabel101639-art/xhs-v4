@@ -308,6 +308,21 @@
                     <label class="form-label subtle">热点超时秒数</label>
                     <input id="configHotwordTimeout" type="number" min="5" max="120" class="form-control">
                 </div>
+                <div class="col-lg-2">
+                    <label class="form-label subtle">抓取类型</label>
+                    <select id="configHotwordTrendType" class="form-select">
+                        <option value="note_search">爆款笔记</option>
+                        <option value="hot_queries">热搜词 / 相关搜索</option>
+                    </select>
+                </div>
+                <div class="col-lg-2">
+                    <label class="form-label subtle">搜索结果条数</label>
+                    <input id="configHotwordPageSize" type="number" min="1" max="50" class="form-control">
+                </div>
+                <div class="col-lg-2">
+                    <label class="form-label subtle">相关搜索词条数</label>
+                    <input id="configHotwordMaxRelatedQueries" type="number" min="1" max="50" class="form-control">
+                </div>
                 <div class="col-lg-6">
                     <label class="form-label subtle">热点请求头 JSON</label>
                     <textarea id="configHotwordHeadersJson" rows="2" class="form-control" placeholder='如 {"Authorization":"Bearer xxx"}'></textarea>
@@ -503,6 +518,8 @@
                     <select id="trendTemplateKey" class="form-select">
                         <option value="generic_lines">通用行文本</option>
                         <option value="generic_json">通用 JSON</option>
+                        <option value="xhs_hot_queries">小红书热搜词接口</option>
+                        <option value="xhs_note_search">小红书爆款笔记接口</option>
                         <option value="douyin_hotwords">抖音热点词接口</option>
                         <option value="qiangua_notes">千瓜笔记导出</option>
                     </select>
@@ -543,6 +560,8 @@
                             <label class="form-label subtle">解析模板</label>
                             <select id="trendSandboxTemplateKey" class="form-select">
                                 <option value="generic_json">通用 JSON</option>
+                                <option value="xhs_hot_queries">小红书热搜词接口</option>
+                                <option value="xhs_note_search">小红书爆款笔记接口</option>
                                 <option value="douyin_hotwords">抖音热点词接口</option>
                                 <option value="qiangua_notes">千瓜笔记导出</option>
                             </select>
@@ -928,12 +947,30 @@
                     <input id="creatorSyncBatchLimit" type="number" min="1" max="200" value="20" class="form-control">
                 </div>
                 <div class="col-md-2">
+                    <label class="form-label subtle">每账号最多抓取</label>
+                    <input id="creatorSyncMaxPosts" type="number" min="1" max="100" value="60" class="form-control">
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <label class="form-check-label subtle d-flex align-items-center gap-2">
+                        <input id="creatorSyncCurrentMonthOnly" class="form-check-input" type="checkbox" checked onchange="syncCreatorSyncDateState()">
+                        仅抓本月笔记
+                    </label>
+                </div>
+                <div class="col-md-2">
                     <label class="form-label subtle">报名ID（可选）</label>
                     <input id="creatorSyncRegistrationId" type="number" min="1" class="form-control" placeholder="只同步单人">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label subtle">账号ID（可选）</label>
                     <input id="creatorSyncAccountId" type="number" min="1" class="form-control" placeholder="只同步单账号">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label subtle">起始日期</label>
+                    <input id="creatorSyncDateFrom" type="date" class="form-control">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label subtle">截止日期</label>
+                    <input id="creatorSyncDateTo" type="date" class="form-control">
                 </div>
                 <div class="col-md-12 d-flex gap-2 flex-wrap">
                     <button class="btn btn-accent" onclick="runCreatorAccountSync()">异步同步账号</button>
@@ -1391,6 +1428,18 @@
                     </select>
                 </div>
                 <div class="col-md-3">
+                    <label class="form-label subtle">模板类型筛选</label>
+                    <select id="trendTemplateFilter" class="form-select" onchange="loadTrends()">
+                        <option value="">全部模板</option>
+                        <option value="xhs_hot_queries">小红书热搜词接口</option>
+                        <option value="xhs_note_search">小红书爆款笔记接口</option>
+                        <option value="douyin_hotwords">抖音热点词接口</option>
+                        <option value="qiangua_notes">千瓜笔记导出</option>
+                        <option value="generic_json">通用 JSON</option>
+                        <option value="generic_lines">通用行文本</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
                     <label class="form-label subtle">内容池筛选</label>
                     <select id="trendPoolFilter" class="form-select" onchange="loadTrends()">
                         <option value="">全部</option>
@@ -1399,7 +1448,7 @@
                         <option value="archived">归档池</option>
                     </select>
                 </div>
-                <div class="col-md-6 d-flex align-items-end">
+                <div class="col-md-3 d-flex align-items-end">
                     <button class="btn btn-outline-primary me-2" onclick="promoteReserveTrends()">储备热点推入候选池</button>
                     <button class="btn btn-outline-danger" onclick="loadTrends()">刷新热点池</button>
                 </div>
@@ -1530,15 +1579,35 @@
         const assetStyleTypeDefinitions = {{ asset_style_types|tojson }};
         const imageModelDefinitions = {{ image_model_options|tojson }};
 
-        function renderHotwordTemplateOptions(items, selectedValue) {
-            const select = document.getElementById('configHotwordTemplate');
+        function renderSelectOptions(selectId, items, selectedValue, fallbackValue = '') {
+            const select = document.getElementById(selectId);
             if (!select) return;
-            const current = selectedValue || select.value;
+            const current = selectedValue || select.value || fallbackValue;
             select.innerHTML = (items || []).map((item) => `
                 <option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}${item.description ? `｜${escapeHtml(item.description)}` : ''}</option>
             `).join('');
             if (current) {
                 select.value = current;
+            }
+            if (select.value !== current && fallbackValue) {
+                select.value = fallbackValue;
+            }
+        }
+
+        function renderHotwordTemplateOptions(items, selectedValue) {
+            renderSelectOptions('configHotwordTemplate', items, selectedValue, 'generic_lines');
+            renderSelectOptions('trendTemplateKey', items, document.getElementById('trendTemplateKey')?.value || selectedValue, 'generic_lines');
+            renderSelectOptions('trendSandboxTemplateKey', items, document.getElementById('trendSandboxTemplateKey')?.value, 'generic_json');
+            const trendFilter = document.getElementById('trendTemplateFilter');
+            if (trendFilter) {
+                const current = trendFilter.value;
+                trendFilter.innerHTML = `
+                    <option value="">全部模板</option>
+                    ${(items || []).map((item) => `
+                        <option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}</option>
+                    `).join('')}
+                `;
+                trendFilter.value = current;
             }
         }
 
@@ -1562,11 +1631,15 @@
             document.getElementById('configHotwordPlatform').value = current.source_platform || document.getElementById('configHotwordPlatform').value;
             document.getElementById('configHotwordTemplate').value = current.template_key || document.getElementById('configHotwordTemplate').value;
             document.getElementById('configHotwordFetchMode').value = config.hotword_fetch_mode || 'remote';
+            if ('hotword_api_url' in config) document.getElementById('configHotwordApiUrl').value = config.hotword_api_url || '';
             document.getElementById('configHotwordApiMethod').value = config.hotword_api_method || 'GET';
             document.getElementById('configHotwordQueryJson').value = config.hotword_api_query_json || '';
             document.getElementById('configHotwordBodyJson').value = config.hotword_api_body_json || '';
             document.getElementById('configHotwordResultPath').value = config.hotword_result_path || '';
             document.getElementById('configHotwordKeywordParam').value = config.hotword_keyword_param || 'keyword';
+            document.getElementById('configHotwordTrendType').value = config.hotword_trend_type || 'note_search';
+            document.getElementById('configHotwordPageSize').value = config.hotword_page_size || 20;
+            document.getElementById('configHotwordMaxRelatedQueries').value = config.hotword_max_related_queries || 20;
             document.getElementById('automationConfigNote').textContent = `已套用热点接口预设：${current.label}`;
             loadAutomationConfigPreview();
         }
@@ -1612,6 +1685,9 @@
                 hotword_result_path: document.getElementById('configHotwordResultPath').value.trim(),
                 hotword_keyword_param: document.getElementById('configHotwordKeywordParam').value.trim(),
                 hotword_timeout_seconds: parseInt(document.getElementById('configHotwordTimeout').value || '30', 10),
+                hotword_trend_type: document.getElementById('configHotwordTrendType').value,
+                hotword_page_size: parseInt(document.getElementById('configHotwordPageSize').value || '20', 10),
+                hotword_max_related_queries: parseInt(document.getElementById('configHotwordMaxRelatedQueries').value || '20', 10),
                 hotword_auto_generate_topic_ideas: document.getElementById('configHotwordAutoGenerateIdeas').value === 'true',
                 hotword_auto_generate_topic_count: parseInt(document.getElementById('configHotwordAutoIdeaCount').value || '20', 10),
                 hotword_auto_generate_topic_activity_id: parseInt(document.getElementById('configHotwordAutoIdeaActivityId').value || '0', 10),
@@ -1631,7 +1707,27 @@
                 creator_sync_result_path: document.getElementById('configCreatorSyncResultPath').value.trim(),
                 creator_sync_timeout_seconds: parseInt(document.getElementById('configCreatorSyncTimeout').value || '60', 10),
                 creator_sync_batch_limit: parseInt(document.getElementById('configCreatorSyncBatchLimit').value || '20', 10),
+                creator_sync_current_month_only: document.getElementById('creatorSyncCurrentMonthOnly')?.checked !== false,
+                creator_sync_date_from: document.getElementById('creatorSyncDateFrom')?.value || '',
+                creator_sync_date_to: document.getElementById('creatorSyncDateTo')?.value || '',
+                creator_sync_max_posts_per_account: parseInt(document.getElementById('creatorSyncMaxPosts')?.value || '60', 10),
             };
+        }
+
+        function validateCreatorSyncDateRange() {
+            const currentMonthOnly = document.getElementById('creatorSyncCurrentMonthOnly')?.checked;
+            const dateFrom = document.getElementById('creatorSyncDateFrom')?.value || '';
+            const dateTo = document.getElementById('creatorSyncDateTo')?.value || '';
+            if (currentMonthOnly || !dateFrom || !dateTo) {
+                return { ok: true };
+            }
+            if (dateFrom > dateTo) {
+                return {
+                    ok: false,
+                    message: '账号同步日期范围不合法：起始日期不能晚于截止日期',
+                };
+            }
+            return { ok: true };
         }
 
         function collectImageRuntimeConfigPayload() {
@@ -1889,6 +1985,9 @@
             document.getElementById('configHotwordResultPath').value = config.hotword_result_path || '';
             document.getElementById('configHotwordKeywordParam').value = config.hotword_keyword_param || 'keyword';
             document.getElementById('configHotwordTimeout').value = config.hotword_timeout_seconds || 30;
+            document.getElementById('configHotwordTrendType').value = config.hotword_trend_type || 'note_search';
+            document.getElementById('configHotwordPageSize').value = config.hotword_page_size || 20;
+            document.getElementById('configHotwordMaxRelatedQueries').value = config.hotword_max_related_queries || 20;
             document.getElementById('configHotwordHeadersJson').value = config.hotword_api_headers_json || '';
             document.getElementById('configHotwordQueryJson').value = config.hotword_api_query_json || '';
             document.getElementById('configHotwordBodyJson').value = config.hotword_api_body_json || '';
@@ -1933,6 +2032,11 @@
             }
             document.getElementById('creatorSyncSourceChannel').value = config.creator_sync_source_channel || 'Crawler服务';
             document.getElementById('creatorSyncBatchLimit').value = config.creator_sync_batch_limit || 20;
+            document.getElementById('creatorSyncCurrentMonthOnly').checked = config.creator_sync_current_month_only !== false;
+            document.getElementById('creatorSyncDateFrom').value = config.creator_sync_date_from || '';
+            document.getElementById('creatorSyncDateTo').value = config.creator_sync_date_to || '';
+            document.getElementById('creatorSyncMaxPosts').value = config.creator_sync_max_posts_per_account || 60;
+            syncCreatorSyncDateState();
         }
 
         async function loadAutomationConfig() {
@@ -1967,6 +2071,9 @@
                         <div class="subtle">API URL：${escapeHtml(data.hotword_preview?.api_url || '-')}</div>
                         <div class="subtle">Method：${escapeHtml(data.hotword_preview?.api_method || '-')}</div>
                         <div class="subtle">结果路径：${escapeHtml(data.hotword_preview?.result_path || '-')}</div>
+                        <div class="subtle">抓取类型：${escapeHtml(data.hotword_preview?.trend_type || 'note_search')}</div>
+                        <div class="subtle">搜索结果条数：${data.hotword_preview?.page_size || 0}</div>
+                        <div class="subtle">相关搜索词条数：${data.hotword_preview?.max_related_queries || 0}</div>
                         <div class="subtle">自动生成候选话题：${data.hotword_preview?.auto_generate_topic_ideas ? '开启' : '关闭'}</div>
                         <div class="subtle">自动生成数量：${data.hotword_preview?.auto_generate_topic_count || 0}</div>
                         <div class="subtle">目标活动ID：${data.hotword_preview?.auto_generate_topic_activity_resolved_id || data.hotword_preview?.auto_generate_topic_activity_id || 0}</div>
@@ -1992,6 +2099,10 @@
                         <div class="subtle">Method：${escapeHtml(data.creator_sync_preview?.api_method || '-')}</div>
                         <div class="subtle">结果路径：${escapeHtml(data.creator_sync_preview?.result_path || '-')}</div>
                         <div class="subtle">预估本轮账号：${data.creator_sync_preview?.target_count || 0}</div>
+                        <div class="subtle">仅抓本月：${data.creator_sync_preview?.current_month_only === false ? '否' : '是'}</div>
+                        <div class="subtle">起始日期：${escapeHtml(data.creator_sync_preview?.date_from || '-')}</div>
+                        <div class="subtle">截止日期：${escapeHtml(data.creator_sync_preview?.date_to || '-')}</div>
+                        <div class="subtle">每账号最多抓取：${data.creator_sync_preview?.max_posts_per_account || 0}</div>
                         <div class="subtle">样例账号：${escapeHtml((data.creator_sync_preview?.sample_targets || []).map((item) => item.account_handle || item.profile_url || item.creator_account_id).join('、') || '-')}</div>
                         ${data.creator_sync_preview_error ? `<div class="subtle text-danger mt-2">预览错误：${escapeHtml(data.creator_sync_preview_error)}</div>` : ''}
                     </div>
@@ -2026,6 +2137,11 @@
                     document.getElementById('automationConfigNote').textContent = `${label} 格式不正确：${err}`;
                     return;
                 }
+            }
+            const creatorSyncDateValidation = validateCreatorSyncDateRange();
+            if (!creatorSyncDateValidation.ok) {
+                document.getElementById('automationConfigNote').textContent = creatorSyncDateValidation.message;
+                return;
             }
             const payload = {
                 ...collectHotwordRuntimeConfigPayload(),
@@ -2168,6 +2284,14 @@
                         <div class="subtle">副标题：${escapeHtml(plan.overlay_plan?.subheadline || '-')}</div>
                         <div class="subtle">要点：${escapeHtml((plan.overlay_plan?.bullet_points || []).join(' ｜ ') || '-')}</div>
                         <div class="subtle mt-2">${escapeHtml(plan.overlay_plan?.postprocess || '-')}</div>
+                    </div>
+                    <div class="col-lg-4">
+                        <strong>模板预览图</strong>
+                        <div class="mt-2">
+                            ${plan.preview_asset?.preview_url ? `<img class="asset-preview" src="${plan.preview_asset.preview_url}" alt="${escapeHtml(plan.preview_asset.title || '')}">` : '<div class="subtle">暂无预览图</div>'}
+                            <div class="subtle mt-2">${escapeHtml(plan.preview_asset?.type || '-')}</div>
+                            <div class="subtle">${escapeHtml(plan.preview_asset?.title || '-')}</div>
+                        </div>
                     </div>
                     <div class="col-lg-6">
                         <strong>产品图素材</strong>
@@ -3595,11 +3719,27 @@
             if (hotwordSchedule) {
                 document.getElementById('hotwordScheduleInterval').value = hotwordSchedule.interval_minutes || 360;
                 document.getElementById('hotwordScheduleEnabled').checked = Boolean(hotwordSchedule.enabled);
+                const params = hotwordSchedule.params_payload || {};
+                if (params.source_platform) document.getElementById('hotwordSourcePlatform').value = params.source_platform;
+                if (params.source_channel) document.getElementById('hotwordSourceChannel').value = params.source_channel;
+                if (Object.prototype.hasOwnProperty.call(params, 'keyword_limit')) document.getElementById('hotwordKeywordLimit').value = params.keyword_limit || 10;
+                if (typeof params.keywords === 'string') document.getElementById('hotwordKeywordInput').value = params.keywords;
+                document.getElementById('configHotwordTrendType').value = params.hotword_trend_type || document.getElementById('configHotwordTrendType').value || 'note_search';
+                document.getElementById('configHotwordPageSize').value = params.hotword_page_size || document.getElementById('configHotwordPageSize').value || 20;
+                document.getElementById('configHotwordMaxRelatedQueries').value = params.hotword_max_related_queries || document.getElementById('configHotwordMaxRelatedQueries').value || 20;
             }
             const creatorSyncSchedule = (data.items || []).find((item) => item.job_key === 'creator_accounts_sync_half_hourly');
             if (creatorSyncSchedule) {
                 document.getElementById('creatorSyncScheduleInterval').value = creatorSyncSchedule.interval_minutes || 30;
                 document.getElementById('creatorSyncScheduleEnabled').checked = Boolean(creatorSyncSchedule.enabled);
+                const params = creatorSyncSchedule.params_payload || {};
+                if (Object.prototype.hasOwnProperty.call(params, 'batch_limit')) document.getElementById('creatorSyncBatchLimit').value = params.batch_limit || 20;
+                if (Object.prototype.hasOwnProperty.call(params, 'max_posts_per_account')) document.getElementById('creatorSyncMaxPosts').value = params.max_posts_per_account || 60;
+                document.getElementById('creatorSyncCurrentMonthOnly').checked = params.current_month_only !== false;
+                if (Object.prototype.hasOwnProperty.call(params, 'date_from')) document.getElementById('creatorSyncDateFrom').value = params.date_from || '';
+                if (Object.prototype.hasOwnProperty.call(params, 'date_to')) document.getElementById('creatorSyncDateTo').value = params.date_to || '';
+                if (params.source_channel) document.getElementById('creatorSyncSourceChannel').value = params.source_channel;
+                syncCreatorSyncDateState();
             }
             const ideaSchedule = (data.items || []).find((item) => item.job_key === 'topic_ideas_daily');
             if (ideaSchedule) {
@@ -3642,8 +3782,10 @@
         async function loadTrends() {
             const params = new URLSearchParams();
             const sourcePlatform = document.getElementById('trendPlatformFilter')?.value;
+            const sourceTemplateKey = document.getElementById('trendTemplateFilter')?.value;
             const poolStatus = document.getElementById('trendPoolFilter')?.value;
             if (sourcePlatform) params.set('source_platform', sourcePlatform);
+            if (sourceTemplateKey) params.set('source_template_key', sourceTemplateKey);
             if (poolStatus) params.set('pool_status', poolStatus);
             const res = await fetch(`/api/trends?${params.toString()}`);
             const data = await res.json();
@@ -3651,7 +3793,7 @@
             body.innerHTML = (data.items || []).map((item) => `
                 <tr>
                     <td>${escapeHtml(item.source_platform)}<div class="subtle">${escapeHtml(item.source_channel)}</div></td>
-                    <td>${escapeHtml(item.source_template_key || '-')}</td>
+                    <td>${escapeHtml(item.source_template_label || item.source_template_key || '-')}</td>
                     <td>${escapeHtml(item.keyword || '-')}</td>
                     <td>
                         ${item.link ? `<a href="${escapeHtml(item.link)}" target="_blank">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)}
@@ -4215,19 +4357,7 @@
         async function pingHotwordSync() {
             const payload = {
                 wait_seconds: 3,
-                hotword_source_platform: document.getElementById('configHotwordPlatform').value,
-                hotword_source_template: document.getElementById('configHotwordTemplate').value,
-                hotword_source_channel: document.getElementById('configHotwordChannel').value.trim(),
-                hotword_keyword_limit: parseInt(document.getElementById('configHotwordKeywordLimit').value || '10', 10),
-                hotword_fetch_mode: document.getElementById('configHotwordFetchMode').value,
-                hotword_api_url: document.getElementById('configHotwordApiUrl').value.trim(),
-                hotword_api_method: document.getElementById('configHotwordApiMethod').value,
-                hotword_api_headers_json: document.getElementById('configHotwordHeadersJson').value.trim(),
-                hotword_api_query_json: document.getElementById('configHotwordQueryJson').value.trim(),
-                hotword_api_body_json: document.getElementById('configHotwordBodyJson').value.trim(),
-                hotword_result_path: document.getElementById('configHotwordResultPath').value.trim(),
-                hotword_keyword_param: document.getElementById('configHotwordKeywordParam').value.trim(),
-                hotword_timeout_seconds: parseInt(document.getElementById('configHotwordTimeout').value || '30', 10),
+                ...collectHotwordRuntimeConfigPayload(),
                 keywords: document.getElementById('hotwordKeywordInput').value.trim()
             };
             const res = await fetch('/api/jobs/hotwords/ping', {
@@ -4297,6 +4427,11 @@
         }
 
         async function saveCreatorSyncScheduleFromCurrentConfig() {
+            const creatorSyncDateValidation = validateCreatorSyncDateRange();
+            if (!creatorSyncDateValidation.ok) {
+                document.getElementById('scheduleMsg').textContent = creatorSyncDateValidation.message;
+                return;
+            }
             const payload = {
                 name: '报名人账号持续同步',
                 enabled: document.getElementById('creatorSyncScheduleEnabled').checked,
@@ -4305,7 +4440,11 @@
                     ...collectCreatorSyncRuntimeConfigPayload(),
                     source_platform: '小红书',
                     source_channel: document.getElementById('creatorSyncSourceChannel').value.trim(),
-                    batch_limit: parseInt(document.getElementById('creatorSyncBatchLimit').value || '20', 10)
+                    batch_limit: parseInt(document.getElementById('creatorSyncBatchLimit').value || '20', 10),
+                    current_month_only: document.getElementById('creatorSyncCurrentMonthOnly').checked,
+                    date_from: document.getElementById('creatorSyncDateFrom').value,
+                    date_to: document.getElementById('creatorSyncDateTo').value,
+                    max_posts_per_account: parseInt(document.getElementById('creatorSyncMaxPosts').value || '60', 10),
                 }
             };
             const res = await fetch('/api/admin/schedules/creator-sync/upsert', {
@@ -4321,11 +4460,20 @@
         }
 
         async function runCreatorAccountSync() {
+            const creatorSyncDateValidation = validateCreatorSyncDateRange();
+            if (!creatorSyncDateValidation.ok) {
+                document.getElementById('creatorSyncJobMsg').textContent = creatorSyncDateValidation.message;
+                return;
+            }
             const payload = {
                 ...collectCreatorSyncRuntimeConfigPayload(),
                 source_channel: document.getElementById('creatorSyncSourceChannel').value.trim(),
                 batch_name: document.getElementById('creatorSyncBatchName').value.trim(),
                 batch_limit: parseInt(document.getElementById('creatorSyncBatchLimit').value || '20', 10),
+                current_month_only: document.getElementById('creatorSyncCurrentMonthOnly').checked,
+                date_from: document.getElementById('creatorSyncDateFrom').value,
+                date_to: document.getElementById('creatorSyncDateTo').value,
+                max_posts_per_account: parseInt(document.getElementById('creatorSyncMaxPosts').value || '60', 10),
                 registration_id: parseInt(document.getElementById('creatorSyncRegistrationId').value || '0', 10),
                 creator_account_id: parseInt(document.getElementById('creatorSyncAccountId').value || '0', 10),
             };
@@ -4690,6 +4838,30 @@
             }
         }
 
+        function ensureCreatorSyncDateDefaults() {
+            const fromInput = document.getElementById('creatorSyncDateFrom');
+            const toInput = document.getElementById('creatorSyncDateTo');
+            if (!fromInput || !toInput) return;
+            const now = new Date();
+            const today = now.toISOString().slice(0, 10);
+            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+            if (!fromInput.value) fromInput.value = monthStart;
+            if (!toInput.value) toInput.value = today;
+        }
+
+        function syncCreatorSyncDateState() {
+            const currentMonthOnlyInput = document.getElementById('creatorSyncCurrentMonthOnly');
+            const fromInput = document.getElementById('creatorSyncDateFrom');
+            const toInput = document.getElementById('creatorSyncDateTo');
+            if (!currentMonthOnlyInput || !fromInput || !toInput) return;
+            if (currentMonthOnlyInput.checked) {
+                ensureCreatorSyncDateDefaults();
+            }
+            fromInput.disabled = currentMonthOnlyInput.checked;
+            toInput.disabled = currentMonthOnlyInput.checked;
+        }
+
+        syncCreatorSyncDateState();
         loadOverview();
         loadAutomationConfig();
         loadAutomationConfigPreview();

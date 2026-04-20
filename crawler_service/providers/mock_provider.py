@@ -123,6 +123,89 @@ class MockCrawlerProvider(BaseCrawlerProvider):
             },
         }
 
+    async def fetch_trends(self, payload):
+        keywords = [str(item or '').strip() for item in getattr(payload, 'keywords', []) if str(item or '').strip()]
+        if not keywords:
+            keywords = ['脂肪肝']
+        trend_type = (getattr(payload, 'trend_type', 'note_search') or 'note_search').strip().lower() or 'note_search'
+        page_size = min(max(_safe_int(getattr(payload, 'page_size', 20), 20), 1), 50)
+        max_related_queries = min(max(_safe_int(getattr(payload, 'max_related_queries', 20), 20), 1), 50)
+        source_channel = getattr(payload, 'source_channel', '') or 'mock_provider'
+
+        if trend_type == 'hot_queries':
+            suffixes = ['体检', '症状', '检查', '饮食', '复查', '治疗', '怎么调理', '注意事项']
+            items = []
+            for keyword in keywords:
+                for index, suffix in enumerate(suffixes, start=1):
+                    rank = len(items) + 1
+                    if rank > max_related_queries:
+                        break
+                    query = f'{keyword}{suffix}'
+                    seed = _deterministic_seed(keyword, suffix, rank)
+                    items.append({
+                        'keyword': keyword,
+                        'query': query,
+                        'title': query,
+                        'summary': f'模拟小红书相关热搜词，用于联调热点抓取链路。原始关键词：{keyword}',
+                        'hot_value': 12000 - rank * 173 + (seed % 120),
+                        'rank': rank,
+                        'source_channel': source_channel,
+                    })
+                if len(items) >= max_related_queries:
+                    break
+            items = items[:max_related_queries]
+        else:
+            title_suffixes = [
+                '体检后别只盯转氨酶',
+                '这3个误区很多人都踩过',
+                '门诊最常被问到的一题',
+                '复查前一定先看这几点',
+                '一篇讲清楚怎么管理',
+            ]
+            items = []
+            for keyword in keywords:
+                for index in range(page_size):
+                    rank = len(items) + 1
+                    if rank > page_size:
+                        break
+                    seed = _deterministic_seed(keyword, index, source_channel)
+                    likes = 80 + (seed % 360)
+                    favorites = 40 + (seed % 220)
+                    comments = 12 + (seed % 90)
+                    views = 2000 + (seed % 18000)
+                    post_id = f'mocktrend{seed:08x}'
+                    items.append({
+                        'keyword': keyword,
+                        'title': f'{keyword}{title_suffixes[index % len(title_suffixes)]}',
+                        'link': f'https://www.xiaohongshu.com/explore/{post_id}',
+                        'author': f'模拟笔记账号{rank}',
+                        'summary': f'模拟小红书爆款笔记结果，用于联调热点池和候选话题生成。关键词：{keyword}',
+                        'likes': likes,
+                        'favorites': favorites,
+                        'comments': comments,
+                        'views': views,
+                        'rank': rank,
+                        'publish_time': (datetime.now() - timedelta(days=index)).strftime('%Y-%m-%d %H:%M:%S'),
+                        'source_channel': source_channel,
+                    })
+                if len(items) >= page_size:
+                    break
+            items = items[:page_size]
+
+        return {
+            'success': True,
+            'provider': 'mock',
+            'batch_name': getattr(payload, 'batch_name', ''),
+            'source_channel': source_channel,
+            'trend_type': trend_type,
+            'items': items,
+            'meta': {
+                'keyword_count': len(keywords),
+                'item_count': len(items),
+                'trend_type': trend_type,
+            },
+        }
+
     def _parse_date_boundary(self, raw, start=True):
         text = (raw or '').strip()
         if not text:
