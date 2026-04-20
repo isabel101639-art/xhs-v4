@@ -99,8 +99,10 @@ def build_trend_probe_diagnosis(summary):
     item_count = summary.get('item_count', 0) or 0
     trend_type = summary.get('trend_type') or 'note_search'
     sample_items = summary.get('sample_items') or []
+    metric_coverage = summary.get('metric_coverage') or {}
     has_nonzero_views = any((item.get('views') or 0) > 0 for item in sample_items if isinstance(item, dict))
     has_nonzero_hot_value = any((item.get('hot_value') or 0) > 0 for item in sample_items if isinstance(item, dict))
+    exposure_hit_rate = ((metric_coverage.get('exposures') or {}).get('hit_rate') or 0)
 
     if provider == 'playwright_xhs' and not health.get('storage_state_exists', False):
         return {
@@ -111,6 +113,16 @@ def build_trend_probe_diagnosis(summary):
         }
 
     if item_count > 0:
+        if trend_type == 'note_search' and exposure_hit_rate and exposure_hit_rate < 50:
+            return {
+                'status': 'partial',
+                'summary': f'已抓到爆款笔记，但曝光量命中率偏低（{exposure_hit_rate}%）',
+                'issues': ['当前搜索结果里只有部分笔记命中了曝光量字段'],
+                'suggested_actions': [
+                    '优先用 debug_xhs_search.py 检查 state_metric_candidates，补充曝光量字段名',
+                    '必要时设置 XHS_EXPOSURE_HINT_TOKENS 扩充模糊命中关键词',
+                ],
+            }
         if trend_type == 'note_search' and has_nonzero_views and not has_nonzero_hot_value:
             return {
                 'status': 'partial',
@@ -147,8 +159,10 @@ def build_account_probe_diagnosis(summary):
     account_count = summary.get('account_count', 0) or 0
     post_count = summary.get('post_count', 0) or 0
     sample_posts = summary.get('sample_posts') or []
+    metric_coverage = summary.get('metric_coverage') or {}
     has_nonzero_views = any((item.get('views') or 0) > 0 for item in sample_posts if isinstance(item, dict))
     has_nonzero_exposures = any((item.get('exposures') or 0) > 0 for item in sample_posts if isinstance(item, dict))
+    exposure_hit_rate = ((metric_coverage.get('exposures') or {}).get('hit_rate') or 0)
 
     if provider == 'playwright_xhs' and not health.get('storage_state_exists', False):
         return {
@@ -159,6 +173,16 @@ def build_account_probe_diagnosis(summary):
         }
 
     if account_count > 0 and post_count > 0:
+        if has_nonzero_exposures and exposure_hit_rate < 50:
+            return {
+                'status': 'partial',
+                'summary': f'已抓到账号和笔记，但曝光量命中率偏低（{exposure_hit_rate}%）',
+                'issues': ['当前账号页只有部分笔记命中了曝光量字段'],
+                'suggested_actions': _unique([
+                    '先运行 crawler_service/scripts/debug_xhs_profile.py 查看 state_metric_candidates',
+                    '如果字段命名特殊，设置 XHS_EXPOSURE_HINT_TOKENS 扩充模糊匹配',
+                ]),
+            }
         if has_nonzero_views and not has_nonzero_exposures:
             return {
                 'status': 'partial',
