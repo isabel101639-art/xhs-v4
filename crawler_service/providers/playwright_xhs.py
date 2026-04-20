@@ -248,6 +248,60 @@ def _state_count_with_source(value, paths, default=0):
     return default, ''
 
 
+def _iter_leaf_paths(value, prefix=''):
+    if isinstance(value, dict):
+        for key, child in value.items():
+            next_prefix = f'{prefix}.{key}' if prefix else str(key)
+            yield from _iter_leaf_paths(child, next_prefix)
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            next_prefix = f'{prefix}.{index}' if prefix else str(index)
+            yield from _iter_leaf_paths(child, next_prefix)
+    else:
+        yield prefix, value
+
+
+def _state_count_fuzzy_with_source(value, include_tokens, exclude_tokens=None, default=0):
+    include_tokens = [str(token).lower() for token in (include_tokens or []) if str(token).strip()]
+    exclude_tokens = [str(token).lower() for token in (exclude_tokens or []) if str(token).strip()]
+    for path, current in _iter_leaf_paths(value):
+        lowered_path = str(path or '').lower()
+        if not lowered_path:
+            continue
+        if include_tokens and not any(token in lowered_path for token in include_tokens):
+            continue
+        if exclude_tokens and any(token in lowered_path for token in exclude_tokens):
+            continue
+        count = _parse_count(current)
+        if count:
+            return count, path
+    return default, ''
+
+
+def _collect_metric_candidates(value, include_tokens=None, exclude_tokens=None, limit=20):
+    include_tokens = [str(token).lower() for token in (include_tokens or []) if str(token).strip()]
+    exclude_tokens = [str(token).lower() for token in (exclude_tokens or []) if str(token).strip()]
+    items = []
+    for path, current in _iter_leaf_paths(value):
+        lowered_path = str(path or '').lower()
+        if not lowered_path:
+            continue
+        if include_tokens and not any(token in lowered_path for token in include_tokens):
+            continue
+        if exclude_tokens and any(token in lowered_path for token in exclude_tokens):
+            continue
+        count = _parse_count(current)
+        if not count:
+            continue
+        items.append({
+            'path': path,
+            'value': count,
+        })
+        if len(items) >= limit:
+            break
+    return items
+
+
 def _looks_like_search_feed_item(value):
     if not isinstance(value, dict):
         return False
@@ -392,6 +446,30 @@ def _normalize_search_feed_item(item, keyword, source_channel, rank):
     if not hot_value:
         hot_value = views + likes * 3 + favorites * 4 + comments * 5 + max(0, 100 - rank * 3)
         hot_value_source = 'derived_from_engagement'
+    if not views:
+        views, views_source = _state_count_fuzzy_with_source(
+            item,
+            include_tokens=['view', 'read', 'browse', 'pv'],
+            exclude_tokens=['like', 'comment', 'collect', 'favor', 'share', 'impress', 'exposure'],
+            default=views,
+        )
+    if not exposures:
+        exposures, exposures_source = _state_count_fuzzy_with_source(
+            item,
+            include_tokens=['impression', 'exposure', 'expo', 'reach'],
+            exclude_tokens=['like', 'comment', 'collect', 'favor', 'share'],
+            default=exposures,
+        )
+    if hot_value_source == 'derived_from_engagement':
+        fuzzy_hot_value, fuzzy_hot_value_source = _state_count_fuzzy_with_source(
+            item,
+            include_tokens=['hot', 'score', 'heat', 'search_cnt'],
+            exclude_tokens=['like', 'comment', 'collect', 'favor', 'share'],
+            default=0,
+        )
+        if fuzzy_hot_value:
+            hot_value = fuzzy_hot_value
+            hot_value_source = fuzzy_hot_value_source
     return {
         'keyword': keyword,
         'query': keyword,

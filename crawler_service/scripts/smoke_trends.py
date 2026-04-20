@@ -127,6 +127,40 @@ def main():
     _assert((normalized_profile_feed.get('metric_sources') or {}).get('exposures') == 'note_card.impression_cnt', 'profile feed normalization should expose exposures source path')
     _print_check('profile_feed_normalization', json.dumps(normalized_profile_feed, ensure_ascii=False))
 
+    fuzzy_profile_feed = _normalize_profile_feed_item(
+        item={
+            'id': 'profile_note_002',
+            'note_card': {
+                'title': '账号页模糊字段标题',
+                'desc': '账号页模糊字段摘要',
+                'metrics': {
+                    'reach_value': 23456,
+                    'read_value': 6789,
+                },
+                'interact_info': {
+                    'liked_count': 11,
+                    'collected_count': 7,
+                    'comment_count': 3,
+                },
+            },
+        },
+        profile_url='https://www.xiaohongshu.com/user/profile/demo_account',
+        account_handle='demo_account',
+        target=type('Target', (), {
+            'owner_phone': '13800000000',
+            'owner_name': '测试账号',
+            'registration_id': 0,
+            'topic_id': 0,
+            'submission_id': 0,
+        })(),
+        source_channel='CrawlerSmoke',
+        rank=2,
+    )
+    _assert(fuzzy_profile_feed.get('views') == 6789, 'fuzzy profile feed normalization should map read_value to views')
+    _assert(fuzzy_profile_feed.get('exposures') == 23456, 'fuzzy profile feed normalization should map reach_value to exposures')
+    _assert((fuzzy_profile_feed.get('metric_sources') or {}).get('exposures') == 'note_card.metrics.reach_value', 'fuzzy profile feed normalization should expose fuzzy exposures source path')
+    _print_check('fuzzy_profile_feed_normalization', json.dumps(fuzzy_profile_feed, ensure_ascii=False))
+
     normalized_query = _normalize_related_query_item(
         {'query': '脂肪肝体检', 'hot_value': 12345},
         keyword='脂肪肝',

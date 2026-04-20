@@ -10,6 +10,7 @@ from crawler_service.providers.playwright_xhs import (
     DEFAULT_POST_TITLE_SELECTORS,
     DEFAULT_PROFILE_NAME_SELECTORS,
     PlaywrightXHSCrawlerProvider,
+    _collect_metric_candidates,
 )
 
 
@@ -69,6 +70,12 @@ async def main():
             'follower_count': await provider._extract_follower_count(page),
             'state_available': bool(state),
             'state_top_keys': sorted(list(state.keys()))[:20] if isinstance(state, dict) else [],
+            'state_metric_candidates': _collect_metric_candidates(
+                state,
+                include_tokens=['view', 'read', 'impression', 'exposure', 'expo', 'reach'],
+                exclude_tokens=['like', 'comment', 'collect', 'favor', 'share'],
+                limit=30,
+            ),
             'state_posts': state_posts[:5],
             'state_post_metric_sources': [item.get('metric_sources') or {} for item in state_posts[:5]],
             'profile_name_candidates': await _selector_counts(page, DEFAULT_PROFILE_NAME_SELECTORS),

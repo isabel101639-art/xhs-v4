@@ -4,7 +4,10 @@ import os
 from pathlib import Path
 
 from crawler_service.config import get_settings
-from crawler_service.providers.playwright_xhs import PlaywrightXHSCrawlerProvider
+from crawler_service.providers.playwright_xhs import (
+    PlaywrightXHSCrawlerProvider,
+    _collect_metric_candidates,
+)
 
 
 async def main():
@@ -60,6 +63,12 @@ async def main():
                 'keyword': keyword,
                 'state_available': bool(state),
                 'state_top_keys': sorted(list(state.keys()))[:20] if isinstance(state, dict) else [],
+                'state_metric_candidates': _collect_metric_candidates(
+                    state,
+                    include_tokens=['view', 'read', 'impression', 'exposure', 'expo', 'reach', 'hot', 'score', 'heat'],
+                    exclude_tokens=['like', 'comment', 'collect', 'favor', 'share'],
+                    limit=30,
+                ),
                 'state_note_items': state_note_items[:5],
                 'state_note_metric_sources': [item.get('metric_sources') or {} for item in state_note_items[:5]],
                 'state_hot_queries': state_hot_queries[:10],
