@@ -17,6 +17,12 @@ async def main():
 
     settings = get_settings()
     provider = build_provider(settings)
+    health = await provider.healthcheck()
+    if settings.provider == 'playwright_xhs' and not health.get('storage_state_exists'):
+        raise SystemExit(
+            f"当前 provider=playwright_xhs，但未找到登录态文件：{health.get('storage_state_path') or '-'}\n"
+            "请先执行 crawler_service/scripts/save_xhs_storage_state.py 保存登录态。"
+        )
 
     raw_keywords = (os.environ.get('XHS_PROBE_KEYWORDS') or os.environ.get('XHS_DEBUG_SEARCH_KEYWORD') or '脂肪肝').strip()
     keywords = [item.strip() for item in raw_keywords.replace('，', ',').split(',') if item.strip()]
@@ -47,6 +53,7 @@ async def main():
 
     print(json.dumps({
         'provider': settings.provider,
+        'health': health,
         'trend_type': trend_type,
         'keyword_count': len(keywords),
         'item_count': len(result.get('items') or []),

@@ -24,6 +24,11 @@ def _env_int(name, default=0, min_value=None, max_value=None):
     return value
 
 
+def _default_playwright_storage_state_path():
+    crawler_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(crawler_dir, '.state', 'xhs_storage_state.json')
+
+
 @dataclass(frozen=True)
 class CrawlerSettings:
     service_name: str
@@ -70,7 +75,7 @@ def get_settings():
         ).strip(),
         playwright_headless=_env_flag('PLAYWRIGHT_HEADLESS', True),
         playwright_navigation_timeout_ms=_env_int('PLAYWRIGHT_NAVIGATION_TIMEOUT_MS', 30000, 1000, 180000),
-        playwright_storage_state_path=(os.environ.get('PLAYWRIGHT_STORAGE_STATE_PATH') or '').strip(),
+        playwright_storage_state_path=(os.environ.get('PLAYWRIGHT_STORAGE_STATE_PATH') or _default_playwright_storage_state_path()).strip(),
         playwright_browser_channel=(os.environ.get('PLAYWRIGHT_BROWSER_CHANNEL') or '').strip(),
         xhs_profile_name_selector=(os.environ.get('XHS_PROFILE_NAME_SELECTOR') or '').strip(),
         xhs_follower_count_selector=(os.environ.get('XHS_FOLLOWER_COUNT_SELECTOR') or '').strip(),

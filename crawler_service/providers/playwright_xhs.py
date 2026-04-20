@@ -467,6 +467,10 @@ class PlaywrightXHSCrawlerProvider(BaseCrawlerProvider):
             'provider': 'playwright_xhs',
             'ready': playwright_ready,
             'storage_state_path': self.settings.playwright_storage_state_path,
+            'storage_state_exists': bool(self.settings.playwright_storage_state_path and os.path.exists(self.settings.playwright_storage_state_path)),
+            'storage_state_required': True,
+            'supports_account_posts': True,
+            'supports_trends': True,
             'search_url_template': self.settings.xhs_search_url_template,
             'post_card_selectors': _selector_candidates(
                 self.settings.xhs_post_card_selector,

@@ -2865,6 +2865,8 @@
                         <div class="subtle">自动化模式：${runtime.inline_automation_jobs ? 'inline 本地模式' : 'celery 异步模式'}</div>
                         <div class="subtle">热点模式：${escapeHtml(runtime.hotword_fetch_mode || 'skeleton')}</div>
                         <div class="subtle">热点 API：${escapeHtml(runtime.hotword_api_url || '-')}</div>
+                        <div class="subtle">热点抓取类型：${escapeHtml(runtime.hotword_trend_type || 'note_search')}</div>
+                        <div class="subtle">搜索结果条数：${runtime.hotword_page_size || 0} ｜ 相关搜索词：${runtime.hotword_max_related_queries || 0}</div>
                         <div class="subtle">抓完热点后自动生成话题：${runtime.hotword_auto_generate_topic_ideas ? `开启（${runtime.hotword_auto_generate_topic_count || 0}个）` : '关闭'}</div>
                         <div class="subtle">账号同步模式：${escapeHtml(runtime.creator_sync_fetch_mode || 'disabled')}</div>
                         <div class="subtle">账号同步 API：${escapeHtml(runtime.creator_sync_api_url || '-')}</div>
