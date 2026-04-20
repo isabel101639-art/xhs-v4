@@ -22,7 +22,7 @@ def _first_metric_sources(items):
 
 async def main():
     from crawler_service.config import get_settings
-    from crawler_service.probe_diagnostics import build_account_probe_diagnosis
+    from crawler_service.probe_diagnostics import build_account_probe_diagnosis, build_metric_coverage
     from crawler_service.providers import build_provider
     from crawler_service.schemas import AccountPostsRequest, SyncTarget
 
@@ -96,6 +96,7 @@ async def main():
     summary['sample_account'] = (result.get('accounts') or [])[:1]
     summary['sample_posts'] = (result.get('posts') or [])[:5]
     summary['metric_sources'] = _first_metric_sources(result.get('posts') or [])
+    summary['metric_coverage'] = build_metric_coverage(result.get('posts') or [], ['views', 'exposures', 'likes', 'favorites', 'comments'])
     summary['diagnosis'] = build_account_probe_diagnosis(summary)
     output_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
     print(json.dumps(summary, ensure_ascii=False, indent=2))

@@ -4806,6 +4806,7 @@ def _build_crawler_probe_payload():
         provider = payload.get('provider') or (payload.get('health') or {}).get('provider') or ''
         suggested_actions = diagnosis.get('suggested_actions') or []
         metric_sources = resolve_metric_sources(payload)
+        metric_coverage = payload.get('metric_coverage') or {}
         updated_at = _format_datetime(datetime.fromtimestamp(os.path.getmtime(path))) if exists else ''
         items.append({
             'key': key,
@@ -4818,6 +4819,7 @@ def _build_crawler_probe_payload():
             'summary': summary,
             'suggested_actions': suggested_actions[:5],
             'metric_sources': metric_sources,
+            'metric_coverage': metric_coverage if isinstance(metric_coverage, dict) else {},
         })
 
     latest_success = next((item for item in items if item['exists']), None)

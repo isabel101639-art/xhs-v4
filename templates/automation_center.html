@@ -2984,6 +2984,10 @@
                                             ? `<div class="subtle mt-1">命中来源：${escapeHtml(Object.entries(item.metric_sources).map(([key, value]) => `${key}=${value || '-'}`).join(' ｜ '))}</div>`
                                             : ''
                                         }
+                                        ${(item.metric_coverage && Object.keys(item.metric_coverage).length)
+                                            ? `<div class="subtle mt-1">覆盖率：${escapeHtml(Object.entries(item.metric_coverage).map(([key, value]) => `${key}=${value.hit_count || 0}/${value.total_count || 0}`).join(' ｜ '))}</div>`
+                                            : ''
+                                        }
                                         ${(item.suggested_actions || []).length ? `<div class="subtle mt-2">建议：${escapeHtml((item.suggested_actions || []).join(' ｜ '))}</div>` : ''}
                                     </div>
                                 </div>

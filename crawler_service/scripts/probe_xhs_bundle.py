@@ -29,7 +29,7 @@ def _first_metric_sources(items):
 
 async def main():
     from crawler_service.config import get_settings
-    from crawler_service.probe_diagnostics import build_bundle_diagnosis
+    from crawler_service.probe_diagnostics import build_bundle_diagnosis, build_metric_coverage
     from crawler_service.providers import build_provider
     from crawler_service.schemas import AccountPostsRequest, SyncTarget, TrendQueryRequest
 
@@ -91,6 +91,7 @@ async def main():
             'output_path': str(trend_output_path),
             'sample_items': (trend_result.get('items') or [])[:5],
             'metric_sources': _first_metric_sources(trend_result.get('items') or []),
+            'metric_coverage': build_metric_coverage(trend_result.get('items') or [], ['views', 'exposures', 'hot_value', 'likes', 'favorites', 'comments']),
         }
 
     profile_url = (os.environ.get('XHS_PROBE_PROFILE_URL') or '').strip()
@@ -138,6 +139,7 @@ async def main():
             'sample_account': (account_result.get('accounts') or [])[:1],
             'sample_posts': (account_result.get('posts') or [])[:5],
             'metric_sources': _first_metric_sources(account_result.get('posts') or []),
+            'metric_coverage': build_metric_coverage(account_result.get('posts') or [], ['views', 'exposures', 'likes', 'favorites', 'comments']),
         }
 
     bundle_output_path = output_dir / 'xhs_probe_bundle.json'

@@ -7,6 +7,39 @@ def _unique(items):
     return result
 
 
+def build_metric_coverage(items, metric_keys):
+    items = items or []
+    metric_keys = [str(item).strip() for item in (metric_keys or []) if str(item).strip()]
+    coverage = {}
+    total_count = len([item for item in items if isinstance(item, dict)])
+    for metric_key in metric_keys:
+        hit_count = 0
+        source_paths = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            value = item.get(metric_key)
+            if value in [None, '']:
+                continue
+            try:
+                numeric_value = int(value)
+            except (TypeError, ValueError):
+                numeric_value = 0
+            if numeric_value <= 0:
+                continue
+            hit_count += 1
+            source = (item.get('metric_sources') or {}).get(metric_key)
+            if source and source not in source_paths:
+                source_paths.append(source)
+        coverage[metric_key] = {
+            'hit_count': hit_count,
+            'total_count': total_count,
+            'hit_rate': round((hit_count / total_count) * 100, 2) if total_count else 0,
+            'source_paths': source_paths[:10],
+        }
+    return coverage
+
+
 def build_login_state_diagnosis(result):
     result = result or {}
     health = result.get('health') or {}
