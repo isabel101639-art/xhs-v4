@@ -184,6 +184,7 @@ class MockCrawlerProvider(BaseCrawlerProvider):
                     favorites = 40 + (seed % 220)
                     comments = 12 + (seed % 90)
                     views = 2000 + (seed % 18000)
+                    hot_value = views + likes * 3 + favorites * 4 + comments * 5 + max(0, 100 - rank * 3)
                     post_id = f'mocktrend{seed:08x}'
                     items.append({
                         'keyword': keyword,
@@ -191,6 +192,7 @@ class MockCrawlerProvider(BaseCrawlerProvider):
                         'link': f'https://www.xiaohongshu.com/explore/{post_id}',
                         'author': f'模拟笔记账号{rank}',
                         'summary': f'模拟小红书爆款笔记结果，用于联调热点池和候选话题生成。关键词：{keyword}',
+                        'hot_value': hot_value,
                         'likes': likes,
                         'favorites': favorites,
                         'comments': comments,

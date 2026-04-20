@@ -65,6 +65,9 @@ def build_trend_probe_diagnosis(summary):
     provider = summary.get('provider') or ''
     item_count = summary.get('item_count', 0) or 0
     trend_type = summary.get('trend_type') or 'note_search'
+    sample_items = summary.get('sample_items') or []
+    has_nonzero_views = any((item.get('views') or 0) > 0 for item in sample_items if isinstance(item, dict))
+    has_nonzero_hot_value = any((item.get('hot_value') or 0) > 0 for item in sample_items if isinstance(item, dict))
 
     if provider == 'playwright_xhs' and not health.get('storage_state_exists', False):
         return {
@@ -75,6 +78,16 @@ def build_trend_probe_diagnosis(summary):
         }
 
     if item_count > 0:
+        if trend_type == 'note_search' and has_nonzero_views and not has_nonzero_hot_value:
+            return {
+                'status': 'partial',
+                'summary': '已抓到爆款笔记和阅读量，但热度值仍未稳定命中',
+                'issues': ['当前热度值主要依赖阅读/互动估算或页面未返回稳定热度字段'],
+                'suggested_actions': [
+                    '优先检查搜索页状态树里是否存在 hot_value / score / search_cnt 一类字段',
+                    '继续用 debug_xhs_search.py 查看状态树样例，必要时补充热度字段路径',
+                ],
+            }
         return {
             'status': 'ready',
             'summary': f'已成功抓到 {item_count} 条{"爆款笔记" if trend_type == "note_search" else "相关热搜词"}',
@@ -100,6 +113,9 @@ def build_account_probe_diagnosis(summary):
     provider = summary.get('provider') or ''
     account_count = summary.get('account_count', 0) or 0
     post_count = summary.get('post_count', 0) or 0
+    sample_posts = summary.get('sample_posts') or []
+    has_nonzero_views = any((item.get('views') or 0) > 0 for item in sample_posts if isinstance(item, dict))
+    has_nonzero_exposures = any((item.get('exposures') or 0) > 0 for item in sample_posts if isinstance(item, dict))
 
     if provider == 'playwright_xhs' and not health.get('storage_state_exists', False):
         return {
@@ -110,6 +126,17 @@ def build_account_probe_diagnosis(summary):
         }
 
     if account_count > 0 and post_count > 0:
+        if has_nonzero_views and not has_nonzero_exposures:
+            return {
+                'status': 'partial',
+                'summary': f'已成功抓到 {account_count} 个账号、{post_count} 条笔记，阅读量已回流，但传播量仍未命中',
+                'issues': ['账号页状态树或 DOM 里还没有稳定提取到 impression_cnt / exposure_count'],
+                'suggested_actions': _unique([
+                    '先运行 crawler_service/scripts/debug_xhs_profile.py 检查账号页 HTML 和状态树',
+                    '重点查找 impression_cnt、exposure_count、view_count 之外的曝光字段命名',
+                    '如果账号页根本不返回传播量字段，就先接受 exposures=0 的回退口径',
+                ]),
+            }
         return {
             'status': 'ready',
             'summary': f'已成功抓到 {account_count} 个账号、{post_count} 条笔记',
