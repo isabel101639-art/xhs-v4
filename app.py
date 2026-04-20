@@ -9086,6 +9086,19 @@ def _hotword_healthcheck(payload=None, timeout_seconds=3, sample_keywords=None, 
         source_channel=settings.get('hotword_source_channel') or 'Worker骨架',
         batch_name='healthcheck_hotword',
     )
+    health_url = api_url
+    health_response = None
+    parsed = urlparse(api_url)
+    if parsed.scheme and parsed.netloc:
+        health_url = urlunparse((parsed.scheme, parsed.netloc, '/healthz', '', '', ''))
+        try:
+            response = requests.get(health_url, timeout=min(max(_safe_int(timeout_seconds, 3), 1), 15))
+            try:
+                health_response = response.json()
+            except ValueError:
+                health_response = response.text[:300]
+        except Exception:
+            health_response = None
 
     try:
         preview_data = _preview_hotword_rows(
@@ -9096,11 +9109,16 @@ def _hotword_healthcheck(payload=None, timeout_seconds=3, sample_keywords=None, 
             batch_name='healthcheck_hotword',
         )
         response_preview = preview_data.get('response_preview')
+        if isinstance(health_response, dict):
+            response_preview = {
+                'health': health_response,
+                'sample_response': response_preview,
+            }
         return {
             'enabled': True,
             'ok': True,
             'message': '热点源接口可用',
-            'health_url': api_url,
+            'health_url': health_url,
             'status_code': 200,
             'response': response_preview,
             'request_preview': preview,
@@ -9112,9 +9130,9 @@ def _hotword_healthcheck(payload=None, timeout_seconds=3, sample_keywords=None, 
             'enabled': True,
             'ok': False,
             'message': f'热点源接口不可达：{exc}',
-            'health_url': api_url,
+            'health_url': health_url,
             'status_code': status_code,
-            'response': None,
+            'response': {'health': health_response} if isinstance(health_response, dict) else None,
             'request_preview': preview,
             'normalized_preview': [],
         }

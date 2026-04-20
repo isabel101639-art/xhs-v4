@@ -2837,6 +2837,7 @@
             const runtime = data.runtime || {};
             const worker = data.worker || {};
             const hotwordHealth = data.hotword_health || {};
+            const hotwordCrawlerHealth = hotwordHealth.response?.health || {};
             const creatorSyncHealth = data.creator_sync_health || {};
             const creatorCrawlerHealth = creatorSyncHealth.response?.health || {};
             const imageHealth = data.image_health || {};
@@ -2912,6 +2913,9 @@
                         <div class="subtle">Health URL：${escapeHtml(hotwordHealth.health_url || '-')}</div>
                         <div class="subtle">HTTP：${hotwordHealth.status_code || '-'}</div>
                         <div class="subtle">说明：${escapeHtml(hotwordHealth.message || '-')}</div>
+                        <div class="subtle">Provider：${escapeHtml(hotwordCrawlerHealth.provider || '-')}</div>
+                        <div class="subtle">登录态文件：${escapeHtml(hotwordCrawlerHealth.storage_state_path || '-')}</div>
+                        <div class="subtle">登录态存在：${hotwordCrawlerHealth.storage_state_exists === true ? '是' : (hotwordCrawlerHealth.storage_state_exists === false ? '否' : '-')}</div>
                     </div>
                     <div class="col-lg-3">
                         <strong>账号同步 API 健康</strong>
