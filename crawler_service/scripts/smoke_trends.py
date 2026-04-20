@@ -90,6 +90,7 @@ def main():
     _assert(normalized_feed.get('title') == '状态树里的爆款笔记标题', 'state feed normalization should map nested title')
     _assert(normalized_feed.get('author') == '状态树作者', 'state feed normalization should map nested author')
     _assert(normalized_feed.get('likes') == 321, 'state feed normalization should map likes')
+    _assert((normalized_feed.get('metric_sources') or {}).get('likes') == 'note_card.interact_info.liked_count', 'state feed normalization should expose likes source path')
     _print_check('state_feed_normalization', json.dumps(normalized_feed, ensure_ascii=False))
 
     normalized_profile_feed = _normalize_profile_feed_item(
@@ -123,6 +124,7 @@ def main():
     )
     _assert(normalized_profile_feed.get('views') == 4567, 'profile feed normalization should map view_count to views')
     _assert(normalized_profile_feed.get('exposures') == 12345, 'profile feed normalization should map impression_cnt to exposures')
+    _assert((normalized_profile_feed.get('metric_sources') or {}).get('exposures') == 'note_card.impression_cnt', 'profile feed normalization should expose exposures source path')
     _print_check('profile_feed_normalization', json.dumps(normalized_profile_feed, ensure_ascii=False))
 
     normalized_query = _normalize_related_query_item(
@@ -133,6 +135,7 @@ def main():
     )
     _assert(normalized_query.get('query') == '脂肪肝体检', 'related query normalization should map query text')
     _assert(normalized_query.get('hot_value') == 12345, 'related query normalization should keep hot value')
+    _assert((normalized_query.get('metric_sources') or {}).get('hot_value') == 'hot_value', 'related query normalization should expose hot value source path')
     _print_check('state_query_normalization', json.dumps(normalized_query, ensure_ascii=False))
 
     print('Crawler trend smoke check passed.')

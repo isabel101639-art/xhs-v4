@@ -47,11 +47,30 @@ async def main():
         html_path.write_text(await page.content(), encoding='utf-8')
 
         body_text = (await page.locator('body').text_content() or '').strip()
+        state = await provider._read_page_state(page)
+        state_posts = await provider._extract_profile_posts_from_state(
+            page=page,
+            target=type('Target', (), {
+                'owner_phone': '',
+                'owner_name': '',
+                'registration_id': 0,
+                'topic_id': 0,
+                'submission_id': 0,
+            })(),
+            profile_url=target_url,
+            account_handle='',
+            source_channel='debug_profile',
+            max_posts=5,
+        )
         meta = {
             'title': await page.title(),
             'url': page.url,
             'display_name': await provider._extract_display_name(page, '', ''),
             'follower_count': await provider._extract_follower_count(page),
+            'state_available': bool(state),
+            'state_top_keys': sorted(list(state.keys()))[:20] if isinstance(state, dict) else [],
+            'state_posts': state_posts[:5],
+            'state_post_metric_sources': [item.get('metric_sources') or {} for item in state_posts[:5]],
             'profile_name_candidates': await _selector_counts(page, DEFAULT_PROFILE_NAME_SELECTORS),
             'follower_count_candidates': await _selector_counts(page, DEFAULT_FOLLOWER_COUNT_SELECTORS),
             'post_card_candidates': await _selector_counts(page, DEFAULT_POST_CARD_SELECTORS),

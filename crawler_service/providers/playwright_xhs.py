@@ -237,6 +237,17 @@ def _state_count(value, paths, default=0):
     return default
 
 
+def _state_count_with_source(value, paths, default=0):
+    for path in paths:
+        current = _state_get(value, path)
+        if current in [None, '']:
+            continue
+        count = _parse_count(current)
+        if count:
+            return count, path
+    return default, ''
+
+
 def _looks_like_search_feed_item(value):
     if not isinstance(value, dict):
         return False
@@ -334,14 +345,14 @@ def _normalize_search_feed_item(item, keyword, source_channel, rank):
         publish_time_dt = _parse_state_publish_time(_state_get(item, 'noteCard.time'))
     if not publish_time_dt:
         publish_time_dt = _parse_state_publish_time(_state_get(item, 'publish_time'))
-    views = _state_count(item, [
+    views, views_source = _state_count_with_source(item, [
         'view_count',
         'note_card.view_count',
         'noteCard.view_count',
         'impression_cnt',
         'exposure_count',
     ])
-    exposures = _state_count(item, [
+    exposures, exposures_source = _state_count_with_source(item, [
         'impression_cnt',
         'exposure_count',
         'note_card.impression_cnt',
@@ -349,27 +360,38 @@ def _normalize_search_feed_item(item, keyword, source_channel, rank):
         'note_card.exposure_count',
         'noteCard.exposure_count',
     ])
-    likes = _state_count(item, [
+    likes, likes_source = _state_count_with_source(item, [
         'interact_info.liked_count',
         'note_card.interact_info.liked_count',
         'noteCard.interact_info.liked_count',
         'likes',
         'like_count',
     ])
-    favorites = _state_count(item, [
+    favorites, favorites_source = _state_count_with_source(item, [
         'interact_info.collected_count',
         'note_card.interact_info.collected_count',
         'noteCard.interact_info.collected_count',
         'favorites',
         'collect_count',
     ])
-    comments = _state_count(item, [
+    comments, comments_source = _state_count_with_source(item, [
         'interact_info.comment_count',
         'note_card.interact_info.comment_count',
         'noteCard.interact_info.comment_count',
         'comments',
         'comment_count',
     ])
+    hot_value, hot_value_source = _state_count_with_source(item, [
+        'hot_value',
+        'hotScore',
+        'score',
+        'search_cnt',
+        'note_card.hot_value',
+        'noteCard.hot_value',
+    ])
+    if not hot_value:
+        hot_value = views + likes * 3 + favorites * 4 + comments * 5 + max(0, 100 - rank * 3)
+        hot_value_source = 'derived_from_engagement'
     return {
         'keyword': keyword,
         'query': keyword,
@@ -388,7 +410,7 @@ def _normalize_search_feed_item(item, keyword, source_channel, rank):
             'desc',
             'description',
         ]),
-        'hot_value': views + likes * 3 + favorites * 4 + comments * 5 + max(0, 100 - rank * 3),
+        'hot_value': hot_value,
         'rank': rank,
         'views': views,
         'exposures': exposures,
@@ -396,6 +418,14 @@ def _normalize_search_feed_item(item, keyword, source_channel, rank):
         'favorites': favorites,
         'comments': comments,
         'publish_time': publish_time_dt.strftime('%Y-%m-%d %H:%M:%S') if publish_time_dt else _state_text(item, ['publish_time', 'note_card.time', 'noteCard.time']),
+        'metric_sources': {
+            'views': views_source,
+            'exposures': exposures_source,
+            'likes': likes_source,
+            'favorites': favorites_source,
+            'comments': comments_source,
+            'hot_value': hot_value_source,
+        },
         'source_channel': source_channel,
     }
 
@@ -432,6 +462,7 @@ def _normalize_profile_feed_item(item, profile_url, account_handle, target, sour
         'comments': normalized.get('comments') or 0,
         'shares': 0,
         'follower_delta': 0,
+        'metric_sources': normalized.get('metric_sources') or {},
         'source_channel': source_channel,
     }
 
@@ -443,7 +474,7 @@ def _normalize_related_query_item(item, keyword, source_channel, rank):
         query = _state_text(item, ['query', 'keyword', 'text', 'display_text', 'search_word', 'word', 'title'])
     if not query or len(query) > 24:
         return {}
-    hot_value = _state_count(item, ['hot_value', 'hotScore', 'score', 'search_cnt'], max(0, 10000 - rank * 131))
+    hot_value, hot_value_source = _state_count_with_source(item, ['hot_value', 'hotScore', 'score', 'search_cnt'], max(0, 10000 - rank * 131))
     return {
         'keyword': keyword,
         'query': query,
@@ -451,6 +482,9 @@ def _normalize_related_query_item(item, keyword, source_channel, rank):
         'summary': f'由小红书搜索页状态数据提取，原始关键词：{keyword}',
         'hot_value': hot_value,
         'rank': rank,
+        'metric_sources': {
+            'hot_value': hot_value_source or 'fallback_rank_formula',
+        },
         'source_channel': source_channel,
     }
 

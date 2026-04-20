@@ -61,7 +61,9 @@ async def main():
                 'state_available': bool(state),
                 'state_top_keys': sorted(list(state.keys()))[:20] if isinstance(state, dict) else [],
                 'state_note_items': state_note_items[:5],
+                'state_note_metric_sources': [item.get('metric_sources') or {} for item in state_note_items[:5]],
                 'state_hot_queries': state_hot_queries[:10],
+                'state_hot_query_metric_sources': [item.get('metric_sources') or {} for item in state_hot_queries[:10]],
                 'screenshot_path': str(screenshot_path),
                 'html_path': str(html_path),
             }
