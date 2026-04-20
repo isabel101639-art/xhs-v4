@@ -4881,6 +4881,74 @@ def _read_crawler_probe_file(path):
         return {}
 
 
+CRAWLER_HINT_BASELINES = {
+    'views': {'view', 'views', 'read', 'reads', 'browse', 'browses', 'pv', 'reading', 'traffic'},
+    'exposures': {'impression', 'impressions', 'exposure', 'exposures', 'expo', 'reach', 'show', 'display', 'impr'},
+    'hot': {'hot', 'hotvalue', 'score', 'heat', 'trend', 'searchcnt', 'search', 'cnt'},
+}
+
+CRAWLER_HINT_STOP_TOKENS = {
+    'note', 'notecard', 'card', 'metrics', 'metric', 'interact', 'info', 'item', 'items', 'data',
+    'list', 'user', 'profile', 'result', 'results', 'path', 'title', 'desc', 'text', 'value',
+    'count', 'counts', 'num', 'nums', 'state', 'page', 'pages', 'feed', 'feeds',
+}
+
+
+def _tokenize_metric_path(path):
+    raw = re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', str(path or ''))
+    tokens = []
+    for token in re.split(r'[^a-zA-Z0-9]+', raw.lower()):
+        current = token.strip()
+        if not current or current.isdigit() or current in CRAWLER_HINT_STOP_TOKENS:
+            continue
+        if len(current) < 3 and current not in {'pv'}:
+            continue
+        if current not in tokens:
+            tokens.append(current)
+    return tokens
+
+
+def _classify_metric_candidate_path(path):
+    lowered = str(path or '').lower()
+    if any(token in lowered for token in ['impression', 'exposure', 'expo', 'reach', 'deliver', 'show', 'display', 'impr']):
+        return 'exposures'
+    if any(token in lowered for token in ['view', 'read', 'browse', 'pv', 'traffic']):
+        return 'views'
+    if any(token in lowered for token in ['hot', 'score', 'heat', 'trend', 'search_cnt']):
+        return 'hot'
+    return ''
+
+
+def _build_metric_hint_suggestions(metric_candidates):
+    suggestions = {
+        'views': [],
+        'exposures': [],
+        'hot': [],
+    }
+    for item in metric_candidates or []:
+        if not isinstance(item, dict):
+            continue
+        bucket = _classify_metric_candidate_path(item.get('path'))
+        if not bucket:
+            continue
+        for token in _tokenize_metric_path(item.get('path')):
+            if token in CRAWLER_HINT_BASELINES[bucket]:
+                continue
+            if token not in suggestions[bucket]:
+                suggestions[bucket].append(token)
+    env_examples = {}
+    if suggestions['views']:
+        env_examples['XHS_VIEWS_HINT_TOKENS'] = ','.join(suggestions['views'][:8])
+    if suggestions['exposures']:
+        env_examples['XHS_EXPOSURE_HINT_TOKENS'] = ','.join(suggestions['exposures'][:8])
+    if suggestions['hot']:
+        env_examples['XHS_HOT_HINT_TOKENS'] = ','.join(suggestions['hot'][:8])
+    return {
+        'tokens': suggestions,
+        'env_examples': env_examples,
+    }
+
+
 def _build_crawler_probe_payload():
     debug_output_dir = (os.environ.get('XHS_DEBUG_OUTPUT_DIR') or '/tmp/xhs_crawler_debug').strip() or '/tmp/xhs_crawler_debug'
     probe_defs = [
@@ -4950,12 +5018,14 @@ def _build_crawler_probe_payload():
         'path': os.path.join(debug_output_dir, 'xhs_search_debug.json'),
         'metric_candidates': resolve_debug_metric_candidates(search_debug_payload)[:15],
         'state_note_metric_sources': (search_debug_payload.get('state_note_metric_sources') or [])[:5] if isinstance(search_debug_payload, dict) else [],
+        'hint_suggestions': _build_metric_hint_suggestions(resolve_debug_metric_candidates(search_debug_payload)[:30]),
     }
     debug_hints['profile'] = {
         'exists': bool(profile_debug_payload),
         'path': os.path.join(debug_output_dir, 'xhs_profile_debug.json'),
         'metric_candidates': resolve_debug_metric_candidates(profile_debug_payload)[:15],
         'state_post_metric_sources': (profile_debug_payload.get('state_post_metric_sources') or [])[:5] if isinstance(profile_debug_payload, dict) else [],
+        'hint_suggestions': _build_metric_hint_suggestions(resolve_debug_metric_candidates(profile_debug_payload)[:30]),
     }
 
     latest_success = next((item for item in items if item['exists']), None)

@@ -2994,9 +2994,17 @@
                                 <strong>候选字段建议</strong>
                                 ${crawlerProbe.debug_hints?.search?.exists ? `
                                     <div class="subtle mt-2">搜索页候选：${escapeHtml((crawlerProbe.debug_hints.search.metric_candidates || []).map((item) => `${item.path}=${item.value}`).join(' ｜ ') || '-')}</div>
+                                    ${Object.keys(crawlerProbe.debug_hints?.search?.hint_suggestions?.env_examples || {}).length
+                                        ? `<div class="subtle mt-2">搜索页建议：${escapeHtml(Object.entries(crawlerProbe.debug_hints.search.hint_suggestions.env_examples || {}).map(([key, value]) => `${key}=${value}`).join(' ｜ '))}</div>`
+                                        : ''
+                                    }
                                 ` : ''}
                                 ${crawlerProbe.debug_hints?.profile?.exists ? `
                                     <div class="subtle mt-2">账号页候选：${escapeHtml((crawlerProbe.debug_hints.profile.metric_candidates || []).map((item) => `${item.path}=${item.value}`).join(' ｜ ') || '-')}</div>
+                                    ${Object.keys(crawlerProbe.debug_hints?.profile?.hint_suggestions?.env_examples || {}).length
+                                        ? `<div class="subtle mt-2">账号页建议：${escapeHtml(Object.entries(crawlerProbe.debug_hints.profile.hint_suggestions.env_examples || {}).map(([key, value]) => `${key}=${value}`).join(' ｜ '))}</div>`
+                                        : ''
+                                    }
                                 ` : ''}
                             </div>
                         ` : ''}
