@@ -6,13 +6,14 @@ from collections import Counter, defaultdict
 from flask import jsonify, request
 from werkzeug.utils import secure_filename
 
-from models import AssetGenerationTask, AssetLibrary, AutomationSchedule, DataSourceTask
+from models import AssetGenerationTask, AssetLibrary, AssetPlanDraft, AutomationSchedule, DataSourceTask
 
 
 def register_automation_asset_routes(app, helpers):
     admin_json_guard = helpers['admin_json_guard']
     safe_int = helpers['safe_int']
     serialize_asset_generation_task = helpers['serialize_asset_generation_task']
+    serialize_asset_plan_draft = helpers['serialize_asset_plan_draft']
     serialize_asset_library_item = helpers['serialize_asset_library_item']
     serialize_automation_schedule = helpers['serialize_automation_schedule']
     pool_status_label = helpers['pool_status_label']
@@ -23,6 +24,7 @@ def register_automation_asset_routes(app, helpers):
     dispatch_creator_account_sync = helpers['dispatch_creator_account_sync']
     dispatch_automation_schedule = helpers['dispatch_automation_schedule']
     build_asset_generation_plan_payload = helpers['build_asset_generation_plan_payload']
+    build_batch_asset_plan_drafts = helpers['build_batch_asset_plan_drafts']
     build_asset_style_recommendation_payload = helpers['build_asset_style_recommendation_payload']
     log_operation = helpers['log_operation']
     db = helpers['db']
@@ -81,6 +83,182 @@ def register_automation_asset_routes(app, helpers):
             return guard
         payload = request.json or {}
         return jsonify(build_asset_generation_plan_payload(payload))
+
+    @app.route('/api/admin/assets/batch-plan-preview', methods=['POST'])
+    def preview_batch_asset_plan():
+        guard = admin_json_guard()
+        if guard:
+            return guard
+        payload = request.json or {}
+        return jsonify(build_batch_asset_plan_drafts(payload))
+
+    @app.route('/api/admin/assets/draft-plans')
+    def list_asset_plan_drafts():
+        guard = admin_json_guard()
+        if guard:
+            return guard
+
+        status = (request.args.get('status') or '').strip()
+        limit = min(max(safe_int(request.args.get('limit'), 30), 1), 100)
+        query = AssetPlanDraft.query
+        if status:
+            query = query.filter_by(status=status)
+        items = query.order_by(AssetPlanDraft.updated_at.desc(), AssetPlanDraft.created_at.desc(), AssetPlanDraft.id.desc()).limit(limit).all()
+        return jsonify({
+            'success': True,
+            'items': [serialize_asset_plan_draft(item) for item in items],
+        })
+
+    @app.route('/api/admin/assets/draft-plans/save-batch', methods=['POST'])
+    def save_asset_plan_drafts_batch():
+        guard = admin_json_guard()
+        if guard:
+            return guard
+
+        data = request.json or {}
+        source_type = (data.get('source_type') or '').strip()[:20]
+        bucket_label = (data.get('bucket_label') or '').strip()[:100]
+        raw_items = data.get('items') or []
+        kept_items = [item for item in raw_items if isinstance(item, dict)]
+        if not kept_items:
+            return jsonify({'success': False, 'message': '当前没有可保存的草案'})
+
+        saved = []
+        for row in kept_items[:20]:
+            source_id = safe_int(row.get('source_id'), 0)
+            cover_style_type = (row.get('plan', {}) or {}).get('cover_style_type') or row.get('cover_style_type') or ''
+            inner_style_type = (row.get('plan', {}) or {}).get('inner_style_type') or row.get('inner_style_type') or ''
+            generation_mode = (row.get('plan', {}) or {}).get('generation_mode') or 'smart_bundle'
+            draft = AssetPlanDraft.query.filter_by(
+                source_type=source_type or (row.get('source_type') or '')[:20],
+                source_id=source_id or None,
+                cover_style_type=str(cover_style_type or '')[:50],
+                inner_style_type=str(inner_style_type or '')[:50],
+                generation_mode=str(generation_mode or '')[:50],
+                status='active',
+            ).first()
+            if not draft:
+                draft = AssetPlanDraft(
+                    source_type=source_type or (row.get('source_type') or '')[:20],
+                    source_id=source_id or None,
+                    cover_style_type=str(cover_style_type or '')[:50],
+                    inner_style_type=str(inner_style_type or '')[:50],
+                    generation_mode=str(generation_mode or '')[:50],
+                    status='active',
+                )
+                db.session.add(draft)
+            draft.source_title = (row.get('source_title') or '')[:200]
+            draft.bucket_label = bucket_label or (row.get('template_agent_label') or '')[:100]
+            draft.template_agent_label = (row.get('template_agent_label') or '')[:100]
+            draft.image_skill_label = (row.get('image_skill_label') or '')[:100]
+            draft.style_type = str(((row.get('plan') or {}).get('style_type') or row.get('style_type') or ''))[:50]
+            draft.title_hint = str(((row.get('plan') or {}).get('title_hint') or row.get('source_title') or ''))[:200]
+            draft.selected_content = str(row.get('selected_content') or '')[:4000]
+            draft.draft_payload = json.dumps(row, ensure_ascii=False)
+            saved.append(draft)
+
+        db.session.flush()
+        log_operation('save_batch', 'asset_plan_draft', message='批量保存图片草案', detail={
+            'source_type': source_type,
+            'bucket_label': bucket_label,
+            'count': len(saved),
+            'actor': current_actor(),
+        })
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': f'已保存 {len(saved)} 条图片草案到待办池',
+            'items': [serialize_asset_plan_draft(item) for item in saved],
+        })
+
+    @app.route('/api/admin/assets/draft-plans/<int:draft_id>/status', methods=['POST'])
+    def update_asset_plan_draft_status(draft_id):
+        guard = admin_json_guard()
+        if guard:
+            return guard
+
+        draft = AssetPlanDraft.query.get_or_404(draft_id)
+        data = request.json or {}
+        status = (data.get('status') or '').strip()
+        if status not in {'active', 'archived'}:
+            return jsonify({'success': False, 'message': '不支持的草案状态'})
+        draft.status = status
+        log_operation('update_status', 'asset_plan_draft', target_id=draft.id, message='更新图片草案状态', detail={
+            'status': status,
+            'source_type': draft.source_type,
+            'source_id': draft.source_id,
+            'actor': current_actor(),
+        })
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': '图片草案状态已更新',
+            'item': serialize_asset_plan_draft(draft),
+        })
+
+    @app.route('/api/admin/assets/draft-plans/confirm-batch', methods=['POST'])
+    def confirm_asset_plan_drafts_batch():
+        guard = admin_json_guard()
+        if guard:
+            return guard
+
+        data = request.json or {}
+        raw_ids = data.get('draft_ids') or []
+        draft_ids = []
+        for item in raw_ids:
+            value = safe_int(item, 0)
+            if value > 0:
+                draft_ids.append(value)
+        draft_ids = list(dict.fromkeys(draft_ids))[:30]
+        if not draft_ids:
+            return jsonify({'success': False, 'message': '请先选择要确认的图片草案'})
+
+        drafts = AssetPlanDraft.query.filter(AssetPlanDraft.id.in_(draft_ids)).all()
+        if not drafts:
+            return jsonify({'success': False, 'message': '未找到可确认的图片草案'})
+
+        created_tasks = []
+        archive_after = data.get('archive_after', True)
+        for draft in drafts:
+            payload = load_json_value(draft.draft_payload, {})
+            plan = payload.get('plan') if isinstance(payload, dict) else {}
+            task = AssetGenerationTask(
+                registration_id=None,
+                topic_id=None,
+                draft_source_type=(draft.source_type or '')[:20],
+                draft_source_id=draft.source_id,
+                draft_plan_id=draft.id,
+                source_provider='draft_pool',
+                model_name='',
+                style_preset=(plan.get('style_label') or draft.style_type or '图片草案')[:50],
+                generation_mode=(draft.generation_mode or 'smart_bundle')[:50],
+                cover_style_type=(draft.cover_style_type or '')[:50],
+                inner_style_type=(draft.inner_style_type or '')[:50],
+                image_count=1,
+                status='draft',
+                title_hint=(draft.title_hint or draft.source_title or '图片草案')[:200],
+                prompt_text=(plan.get('strategy_reason') or draft.selected_content or '')[:5000],
+                selected_content=draft.selected_content or '',
+                message='已从图片草案确认，待补报名ID后执行',
+            )
+            db.session.add(task)
+            created_tasks.append(task)
+            if archive_after:
+                draft.status = 'archived'
+
+        db.session.flush()
+        log_operation('confirm_batch', 'asset_plan_draft', message='批量确认图片草案为待执行图片任务', detail={
+            'draft_count': len(drafts),
+            'task_count': len(created_tasks),
+            'archive_after': bool(archive_after),
+            'actor': current_actor(),
+        })
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': f'已生成 {len(created_tasks)} 条待执行图片任务',
+            'items': [serialize_asset_generation_task(item) for item in created_tasks],
+        })
 
     @app.route('/api/admin/assets/style-recommendations', methods=['POST'])
     def asset_style_recommendations():
@@ -535,6 +713,60 @@ def register_automation_asset_routes(app, helpers):
             'message': '已重新派发图片生成任务',
             'task_id': dispatched['task_id'],
             'asset_task_id': dispatched['task_record'].id,
+        })
+
+    @app.route('/api/admin/assets/tasks/<int:task_id>/activate-draft', methods=['POST'])
+    def activate_draft_asset_generation_task(task_id):
+        guard = admin_json_guard()
+        if guard:
+            return guard
+
+        task = AssetGenerationTask.query.get_or_404(task_id)
+        if (task.status or '').strip() != 'draft':
+            return jsonify({'success': False, 'message': '只有待执行图片任务才支持补报名ID并派发'})
+
+        data = request.json or {}
+        registration_id = safe_int(data.get('registration_id'), 0)
+        if registration_id <= 0:
+            return jsonify({'success': False, 'message': '请先填写有效的报名ID'})
+
+        payload = {
+            'registration_id': registration_id,
+            'selected_content': task.selected_content or '',
+            'style_type': (task.cover_style_type or task.inner_style_type or task.style_preset or 'medical_science'),
+            'generation_mode': task.generation_mode or 'smart_bundle',
+            'cover_style_type': task.cover_style_type or '',
+            'inner_style_type': task.inner_style_type or '',
+            'title_hint': task.title_hint or '',
+            'product_profile': task.product_profile or '',
+            'product_category': task.product_category or '',
+            'product_name': task.product_name or '',
+            'product_indication': task.product_indication or '',
+            'product_asset_ids': task.product_asset_ids or '',
+            'reference_asset_ids': task.reference_asset_ids or '',
+            'image_count': task.image_count or 1,
+        }
+        try:
+            dispatched = dispatch_asset_generation(payload, actor=current_actor())
+        except ValueError as exc:
+            return jsonify({'success': False, 'message': str(exc)})
+
+        task.status = 'archived'
+        task.message = f'已补报名ID并转正式任务 #{dispatched["task_record"].id}'
+        log_operation('activate_draft', 'asset_generation_task', target_id=task.id, message='待执行图片任务补报名ID并派发', detail={
+            'registration_id': registration_id,
+            'new_asset_task_id': dispatched['task_record'].id,
+            'new_celery_task_id': dispatched['task_id'],
+            'actor': current_actor(),
+        })
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': '已补报名ID并派发正式图片任务',
+            'task_id': dispatched['task_id'],
+            'asset_task_id': dispatched['task_record'].id,
+            'draft_item': serialize_asset_generation_task(task),
+            'item': serialize_asset_generation_task(dispatched['task_record']),
         })
 
     @app.route('/api/asset_tasks/<int:task_id>')

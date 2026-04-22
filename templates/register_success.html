@@ -327,7 +327,7 @@
             <div class="studio-head">
                 <div>
                     <h5>一键生成文案</h5>
-                    <p>先选人设、场景、软植入产品和内容目标，再生成更自然的 3 个差异化版本。系统会默认帮你把标题、开头钩子、产品软植入和互动结尾一起做好。</p>
+                    <p>先选人设、场景、软植入产品、内容目标、写作技能包和标题技能包，再生成更自然的 3 个差异化版本。系统会默认帮你把标题、开头钩子、产品软植入和互动结尾一起做好。</p>
                 </div>
                 <div class="studio-tip">
                     <strong>这次我已经把生成方向锁成 4 件事：</strong><br>
@@ -362,10 +362,18 @@
                             <option value="doctor_assistant">医生助理</option>
                             <option value="health_manager">健管师</option>
                             <option value="nutritionist">营养师</option>
+                            <option value="tcm_practitioner">中医调理视角</option>
+                            <option value="fitness_coach">运动减脂教练</option>
+                            <option value="emotional_support">情绪陪伴者</option>
+                            <option value="women_health">女性健康视角</option>
+                            <option value="physical_exam_blogger">体检复盘博主</option>
+                            <option value="chronic_manager">慢病管理者</option>
                             <option value="patient_self">患者本人</option>
                             <option value="patient_family">患者家属</option>
                             <option value="medical_science">医学科普</option>
                             <option value="patient_friend">患者朋友</option>
+                            <option value="office_worker">职场久坐人群</option>
+                            <option value="caregiver">陪诊照护者</option>
                             <option value="custom">自定义身份</option>
                         </select>
                         <input type="text" class="form-control mt-2" id="customPersona" placeholder="例如：陪诊护士 / 肝病病友群群主" style="display:none;">
@@ -384,9 +392,36 @@
                             <option value="family_support">家属陪伴照护</option>
                             <option value="diet_adjustment">饮食调整建议</option>
                             <option value="report_interpretation">检查报告解读</option>
+                            <option value="tcm_conditioning">中医调理养肝</option>
+                            <option value="fatty_liver_management">脂肪肝减脂管理</option>
+                            <option value="mood_stress">情绪压力与肝气</option>
+                            <option value="sleep_recovery">失眠熬夜恢复期</option>
+                            <option value="women_dailycare">女性日常养肝</option>
+                            <option value="office_sedentary">久坐久盯屏场景</option>
+                            <option value="exercise_rebuild">运动减脂重启期</option>
                             <option value="custom">自定义场景</option>
                         </select>
                         <input type="text" class="form-control mt-2" id="customScene" placeholder="例如：陪爸妈体检当天 / 酒局后第二天早晨" style="display:none;">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="studio-field">
+                        <label class="form-label">内容方向</label>
+                        <select class="form-select" id="copyDirection">
+                            <option value="auto">系统自动匹配</option>
+                            <option value="report_interpretation">检查解读线</option>
+                            <option value="fatty_liver_management">脂肪肝管理线</option>
+                            <option value="liver_care_habits">保肝护肝习惯线</option>
+                            <option value="tcm_conditioning">中医调理线</option>
+                            <option value="emotion_mindbody">情绪与肝线</option>
+                            <option value="diet_nutrition">饮食营养线</option>
+                            <option value="exercise_fitness">运动减脂线</option>
+                            <option value="family_care">家庭照护线</option>
+                            <option value="women_health">女性养肝线</option>
+                            <option value="myth_busting">误区纠偏线</option>
+                            <option value="custom">自定义方向</option>
+                        </select>
+                        <input type="text" class="form-control mt-2" id="customDirection" placeholder="例如：肝气郁结日常调理 / 久坐人群养肝" style="display:none;">
                     </div>
                 </div>
                 <div class="col-md-3">
@@ -414,6 +449,28 @@
                         </select>
                     </div>
                 </div>
+                <div class="col-md-4">
+                    <div class="studio-field">
+                        <label class="form-label">写作技能包</label>
+                        <select class="form-select" id="copySkill">
+                            {% for skill_key, skill_label in copy_skill_options.items() %}
+                            <option value="{{ skill_key }}">{{ skill_label }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">适合不会写小红书的人，系统会把标题套路、开头钩子和正文结构一起锁住。</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="studio-field">
+                        <label class="form-label">标题技能包</label>
+                        <select class="form-select" id="titleSkill">
+                            {% for skill_key, skill_label in title_skill_options.items() %}
+                            <option value="{{ skill_key }}">{{ skill_label }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text" id="titleSkillHelp">系统会按你选的标题打法去拉点击、拉收藏或拉互动。</div>
+                    </div>
+                </div>
                 <div class="col-12">
                     <div class="studio-field">
                         <label class="form-label">自定义提词器</label>
@@ -424,21 +481,58 @@
 
             <div class="studio-actions">
                 <label class="studio-switch mb-0">
-                    <input class="form-check-input mt-0" type="checkbox" id="fastMode" checked>
+                    <input class="form-check-input mt-0" type="checkbox" id="fastMode">
                     极速生成（优先给出 3 个可选版本）
                 </label>
+                <button type="button" class="outline-pill-btn" onclick="applyBeginnerPreset('viral_title')">
+                    <i class="bi bi-graph-up-arrow"></i> 新手冲点击
+                </button>
+                <button type="button" class="outline-pill-btn" onclick="applyBeginnerPreset('save_value')">
+                    <i class="bi bi-bookmark-star"></i> 新手冲收藏
+                </button>
+                <button type="button" class="outline-pill-btn" onclick="applyBeginnerPreset('comment_engagement')">
+                    <i class="bi bi-chat-dots"></i> 新手冲互动
+                </button>
+                <button type="button" class="outline-pill-btn" onclick="applyRecommendedViralPreset()">
+                    <i class="bi bi-lightning-charge"></i> 应用系统推荐组合
+                </button>
                 <button id="generateBtn" class="studio-primary-btn" onclick="generateCopy()">
                     <i class="bi bi-stars"></i> 生成文案
                 </button>
             </div>
+            <div id="viralOperationTips" class="form-text mt-2">系统会根据当前话题推荐更适合的文案打法、标题打法和图片打法。</div>
+            <div id="strategyRecommendationBar" class="form-text mt-2">系统正在准备近期实战推荐。</div>
 
             <div id="loading" style="display:none;" class="mt-3">
                 <div class="spinner-border text-primary" role="status"></div>
-                <span class="ms-2">AI 正在按你选择的人设和场景生成中...</span>
+                <span class="ms-2">AI 正在按你选择的人设、场景、写作技能包和标题技能包生成中...</span>
             </div>
 
             <!-- 生成结果 -->
             <div id="resultArea" class="mt-4" style="display:none;">
+                <div class="row g-3 mb-3">
+                    <div class="col-lg-7">
+                        <div class="border rounded-4 p-3" style="background:#fffaf6;">
+                            <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                                <h6 class="mb-0">标题 A/B 池</h6>
+                                <span class="text-muted small">先定标题，再选正文和封面</span>
+                            </div>
+                            <div id="titlePoolTips" class="text-muted small mb-2">系统会把当前正文版本、标题 skill 和目标打法合并成 1 组标题候选。</div>
+                            <div id="titlePoolWrap" class="d-flex flex-wrap gap-2"></div>
+                        </div>
+                    </div>
+                    <div class="col-lg-5">
+                        <div class="border rounded-4 p-3" style="background:#f6fbff;">
+                            <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                                <h6 class="mb-0">封面推荐池</h6>
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="refreshCoverRecommendations()">刷新推荐</button>
+                            </div>
+                            <div id="coverRecommendationTips" class="text-muted small mb-2">系统会结合当前标题和正文，推荐更适合的封面画法。</div>
+                            <div id="coverRecommendationWrap" class="d-grid gap-2"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="result-toolbar">
                     <h6>请选择你最喜欢的版本</h6>
                     <div class="result-toolbar-actions">
@@ -454,6 +548,7 @@
                     </div>
                 </div>
 
+                <div id="generatorEngineBar" class="form-text mb-3"></div>
                 <div id="copySummaryBar" class="text-muted small mb-3"></div>
                 <div id="copyCardsWrap" class="row g-3"></div>
 
@@ -484,8 +579,20 @@
                         <div class="form-text" id="assetStyleFamilyHelp">先选业务类型，再由系统映射到对应图片风格。</div>
                     </div>
                     <div class="col-md-3">
+                        <label class="form-label">图片技能包</label>
+                        <select class="form-select" id="imageSkill">
+                            {% for skill_key, skill_label in image_skill_options.items() %}
+                            <option value="{{ skill_key }}">{{ skill_label }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text" id="imageSkillHelp">系统会帮你自动偏向更适合点击、收藏或解读的画面打法。</div>
+                    </div>
+                    <div class="col-md-3">
                         <label class="form-label">图片数量</label>
                         <input type="number" class="form-control" id="assetImageCount" min="1" max="4" value="3">
+                    </div>
+                    <div class="col-12">
+                        <div class="form-text" id="imageSkillPresetNote">图片技能包会联动封面样式、内页样式和图文工作流，减少大家自己试错。</div>
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">封面/主图样式</label>
@@ -592,13 +699,37 @@
         let regenCount = 0;
         let versions = [];
         let titles = [];
+        let titleOptions = [];
         let copyCards = [];
+        let coverRecommendations = [];
         let generatorContext = {};
+        let strategyPersistTimer = null;
+        let lastSavedStrategyHash = '';
+        const initialSavedStrategy = {{ saved_strategy|tojson }};
+        let dynamicStrategyRecommendation = {{ strategy_recommendation|tojson }};
+        let strategyControlsTouchedByUser = false;
+        let isApplyingPresetProgrammatically = false;
+        let didAutoApplyHistoricalRecommendation = false;
         const assetStyleTypeDefinitions = {{ asset_style_types|tojson }};
+        const imageSkillPresets = {{ image_skill_presets|tojson }};
+        const topicContextText = {{ ((registration.topic.topic_name or '') ~ ' ' ~ (registration.topic.keywords or '') ~ ' ' ~ (registration.topic.direction or ''))|tojson }};
+        try {
+            localStorage.setItem('xhs_v4_last_registration_id', '{{ registration.id }}');
+        } catch (error) {
+            // ignore localStorage failures
+        }
         window.latestCreativeAssets = [];
         window.latestGraphicBundles = [];
         window.latestGeneratedImages = [];
         window.currentAssetTaskId = null;
+        const titleSkillHelpMap = {
+            auto: '系统会按当前话题和目标自动选择更合适的标题打法。',
+            result_first: '适合先告诉用户结果、提醒或关键结论，点击效率更高。',
+            conflict_reverse: '适合用反差感和误区纠偏去抓住第一眼注意力。',
+            question_gap: '适合留悬念、留选择题，拉评论和互动。',
+            checklist_collect: '适合做“先做这3步”“这几件事别漏”的收藏型标题。',
+            emotional_diary: '适合经历分享、复盘和陪伴感强的标题。',
+        };
         const assetWorkflowModeMap = {
             smart_bundle: '系统会先拆封面和内页，再按对应样式生成。',
             cover_only: '当前只生成封面或主图，不做内页扩展。',
@@ -656,6 +787,536 @@
             },
         };
 
+        function detectRecommendedPreset() {
+            if (dynamicStrategyRecommendation && dynamicStrategyRecommendation.success && dynamicStrategyRecommendation.recommended) {
+                return {
+                    ...dynamicStrategyRecommendation.recommended,
+                    reason: dynamicStrategyRecommendation.reason || '已按近期策略表现推荐组合。',
+                    source: dynamicStrategyRecommendation.source || 'heuristic',
+                    confidence: dynamicStrategyRecommendation.confidence || 'low',
+                };
+            }
+            const text = String(topicContextText || '');
+            const currentGoal = document.getElementById('copyGoal')?.value || 'balanced';
+            if (currentGoal === 'comment_engagement') {
+                return {
+                    copyGoal: 'comment_engagement',
+                    copySkill: 'discussion_hook',
+                    titleSkill: 'question_gap',
+                    imageSkill: 'story_atmosphere',
+                    reason: '当前更适合走互动讨论路线，先把评论区打开。',
+                    source: 'heuristic',
+                    confidence: 'low',
+                };
+            }
+            if (/体检|检查|报告|指标|FibroScan|福波看|复查/.test(text)) {
+                return {
+                    copyGoal: 'save_value',
+                    copySkill: 'report_interpretation',
+                    titleSkill: 'checklist_collect',
+                    imageSkill: 'report_decode',
+                    reason: '当前是检查/报告类话题，更容易靠“看懂指标 + 收藏转发”起量。',
+                    source: 'heuristic',
+                    confidence: 'low',
+                };
+            }
+            if (/误区|为什么|是不是|别再|千万别|想当然|搞错/.test(text)) {
+                return {
+                    copyGoal: 'viral_title',
+                    copySkill: 'myth_busting',
+                    titleSkill: 'conflict_reverse',
+                    imageSkill: 'high_click_cover',
+                    reason: '当前话题自带纠偏和反差感，适合冲点击。',
+                    source: 'heuristic',
+                    confidence: 'low',
+                };
+            }
+            if (/经历|经验|踩坑|复盘|后来|家属|陪诊|我妈|我爸/.test(text)) {
+                return {
+                    copyGoal: 'balanced',
+                    copySkill: 'story_empathy',
+                    titleSkill: 'emotional_diary',
+                    imageSkill: 'story_atmosphere',
+                    reason: '当前更适合走真实经历和情绪代入，先做共鸣。',
+                    source: 'heuristic',
+                    confidence: 'low',
+                };
+            }
+            return {
+                copyGoal: 'viral_title',
+                copySkill: 'story_empathy',
+                titleSkill: 'result_first',
+                imageSkill: 'high_click_cover',
+                reason: '默认先走“高点击封面 + 结果前置标题 + 共鸣正文”的通用爆款组合。',
+                source: 'heuristic',
+                confidence: 'low',
+            };
+        }
+
+        function renderStrategyRecommendationBar() {
+            const wrap = document.getElementById('strategyRecommendationBar');
+            if (!wrap) return;
+            const recommended = detectRecommendedPreset();
+            const sourceLabel = recommended.source === 'historical' ? '近期实战推荐' : '规则推荐';
+            const confidenceLabel = recommended.confidence === 'high' ? '高置信' : (recommended.confidence === 'medium' ? '中置信' : '基础置信');
+            const topRow = (dynamicStrategyRecommendation?.historical_rows || [])[0] || {};
+            const sampleTitles = (topRow.sample_titles || []).filter(Boolean).slice(0, 2).join(' / ');
+            const autoApplyText = didAutoApplyHistoricalRecommendation ? '｜已自动应用' : '';
+            wrap.textContent = `${sourceLabel}｜${confidenceLabel}${autoApplyText}｜建议组合：${recommended.titleSkill || '-'} × ${recommended.imageSkill || '-'}。${recommended.reason || ''}${sampleTitles ? ` 近期标题样本：${sampleTitles}` : ''}`;
+        }
+
+        async function loadStrategyRecommendation() {
+            try {
+                const res = await fetch('/api/strategy_recommendations/{{ registration.id }}');
+                const data = await res.json();
+                if (data && data.success) {
+                    dynamicStrategyRecommendation = data;
+                }
+            } catch (error) {
+                return;
+            } finally {
+                autoApplyHistoricalRecommendationIfNeeded();
+                renderStrategyRecommendationBar();
+                refreshViralOperationTips();
+            }
+        }
+
+        function shouldAutoApplyHistoricalRecommendation() {
+            return Boolean(
+                dynamicStrategyRecommendation &&
+                dynamicStrategyRecommendation.success &&
+                dynamicStrategyRecommendation.source === 'historical' &&
+                ['medium', 'high'].includes(dynamicStrategyRecommendation.confidence || '') &&
+                dynamicStrategyRecommendation.recommended &&
+                !didAutoApplyHistoricalRecommendation &&
+                !strategyControlsTouchedByUser &&
+                !(initialSavedStrategy && Object.keys(initialSavedStrategy).length)
+            );
+        }
+
+        function autoApplyHistoricalRecommendationIfNeeded() {
+            if (!shouldAutoApplyHistoricalRecommendation()) {
+                return;
+            }
+            didAutoApplyHistoricalRecommendation = true;
+            applyPresetObject({
+                ...dynamicStrategyRecommendation.recommended,
+                reason: dynamicStrategyRecommendation.reason || '已按近期实战表现自动切换推荐组合。',
+                source: dynamicStrategyRecommendation.source || 'historical',
+                confidence: dynamicStrategyRecommendation.confidence || 'medium',
+            }, {
+                persistReason: 'auto_apply_historical_recommendation',
+                markAutoApplied: false,
+            });
+        }
+
+        function resolveImageSkillPreset(skillKey) {
+            const rawKey = skillKey || 'auto';
+            if (rawKey !== 'auto' && imageSkillPresets[rawKey]) {
+                return imageSkillPresets[rawKey];
+            }
+            const recommended = detectRecommendedPreset();
+            return imageSkillPresets[recommended.imageSkill] || imageSkillPresets.high_click_cover || null;
+        }
+
+        function getBeginnerPreset(goalKey) {
+            const text = String(topicContextText || '');
+            if (goalKey === 'save_value') {
+                if (/体检|检查|报告|指标|FibroScan|福波看|复查/.test(text)) {
+                    return {
+                        copyGoal: 'save_value',
+                        copySkill: 'report_interpretation',
+                        titleSkill: 'checklist_collect',
+                        imageSkill: 'report_decode',
+                        reason: '这类内容更容易靠“看懂报告 + 收藏备用”起量。',
+                    };
+                }
+                return {
+                    copyGoal: 'save_value',
+                    copySkill: 'practical_checklist',
+                    titleSkill: 'checklist_collect',
+                    imageSkill: 'save_worthy_cards',
+                    reason: '先把内容做成能截图保存的清单和卡片，收藏率更高。',
+                };
+            }
+            if (goalKey === 'comment_engagement') {
+                return {
+                    copyGoal: 'comment_engagement',
+                    copySkill: 'discussion_hook',
+                    titleSkill: 'question_gap',
+                    imageSkill: 'story_atmosphere',
+                    reason: '优先制造代入感和选择题，能更自然地带评论。',
+                };
+            }
+            return {
+                copyGoal: 'viral_title',
+                copySkill: /经历|经验|陪诊|家属|后来|踩坑/.test(text) ? 'story_empathy' : 'myth_busting',
+                titleSkill: /误区|为什么|是不是|别再|千万别/.test(text) ? 'conflict_reverse' : 'result_first',
+                imageSkill: 'high_click_cover',
+                reason: '先把点击抓住，用强封面和强标题把第一眼做对。',
+            };
+        }
+
+        function applyPresetObject(preset, options = {}) {
+            if (!preset) return;
+            const persistReason = options.persistReason || 'apply_preset';
+            const copyGoal = document.getElementById('copyGoal');
+            const copySkill = document.getElementById('copySkill');
+            const titleSkill = document.getElementById('titleSkill');
+            const imageSkill = document.getElementById('imageSkill');
+            const workflowMode = document.getElementById('assetWorkflowMode');
+            isApplyingPresetProgrammatically = true;
+            try {
+                if (copyGoal && preset.copyGoal) copyGoal.value = preset.copyGoal;
+                if (copySkill && preset.copySkill) copySkill.value = preset.copySkill;
+                if (titleSkill && preset.titleSkill) titleSkill.value = preset.titleSkill;
+                if (imageSkill && preset.imageSkill) imageSkill.value = preset.imageSkill;
+                if (workflowMode && preset.generation_mode) workflowMode.value = preset.generation_mode;
+                refreshTitleSkillHelp();
+                applyImageSkillPreset();
+                if (preset.cover_style_type) {
+                    const coverSelect = document.getElementById('assetCoverStyleType');
+                    if (coverSelect) coverSelect.value = preset.cover_style_type;
+                }
+                if (preset.inner_style_type) {
+                    const innerSelect = document.getElementById('assetInnerStyleType');
+                    if (innerSelect) innerSelect.value = preset.inner_style_type;
+                }
+            } finally {
+                isApplyingPresetProgrammatically = false;
+            }
+            refreshAssetStyleTypeHelp();
+            renderStrategyRecommendationBar();
+            refreshViralOperationTips();
+            if (copyCards.length > 0 || titleOptions.length > 0) {
+                scheduleStrategyPersistence(persistReason);
+            }
+        }
+
+        function applyBeginnerPreset(goalKey) {
+            applyPresetObject(getBeginnerPreset(goalKey));
+        }
+
+        function restoreSavedStrategySettings() {
+            if (!initialSavedStrategy || !Object.keys(initialSavedStrategy).length) {
+                return;
+            }
+            const copyGoal = document.getElementById('copyGoal');
+            const copySkill = document.getElementById('copySkill');
+            const titleSkill = document.getElementById('titleSkill');
+            const imageSkill = document.getElementById('imageSkill');
+            const workflowMode = document.getElementById('assetWorkflowMode');
+            if (copyGoal && initialSavedStrategy.selected_copy_goal) copyGoal.value = initialSavedStrategy.selected_copy_goal;
+            if (copySkill && initialSavedStrategy.selected_copy_skill) copySkill.value = initialSavedStrategy.selected_copy_skill;
+            if (titleSkill && initialSavedStrategy.selected_title_skill) titleSkill.value = initialSavedStrategy.selected_title_skill;
+            if (imageSkill && initialSavedStrategy.selected_image_skill) imageSkill.value = initialSavedStrategy.selected_image_skill;
+            if (workflowMode && initialSavedStrategy.selected_generation_mode) workflowMode.value = initialSavedStrategy.selected_generation_mode;
+        }
+
+        function applyIpAgentSeedIfAvailable() {
+            if (initialSavedStrategy && Object.keys(initialSavedStrategy).length) {
+                return;
+            }
+            let seed = null;
+            try {
+                seed = JSON.parse(localStorage.getItem('xhs_v4_ip_agent_seed') || 'null');
+            } catch (error) {
+                seed = null;
+            }
+            if (!seed || typeof seed !== 'object') {
+                return;
+            }
+            const persona = document.getElementById('copyPersona');
+            const scene = document.getElementById('copyScene');
+            const direction = document.getElementById('copyDirection');
+            const goal = document.getElementById('copyGoal');
+            const copySkill = document.getElementById('copySkill');
+            const titleSkill = document.getElementById('titleSkill');
+            const imageSkill = document.getElementById('imageSkill');
+            const prompt = document.getElementById('userPrompt');
+            const familySelect = document.getElementById('assetStyleFamily');
+            const modeSelect = document.getElementById('assetWorkflowMode');
+            const coverSelect = document.getElementById('assetCoverStyleType');
+            const innerSelect = document.getElementById('assetInnerStyleType');
+            isApplyingPresetProgrammatically = true;
+            try {
+                if (persona && seed.persona_key) persona.value = seed.persona_key;
+                if (scene && seed.scene_key) scene.value = seed.scene_key;
+                if (direction && seed.direction_key) direction.value = seed.direction_key;
+                if (goal && seed.copy_goal) goal.value = seed.copy_goal;
+                if (copySkill && seed.copy_skill) copySkill.value = seed.copy_skill;
+                if (titleSkill && seed.title_skill) titleSkill.value = seed.title_skill;
+                if (imageSkill && seed.image_skill) imageSkill.value = seed.image_skill;
+                if (prompt && seed.user_prompt_seed && !String(prompt.value || '').trim()) {
+                    prompt.value = seed.user_prompt_seed;
+                }
+            } finally {
+                isApplyingPresetProgrammatically = false;
+            }
+            refreshTitleSkillHelp();
+            applyImageSkillPreset();
+            if (
+                (familySelect && seed.image_family_key) ||
+                (modeSelect && seed.image_mode_key) ||
+                seed.cover_style_type ||
+                seed.inner_style_type
+            ) {
+                isApplyingPresetProgrammatically = true;
+                try {
+                    if (familySelect && seed.image_family_key) familySelect.value = seed.image_family_key;
+                    if (modeSelect && seed.image_mode_key) modeSelect.value = seed.image_mode_key;
+                    refreshAssetWorkflowControls();
+                    if (coverSelect && seed.cover_style_type) coverSelect.value = seed.cover_style_type;
+                    if (innerSelect && seed.inner_style_type) innerSelect.value = seed.inner_style_type;
+                } finally {
+                    isApplyingPresetProgrammatically = false;
+                }
+                refreshAssetStyleTypeHelp();
+            }
+            refreshViralOperationTips();
+        }
+
+        async function loadPersistedIpAgentSeed() {
+            if (initialSavedStrategy && Object.keys(initialSavedStrategy).length) {
+                return;
+            }
+            let existingSeed = null;
+            try {
+                existingSeed = JSON.parse(localStorage.getItem('xhs_v4_ip_agent_seed') || 'null');
+            } catch (error) {
+                existingSeed = null;
+            }
+            if (existingSeed && typeof existingSeed === 'object' && Object.keys(existingSeed).length) {
+                return;
+            }
+            let profileKey = '';
+            try {
+                profileKey = localStorage.getItem('xhs_v4_ip_profile_key') || '';
+            } catch (error) {
+                profileKey = '';
+            }
+            if (!profileKey) return;
+            try {
+                const res = await fetch(`/api/liver-ip/profile?profile_key=${encodeURIComponent(profileKey)}`);
+                const data = await res.json();
+                const seed = data?.profile?.generator_seed;
+                if (!data?.success || !seed || typeof seed !== 'object') return;
+                localStorage.setItem('xhs_v4_ip_agent_seed', JSON.stringify(seed));
+                applyIpAgentSeedIfAvailable();
+            } catch (error) {
+                return;
+            }
+        }
+
+        function markStrategyControlsTouched() {
+            if (!isApplyingPresetProgrammatically) {
+                strategyControlsTouchedByUser = true;
+            }
+        }
+
+        function normalizeTitleOptions(items) {
+            return (items || []).map((item) => {
+                if (typeof item === 'string') {
+                    return { title: item, source: '系统推荐' };
+                }
+                return {
+                    title: String(item?.title || '').trim(),
+                    source: String(item?.source || '系统推荐').trim(),
+                };
+            }).filter((item) => item.title);
+        }
+
+        function getSelectedTitleText() {
+            const fromPool = titleOptions[selectedTitle]?.title;
+            if (fromPool) return fromPool;
+            if (titles && titles[selectedTitle]) return titles[selectedTitle];
+            return copyCards[selectedVersion]?.title || titles[0] || '分享笔记';
+        }
+
+        function buildSelectedCopyCard() {
+            const current = copyCards[selectedVersion] || copyCards[0];
+            if (!current) return null;
+            return {
+                ...current,
+                title: getSelectedTitleText(),
+            };
+        }
+
+        function buildCurrentStrategyPayload(reason = 'auto_save') {
+            const currentCard = buildSelectedCopyCard();
+            if (!currentCard && (!titleOptions || !titleOptions.length)) {
+                if (initialSavedStrategy && initialSavedStrategy.selected_title) {
+                    return {
+                        registration_id: {{ registration.id }},
+                        reason,
+                        ...initialSavedStrategy,
+                    };
+                }
+                return null;
+            }
+            const workflow = resolveAssetWorkflowConfig();
+            return {
+                registration_id: {{ registration.id }},
+                reason,
+                selected_title: getSelectedTitleText(),
+                selected_title_source: titleOptions[selectedTitle]?.source || '系统推荐',
+                selected_title_index: selectedTitle || 0,
+                selected_copy_version_index: selectedVersion || 0,
+                selected_copy_goal: document.getElementById('copyGoal')?.value || '',
+                selected_copy_skill: document.getElementById('copySkill')?.value || '',
+                selected_title_skill: document.getElementById('titleSkill')?.value || '',
+                selected_image_skill: document.getElementById('imageSkill')?.value || '',
+                selected_cover_style_type: workflow.coverStyleType || '',
+                selected_inner_style_type: workflow.innerStyleType || '',
+                selected_generation_mode: workflow.modeKey || '',
+                selected_copy_text: currentCard ? buildCopyCardText(currentCard) : '',
+                generator_context: generatorContext || {},
+                title_options: (titleOptions || []).slice(0, 8),
+            };
+        }
+
+        async function persistStrategySelection(reason = 'auto_save', force = false) {
+            const payload = buildCurrentStrategyPayload(reason);
+            if (!payload) return false;
+            const hashPayload = { ...payload, reason: '' };
+            const nextHash = JSON.stringify(hashPayload);
+            if (!force && nextHash === lastSavedStrategyHash) {
+                return true;
+            }
+            try {
+                const res = await fetch('/api/strategy_selection', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json();
+                if (data && data.success) {
+                    lastSavedStrategyHash = nextHash;
+                    return true;
+                }
+            } catch (error) {
+                return false;
+            }
+            return false;
+        }
+
+        function scheduleStrategyPersistence(reason = 'auto_save') {
+            if (strategyPersistTimer) {
+                clearTimeout(strategyPersistTimer);
+            }
+            strategyPersistTimer = setTimeout(() => {
+                persistStrategySelection(reason, false);
+            }, 500);
+        }
+
+        function renderTitlePool() {
+            const wrap = document.getElementById('titlePoolWrap');
+            const tips = document.getElementById('titlePoolTips');
+            if (!wrap) return;
+            if (!titleOptions || titleOptions.length === 0) {
+                wrap.innerHTML = '<div class="text-muted small">先生成文案后再挑标题。</div>';
+                return;
+            }
+            if (tips) {
+                tips.textContent = `当前共生成 ${titleOptions.length} 个标题候选。建议先挑一个最想点开的，再决定要不要换正文版本。`;
+            }
+            wrap.innerHTML = titleOptions.map((item, index) => `
+                <button type="button" class="btn ${index === selectedTitle ? 'btn-danger' : 'btn-outline-secondary'} text-start" style="border-radius:16px; min-width:180px;" onclick="selectTitleOption(${index})">
+                    <div class="fw-semibold">${escapeHtml(item.title || '')}</div>
+                    <div class="small ${index === selectedTitle ? 'text-white-50' : 'text-muted'}">${escapeHtml(item.source || '系统推荐')}</div>
+                </button>
+            `).join('');
+        }
+
+        function selectTitleOption(index) {
+            selectedTitle = index;
+            renderTitlePool();
+            renderCopySummary();
+            checkCompliance(getSelectedContent());
+            refreshViralOperationTips();
+            refreshCoverRecommendations();
+            scheduleStrategyPersistence('select_title');
+        }
+
+        function findAssetFamilyByStyle(styleKey) {
+            const target = String(styleKey || '').trim();
+            if (!target) return 'custom';
+            const found = Object.entries(assetStyleFamilyMap).find(([, meta]) => {
+                const optionKeys = [...(meta.coverOptions || []), ...(meta.innerOptions || [])];
+                return optionKeys.includes(target);
+            });
+            return found ? found[0] : 'custom';
+        }
+
+        function renderCoverRecommendations(items) {
+            const wrap = document.getElementById('coverRecommendationWrap');
+            const tips = document.getElementById('coverRecommendationTips');
+            if (!wrap) return;
+            coverRecommendations = items || [];
+            if (!coverRecommendations.length) {
+                wrap.innerHTML = '<div class="text-muted small">系统暂时还没给出封面建议，可以先用图片技能包自动预设。</div>';
+                return;
+            }
+            if (tips) {
+                tips.textContent = '建议先挑一个封面方向，再去预览封面素材或图文套组。';
+            }
+            wrap.innerHTML = coverRecommendations.map((item, index) => `
+                <div class="border rounded-4 p-2 bg-white">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div>
+                            <div class="fw-semibold">${escapeHtml(item.style_label || item.style_key || '封面方案')}</div>
+                            <div class="small text-muted">${escapeHtml(item.reason || '')}</div>
+                            ${item.coverage_hint ? `<div class="small text-muted mt-1">${escapeHtml(item.coverage_hint)}</div>` : ''}
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="applyCoverRecommendation(${index})">应用</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function refreshCoverRecommendations() {
+            const wrap = document.getElementById('coverRecommendationWrap');
+            if (!wrap || !copyCards.length) return;
+            wrap.innerHTML = '<div class="text-muted small">正在分析当前标题和正文，生成封面建议...</div>';
+            try {
+                const res = await fetch('/api/asset_style_recommendations', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        registration_id: {{ registration.id }},
+                        selected_content: getSelectedContent(),
+                        title_hint: getSelectedTitleText(),
+                    }),
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    wrap.innerHTML = `<div class="text-muted small">${escapeHtml(data.message || '封面建议生成失败')}</div>`;
+                    return;
+                }
+                renderCoverRecommendations(data.items || []);
+            } catch (error) {
+                wrap.innerHTML = '<div class="text-muted small">封面建议生成失败，请稍后重试。</div>';
+            }
+        }
+
+        function applyCoverRecommendation(index) {
+            const current = coverRecommendations[index];
+            if (!current) return;
+            const familyKey = findAssetFamilyByStyle(current.style_key);
+            const familySelect = document.getElementById('assetStyleFamily');
+            const coverSelect = document.getElementById('assetCoverStyleType');
+            if (familySelect) {
+                familySelect.value = familyKey;
+            }
+            refreshAssetWorkflowControls();
+            if (coverSelect) {
+                coverSelect.value = current.style_key || coverSelect.value;
+            }
+            refreshAssetStyleTypeHelp();
+            refreshViralOperationTips();
+            scheduleStrategyPersistence('apply_cover_recommendation');
+        }
+
         function escapeHtml(text) {
             return String(text || '').replace(/[&<>"']/g, (char) => ({
                 '&': '&amp;',
@@ -677,6 +1338,65 @@
             const coverMeta = (assetStyleTypeDefinitions || []).find((item) => item.key === coverKey) || {};
             const innerMeta = (assetStyleTypeDefinitions || []).find((item) => item.key === innerKey) || {};
             wrap.textContent = `${familyMeta.label}：${familyMeta.description} 当前模式：${assetWorkflowModeMap[modeKey] || ''} 封面样式：${coverMeta.label || '-'}${modeKey === 'smart_bundle' ? ` ｜ 内页样式：${innerMeta.label || '-'}` : ''}`;
+        }
+
+        function refreshTitleSkillHelp() {
+            const select = document.getElementById('titleSkill');
+            const wrap = document.getElementById('titleSkillHelp');
+            if (!select || !wrap) return;
+            const key = select.value || 'auto';
+            wrap.textContent = titleSkillHelpMap[key] || titleSkillHelpMap.auto;
+        }
+
+        function applyImageSkillPreset() {
+            const select = document.getElementById('imageSkill');
+            const wrap = document.getElementById('imageSkillHelp');
+            const note = document.getElementById('imageSkillPresetNote');
+            const preset = resolveImageSkillPreset(select?.value || 'auto');
+            if (!preset) return;
+            const familySelect = document.getElementById('assetStyleFamily');
+            const modeSelect = document.getElementById('assetWorkflowMode');
+            if (familySelect && preset.family_key) {
+                familySelect.value = preset.family_key;
+            }
+            if (modeSelect && preset.mode_key) {
+                modeSelect.value = preset.mode_key;
+            }
+            refreshAssetWorkflowControls();
+            const coverSelect = document.getElementById('assetCoverStyleType');
+            const innerSelect = document.getElementById('assetInnerStyleType');
+            if (coverSelect && preset.cover_style_key) {
+                coverSelect.value = preset.cover_style_key;
+            }
+            if (innerSelect && preset.inner_style_key) {
+                innerSelect.value = preset.inner_style_key;
+            }
+            if (wrap) {
+                wrap.textContent = `${preset.label || '图片技能包'}：${preset.description || ''}`;
+            }
+            if (note) {
+                note.textContent = preset.usage_tip || '系统会把图片工作流锁到更适合当前内容的爆款打法。';
+            }
+            refreshAssetStyleTypeHelp();
+            if (copyCards.length > 0 || titleOptions.length > 0) {
+                scheduleStrategyPersistence('apply_image_skill');
+            }
+        }
+
+        function refreshViralOperationTips() {
+            const wrap = document.getElementById('viralOperationTips');
+            if (!wrap) return;
+            const recommended = detectRecommendedPreset();
+            const titleSelect = document.getElementById('titleSkill');
+            const imageSelect = document.getElementById('imageSkill');
+            const currentTitleLabel = titleSelect?.selectedOptions?.[0]?.textContent || '系统自动匹配';
+            const currentImageLabel = imageSelect?.selectedOptions?.[0]?.textContent || '系统自动匹配';
+            const sourceLabel = recommended.source === 'historical' ? '近期实战' : '规则默认';
+            wrap.textContent = `系统建议（${sourceLabel}）：${recommended.reason} 当前标题打法：${currentTitleLabel} ｜ 当前图片打法：${currentImageLabel} ｜ 当前标题：${getSelectedTitleText()} ｜ 操作建议：先看标题够不够抓眼，再预览封面，最后才改正文细节。`;
+        }
+
+        function applyRecommendedViralPreset() {
+            applyPresetObject(detectRecommendedPreset());
         }
 
         function renderAssetStyleOptions(selectId, optionKeys, selectedKey) {
@@ -741,11 +1461,17 @@
             const coverMeta = (assetStyleTypeDefinitions || []).find((item) => item.key === config.coverStyleType) || {};
             const innerMeta = (assetStyleTypeDefinitions || []).find((item) => item.key === config.innerStyleType) || {};
             const familyMeta = assetStyleFamilyMap[config.familyKey] || assetStyleFamilyMap.medical_science;
+            const imageSkillMeta = resolveImageSkillPreset(document.getElementById('imageSkill')?.value || 'auto');
             const guideLines = [
                 `图片工作流模式：${config.modeKey}`,
                 `图片主类型：${familyMeta.label}`,
                 `封面样式：${coverMeta.label || config.coverStyleType || '-'}`,
             ];
+            if (imageSkillMeta) {
+                guideLines.push(`图片技能包：${imageSkillMeta.label}`);
+                guideLines.push(`图片打法：${imageSkillMeta.description}`);
+                guideLines.push(`图片提示：${imageSkillMeta.usage_tip}`);
+            }
             if (config.modeKey === 'smart_bundle') {
                 guideLines.push(`内页样式：${innerMeta.label || config.innerStyleType || '-'}`);
                 guideLines.push('请先拆出封面重点，再拆出内页信息块和讲解结构。');
@@ -766,8 +1492,10 @@
         function toggleCopyCustomInputs() {
             const personaMode = document.getElementById('copyPersona')?.value;
             const sceneMode = document.getElementById('copyScene')?.value;
+            const directionMode = document.getElementById('copyDirection')?.value;
             document.getElementById('customPersona').style.display = personaMode === 'custom' ? 'block' : 'none';
             document.getElementById('customScene').style.display = sceneMode === 'custom' ? 'block' : 'none';
+            document.getElementById('customDirection').style.display = directionMode === 'custom' ? 'block' : 'none';
         }
 
         function buildCopyCardText(card) {
@@ -806,9 +1534,21 @@
             const summary = [];
             if (generatorContext.persona) summary.push(`人设：${generatorContext.persona}`);
             if (generatorContext.scene) summary.push(`场景：${generatorContext.scene}`);
+            if (generatorContext.direction) summary.push(`方向：${generatorContext.direction}`);
             if (generatorContext.product) summary.push(`软植入：${generatorContext.product}`);
             if (generatorContext.goal) summary.push(`目标：${generatorContext.goal}`);
+            if (generatorContext.skill) summary.push(`技能包：${generatorContext.skill}`);
+            if (generatorContext.title_skill) summary.push(`标题：${generatorContext.title_skill}`);
+            summary.push(`当前选题：${getSelectedTitleText()}`);
             document.getElementById('copySummaryBar').textContent = summary.join(' ｜ ');
+            const engineWrap = document.getElementById('generatorEngineBar');
+            if (engineWrap) {
+                const engineLabel = generatorContext.engine_label || '';
+                const engineMessage = generatorContext.engine_message || '';
+                const agentMode = generatorContext.agent_mode_label || '';
+                engineWrap.textContent = [engineLabel, agentMode, engineMessage].filter(Boolean).join(' ｜ ');
+                engineWrap.style.color = generatorContext.engine === 'local_fallback' ? '#b54708' : '#667085';
+            }
         }
 
         function renderCopyCards() {
@@ -847,8 +1587,12 @@
                         custom_persona: document.getElementById('customPersona').value.trim(),
                         scene_key: document.getElementById('copyScene').value,
                         custom_scene: document.getElementById('customScene').value.trim(),
+                        direction_key: document.getElementById('copyDirection').value,
+                        custom_direction: document.getElementById('customDirection').value.trim(),
                         product_key: document.getElementById('copyProduct').value,
                         copy_goal: document.getElementById('copyGoal').value,
+                        copy_skill: document.getElementById('copySkill').value,
+                        title_skill: document.getElementById('titleSkill').value,
                     })
                 });
                 const data = await res.json();
@@ -858,9 +1602,11 @@
                     copyCards = normalizeCopyCards(data.cards);
                     versions = copyCards.map((card) => card.copy_text);
                     titles = copyCards.map((card) => card.title);
+                    titleOptions = normalizeTitleOptions(data.title_options || titles.map((title) => ({ title, source: '正文版本' })));
                     selectedVersion = 0;
                     selectedTitle = 0;
                     renderCopySummary();
+                    renderTitlePool();
                     renderCopyCards();
                     document.getElementById('resultArea').style.display = 'block';
                     document.getElementById('creativePackArea').style.display = 'none';
@@ -874,6 +1620,8 @@
                     window.latestGeneratedImages = [];
                     if (copyCards.length > 0) {
                         await checkCompliance(getSelectedContent());
+                        await refreshCoverRecommendations();
+                        await persistStrategySelection('generate_copy', true);
                     }
                     document.getElementById('loading').style.display = 'none';
                     document.getElementById('generateBtn').disabled = false;
@@ -891,9 +1639,12 @@
 
         function selectVersion(index) {
             selectedVersion = index;
-            selectedTitle = index;
+            renderCopySummary();
+            renderTitlePool();
             renderCopyCards();
             checkCompliance(getSelectedContent());
+            refreshCoverRecommendations();
+            scheduleStrategyPersistence('select_version');
         }
         
         async function checkCompliance(content) {
@@ -920,11 +1671,13 @@
             }
             if (selectedVersion === undefined || selectedVersion < 0) {
                 selectedVersion = 0;
-                selectedTitle = 0;
+                if (selectedTitle === undefined || selectedTitle < 0) {
+                    selectedTitle = 0;
+                }
+                renderTitlePool();
                 renderCopyCards();
             }
-            const current = copyCards[selectedVersion];
-            const copyContent = current ? current.copy_text : (versions[selectedVersion] || versions[0] || '');
+            const copyContent = getSelectedContent();
 
             try {
                 if (navigator.clipboard && window.isSecureContext) {
@@ -956,8 +1709,9 @@
         }
 
         function getSelectedContent() {
-            if (copyCards && copyCards.length > 0) {
-                return copyCards[selectedVersion]?.copy_text || copyCards[0]?.copy_text || '';
+            const currentCard = buildSelectedCopyCard();
+            if (currentCard) {
+                return buildCopyCardText(currentCard);
             }
             if (!versions || versions.length === 0) return '';
             return versions[selectedVersion] || versions[0] || '';
@@ -1153,12 +1907,13 @@
                 if (!ok) return;
             }
             const workflow = resolveAssetWorkflowConfig();
+            await persistStrategySelection('start_asset_generation', true);
 
             document.getElementById('assetTaskArea').style.display = 'block';
             document.getElementById('assetTaskMsg').textContent = '正在创建图片任务...';
             document.getElementById('assetTaskList').innerHTML = '';
 
-            const selectedTitleText = titles && titles[selectedTitle] ? titles[selectedTitle] : '';
+            const selectedTitleText = getSelectedTitleText();
             const res = await fetch('/api/jobs/assets/generate', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -1239,6 +1994,7 @@
                 } else {
                     versions[selectedVersion] = data.content;
                 }
+                scheduleStrategyPersistence('humanize_copy');
                 alert('已完成真人化重写');
             } else {
                 alert(data.message || '重写失败');
@@ -1258,6 +2014,7 @@
         // 提交表单
         document.getElementById('submitForm').onsubmit = async function(e) {
             e.preventDefault();
+            const strategyPayload = buildCurrentStrategyPayload('submit_note') || {};
             
             const res = await fetch('/api/submit', {
                 method: 'POST',
@@ -1269,7 +2026,8 @@
                     xhs_views: parseInt(document.getElementById('xhs_views').value || '0', 10),
                     xhs_likes: parseInt(document.getElementById('xhs_likes').value || '0', 10),
                     xhs_favorites: parseInt(document.getElementById('xhs_favorites').value || '0', 10),
-                    xhs_comments: parseInt(document.getElementById('xhs_comments').value || '0', 10)
+                    xhs_comments: parseInt(document.getElementById('xhs_comments').value || '0', 10),
+                    ...strategyPayload
                 })
             });
             
@@ -1289,6 +2047,7 @@
                 alert('请先填写小红书链接和数据');
                 return;
             }
+            const strategyPayload = buildCurrentStrategyPayload('update_note_metrics') || {};
             
             const res = await fetch('/api/update_data', {
                 method: 'POST',
@@ -1300,7 +2059,8 @@
                     xhs_views: parseInt(document.getElementById('xhs_views').value || '0', 10),
                     xhs_likes: parseInt(document.getElementById('xhs_likes').value || '0', 10),
                     xhs_favorites: parseInt(document.getElementById('xhs_favorites').value || '0', 10),
-                    xhs_comments: parseInt(document.getElementById('xhs_comments').value || '0', 10)
+                    xhs_comments: parseInt(document.getElementById('xhs_comments').value || '0', 10),
+                    ...strategyPayload
                 })
             });
             
@@ -1314,13 +2074,72 @@
 
         document.getElementById('copyPersona')?.addEventListener('change', toggleCopyCustomInputs);
         document.getElementById('copyScene')?.addEventListener('change', toggleCopyCustomInputs);
+        document.getElementById('copyDirection')?.addEventListener('change', () => {
+            markStrategyControlsTouched();
+            toggleCopyCustomInputs();
+            refreshViralOperationTips();
+        });
+        document.getElementById('copyGoal')?.addEventListener('change', () => {
+            markStrategyControlsTouched();
+            if ((document.getElementById('imageSkill')?.value || 'auto') === 'auto') {
+                applyImageSkillPreset();
+            }
+            refreshViralOperationTips();
+        });
+        document.getElementById('copySkill')?.addEventListener('change', () => {
+            markStrategyControlsTouched();
+            refreshViralOperationTips();
+        });
+        document.getElementById('titleSkill')?.addEventListener('change', () => {
+            markStrategyControlsTouched();
+            refreshTitleSkillHelp();
+            refreshViralOperationTips();
+        });
+        document.getElementById('imageSkill')?.addEventListener('change', () => {
+            markStrategyControlsTouched();
+            applyImageSkillPreset();
+            refreshViralOperationTips();
+        });
+        restoreSavedStrategySettings();
+        applyIpAgentSeedIfAvailable();
         toggleCopyCustomInputs();
         document.getElementById('assetWorkflowMode')?.addEventListener('change', refreshAssetWorkflowControls);
         document.getElementById('assetStyleFamily')?.addEventListener('change', refreshAssetWorkflowControls);
         document.getElementById('assetCoverStyleType')?.addEventListener('change', refreshAssetStyleTypeHelp);
         document.getElementById('assetInnerStyleType')?.addEventListener('change', refreshAssetStyleTypeHelp);
+        document.getElementById('assetWorkflowMode')?.addEventListener('change', () => {
+            markStrategyControlsTouched();
+            scheduleStrategyPersistence('change_workflow_mode');
+        });
+        document.getElementById('assetStyleFamily')?.addEventListener('change', () => {
+            markStrategyControlsTouched();
+            scheduleStrategyPersistence('change_style_family');
+        });
+        document.getElementById('assetCoverStyleType')?.addEventListener('change', () => {
+            markStrategyControlsTouched();
+            scheduleStrategyPersistence('change_cover_style');
+        });
+        document.getElementById('assetInnerStyleType')?.addEventListener('change', () => {
+            markStrategyControlsTouched();
+            scheduleStrategyPersistence('change_inner_style');
+        });
         refreshAssetWorkflowControls();
         refreshAssetStyleTypeHelp();
+        refreshTitleSkillHelp();
+        applyImageSkillPreset();
+        if (initialSavedStrategy?.selected_cover_style_type) {
+            const coverSelect = document.getElementById('assetCoverStyleType');
+            if (coverSelect) coverSelect.value = initialSavedStrategy.selected_cover_style_type;
+        }
+        if (initialSavedStrategy?.selected_inner_style_type) {
+            const innerSelect = document.getElementById('assetInnerStyleType');
+            if (innerSelect) innerSelect.value = initialSavedStrategy.selected_inner_style_type;
+        }
+        refreshAssetStyleTypeHelp();
+        renderStrategyRecommendationBar();
+        refreshViralOperationTips();
+        loadPersistedIpAgentSeed();
+        loadStrategyRecommendation();
     </script>
     </div>
 </body>

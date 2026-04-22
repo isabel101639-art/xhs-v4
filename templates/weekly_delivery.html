@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>本周交付清单</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --accent: #ef4e45;
+            --accent-dark: #cc3d35;
+            --panel: rgba(255, 255, 255, 0.94);
+            --line: rgba(239, 78, 69, 0.10);
+            --muted: #667085;
+            --ink: #1f2937;
+            --soft: #fff5f1;
+        }
+        body {
+            background: linear-gradient(180deg, #fff8f6 0%, #fff 100%);
+            color: var(--ink);
+        }
+        .navbar {
+            background: linear-gradient(135deg, #ef4e45 0%, #f28d57 100%);
+        }
+        .shell {
+            padding-bottom: 48px;
+        }
+        .hero,
+        .panel-card,
+        .module-card,
+        .check-card {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 24px;
+            box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+        }
+        .hero {
+            padding: 28px;
+        }
+        .panel-card,
+        .module-card,
+        .check-card {
+            padding: 22px;
+        }
+        .metric-card {
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 18px;
+            height: 100%;
+        }
+        .metric-number {
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--accent-dark);
+        }
+        .section-title {
+            font-size: 22px;
+            font-weight: 800;
+            margin-bottom: 16px;
+        }
+        .subtle {
+            color: var(--muted);
+            font-size: 14px;
+        }
+        .status-chip {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .status-ready {
+            background: #e8f7ee;
+            color: #1b7f47;
+        }
+        .status-attention {
+            background: #fff4de;
+            color: #9a6700;
+        }
+        .status-blocked {
+            background: #ffe6e6;
+            color: #b42318;
+        }
+        .list-clean {
+            margin: 0;
+            padding-left: 18px;
+        }
+        .list-clean li {
+            margin-bottom: 8px;
+            line-height: 1.7;
+        }
+        .module-progress {
+            height: 10px;
+            border-radius: 999px;
+            background: #f3ebe8;
+            overflow: hidden;
+        }
+        .module-progress span {
+            display: block;
+            height: 100%;
+            background: linear-gradient(90deg, #ef4e45 0%, #f28d57 100%);
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="/automation_center">← 返回自动化中心</a>
+            <ul class="navbar-nav ms-auto d-flex flex-row flex-wrap">
+                <li class="nav-item"><a class="nav-link" href="/admin">后台</a></li>
+                <li class="nav-item"><a class="nav-link" href="/admin/logout">退出</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container shell">
+        <div class="hero mb-4">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                <div>
+                    <div class="section-title mb-2">本周交付清单</div>
+                    <div class="subtle">截至 {{ payload.summary.updated_at or '-' }}，这页专门用来验收本周要收口的三大板块，不再在多个页面之间来回找状态。</div>
+                </div>
+                <div class="text-end">
+                    <div class="status-chip {% if payload.summary.go_live_status_label == '可上线' %}status-ready{% else %}status-attention{% endif %}">
+                        {{ payload.summary.delivery_status }}
+                    </div>
+                    <div class="subtle mt-2">试运行：{{ payload.summary.trial_status_label or '-' }} ｜ 正式上线：{{ payload.summary.go_live_status_label or '-' }}</div>
+                </div>
+            </div>
+            <div class="subtle mt-3">{{ payload.summary.key_message }}</div>
+        </div>
+
+        <div class="panel-card mb-4">
+            <div class="section-title">本周完成定义</div>
+            <ul class="list-clean">
+                {% for item in payload.this_week_definition %}
+                <li>{{ item }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-2">
+                <div class="metric-card">
+                    <div class="metric-number">{{ payload.counts.trend_notes or 0 }}</div>
+                    <div class="subtle">热点</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="metric-card">
+                    <div class="metric-number">{{ payload.counts.topic_ideas or 0 }}</div>
+                    <div class="subtle">候选话题</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="metric-card">
+                    <div class="metric-number">{{ payload.counts.active_hot_topics or 0 }}</div>
+                    <div class="subtle">热搜话题</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="metric-card">
+                    <div class="metric-number">{{ payload.counts.asset_plan_drafts or 0 }}</div>
+                    <div class="subtle">图片草案</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="metric-card">
+                    <div class="metric-number">{{ payload.counts.draft_asset_tasks or 0 }}</div>
+                    <div class="subtle">待执行图片任务</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="metric-card">
+                    <div class="metric-number">{{ payload.counts.completed_asset_tasks or 0 }}</div>
+                    <div class="subtle">已完成图片任务</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            {% for item in payload.modules %}
+            <div class="col-lg-4">
+                <div class="module-card h-100">
+                    <div class="d-flex justify-content-between align-items-center gap-2">
+                        <strong>{{ item.label }}</strong>
+                        <span class="status-chip {% if item.status == 'ready' %}status-ready{% elif item.status == 'blocked' %}status-blocked{% else %}status-attention{% endif %}">
+                            {{ item.status_label }}
+                        </span>
+                    </div>
+                    <div class="subtle mt-2">{{ item.summary }}</div>
+                    <div class="module-progress mt-3">
+                        <span style="width: {{ item.progress }}%;"></span>
+                    </div>
+                    <div class="subtle mt-2">完成度 {{ item.progress }}%{% if item.evidence %} ｜ {{ item.evidence }}{% endif %}</div>
+
+                    <div class="mt-3">
+                        <strong>本周已完成</strong>
+                        <ul class="list-clean mt-2">
+                            {% for line in item.completed %}
+                            <li>{{ line }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <div class="mt-3">
+                        <strong>本周还要收口</strong>
+                        <ul class="list-clean mt-2">
+                            {% for line in item.remaining %}
+                            <li>{{ line }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-lg-6">
+                <div class="panel-card h-100">
+                    <div class="section-title">外部依赖</div>
+                    <ul class="list-clean">
+                        {% for item in payload.external_blockers %}
+                        <li><strong>{{ item.label }}</strong>：{{ item.detail }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="panel-card h-100">
+                    <div class="section-title">不属于本周必须项</div>
+                    <ul class="list-clean">
+                        {% for item in payload.not_in_this_week %}
+                        <li>{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel-card">
+            <div class="section-title">上线前检查单</div>
+            <div class="row g-3">
+                {% for item in payload.launch_checklist %}
+                <div class="col-lg-4">
+                    <div class="check-card h-100">
+                        <div class="d-flex justify-content-between align-items-center gap-2">
+                            <strong>{{ item.label }}</strong>
+                            <span class="status-chip {% if item.status == 'ready' %}status-ready{% elif item.status == 'blocked' %}status-blocked{% else %}status-attention{% endif %}">
+                                {{ item.status_label }}
+                            </span>
+                        </div>
+                        <div class="subtle mt-2">{{ item.message }}</div>
+                        {% if item.evidence %}
+                        <div class="subtle mt-3">{{ item.evidence }}</div>
+                        {% endif %}
+                        {% if item.next_action %}
+                        <div class="subtle mt-3">下一步：{{ item.next_action }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

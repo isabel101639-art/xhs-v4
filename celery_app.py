@@ -147,10 +147,12 @@ def sync_hotwords_job(data_source_task_id):
     from app import (
         _append_data_source_log,
         _automation_keyword_seeds,
+        _coerce_bool,
         _load_json_value,
         _log_operation,
         _resolve_hotword_rows,
         _safe_int,
+        _upsert_trend_note_corpus_entries,
         DataSourceTask,
         TrendNote,
         db,
@@ -189,12 +191,15 @@ def sync_hotwords_job(data_source_task_id):
         template_key = resolved.get('template_key') or params.get('template_key') or 'generic_lines'
         request_preview = resolved.get('request_preview') or {}
         response_preview = resolved.get('response_preview') or {}
-        auto_generate_topic_ideas = bool(params.get('hotword_auto_generate_topic_ideas'))
+        auto_generate_topic_ideas = _coerce_bool(params.get('hotword_auto_generate_topic_ideas'))
         auto_generate_topic_count = min(max(_safe_int(params.get('hotword_auto_generate_topic_count'), 20), 1), 120)
         auto_generate_topic_activity_id = _safe_int(params.get('hotword_auto_generate_topic_activity_id'), 0) or None
         auto_generate_topic_quota = min(max(_safe_int(params.get('hotword_auto_generate_topic_quota'), 30), 1), 300)
+        auto_convert_corpus_templates = _coerce_bool(params.get('hotword_auto_convert_corpus_templates'))
+        auto_convert_corpus_limit = min(max(_safe_int(params.get('hotword_auto_convert_corpus_limit'), 10), 1), 50)
 
         inserted_count = 0
+        created_notes = []
         for row in rows:
             note = TrendNote(
                 source_platform=row.get('source_platform') or task_record.source_platform or '小红书',
@@ -217,6 +222,7 @@ def sync_hotwords_job(data_source_task_id):
             )
             db.session.add(note)
             inserted_count += 1
+            created_notes.append(note)
 
         task_record.status = 'success'
         task_record.item_count = inserted_count
@@ -252,6 +258,36 @@ def sync_hotwords_job(data_source_task_id):
         })
         db.session.commit()
 
+        corpus_conversion_result = None
+        if auto_convert_corpus_templates and created_notes:
+            conversion = _upsert_trend_note_corpus_entries(
+                created_notes[:auto_convert_corpus_limit],
+                category='爆款拆解',
+            )
+            corpus_conversion_result = {
+                'created_count': len(conversion.get('created') or []),
+                'updated_count': len(conversion.get('updated') or []),
+                'selected_count': min(len(created_notes), auto_convert_corpus_limit),
+            }
+            task_record = DataSourceTask.query.get(data_source_task_id)
+            if task_record:
+                task_record.message = (
+                    f'{task_record.message}，并自动沉淀 {corpus_conversion_result["created_count"] + corpus_conversion_result["updated_count"]} 条模板语料'
+                )[:300]
+                task_record.result_payload = json.dumps({
+                    'inserted_count': inserted_count,
+                    'batch_name': task_record.batch_name,
+                    'keywords': keywords,
+                    'mode': mode,
+                    'template_key': template_key,
+                    'request_preview': request_preview,
+                    'response_preview': response_preview,
+                    'corpus_conversion': corpus_conversion_result,
+                }, ensure_ascii=False)
+                db.session.flush()
+                _append_data_source_log(task_record.id, '热点抓取后已自动转成模板语料', detail=corpus_conversion_result)
+                db.session.commit()
+
         topic_generation_result = None
         if auto_generate_topic_ideas and inserted_count > 0:
             topic_generation_result = generate_topic_ideas_job(
@@ -272,6 +308,7 @@ def sync_hotwords_job(data_source_task_id):
                     'template_key': template_key,
                     'request_preview': request_preview,
                     'response_preview': response_preview,
+                    'corpus_conversion': corpus_conversion_result,
                     'topic_generation': topic_generation_result,
                 }, ensure_ascii=False)
                 db.session.flush()
@@ -287,6 +324,7 @@ def sync_hotwords_job(data_source_task_id):
             'inserted_count': inserted_count,
             'batch_name': task_record.batch_name,
             'mode': mode,
+            'corpus_conversion': corpus_conversion_result,
             'topic_generation': topic_generation_result,
         }
     except Exception as exc:

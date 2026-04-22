@@ -79,6 +79,18 @@ from creator_tracking import (
     sync_tracking_for_creator_account,
     sync_tracking_from_submission,
 )
+from copywriting_skills import (
+    COPY_SKILL_OPTIONS,
+    IMAGE_SKILL_OPTIONS,
+    TITLE_SKILL_OPTIONS,
+    build_copy_skill_local_guidance,
+    build_copy_skill_prompt_block,
+    build_title_skill_local_guidance,
+    build_title_skill_prompt_block,
+    get_image_skill_presets,
+    resolve_copy_skill,
+    resolve_title_skill,
+)
 from models import (
     db,
     Activity,
@@ -97,14 +109,17 @@ from models import (
     DataSourceTask,
     DataSourceLog,
     AssetGenerationTask,
+    AssetPlanDraft,
     AssetLibrary,
     AutomationSchedule,
     CorpusEntry,
+    HotTopicEntry,
     TrendNote,
     TopicIdea,
     CreatorAccount,
     CreatorPost,
     CreatorAccountSnapshot,
+    LiverIpProfilePlan,
     PLATFORM_DEFINITIONS,
     TOPIC_IDEA_STATUS_LABELS,
     ACTIVITY_STATUS_LABELS,
@@ -170,19 +185,71 @@ else:
 db.init_app(app)
 
 LIVER_KEYWORD_SEEDS = [
-    '脂肪肝', '肝纤维化', '肝硬化', '肝癌预防', '复方鳖甲软肝片', 'FibroScan福波看',
-    '肝弹', '肝硬度', '转氨酶', '乙肝', '丙肝', '酒精肝', '肝功能异常', '健康体检',
-    '体检', '肝病筛查', '肝脏B超', '肝结节', '肝区不适', '熬夜护肝',
+    '脂肪肝', '脂肪肝逆转', '脂肪肝减脂', '肝纤维化', '肝硬化', '肝癌', '肝癌预防',
+    '乙肝', '丙肝', '酒精肝', '肝功能异常', '转氨酶', '谷丙转氨酶', '谷草转氨酶',
+    '肝弹', '肝硬度', 'FibroScan福波看', '健康体检', '体检', '肝病筛查', '肝脏B超', '肝结节',
+    '保肝护肝', '养肝', '护肝习惯', '熬夜护肝', '饮酒护肝', '肝区不适', '肝气郁结',
+    '肝郁', '肝火旺', '肝胆湿热', '肝血不足', '肝阴不足', '中医养肝', '疏肝理气',
+    '情绪与肝', '焦虑失眠', '作息调理', '饮食养肝', '减脂餐', '运动减脂',
+    '女性养肝', '更年期养肝', '职场久坐', '慢病管理', '复查管理',
+    '肝损伤', '糖尿病', '冠心病', '减肥', '肥胖', '养肝护肝',
+]
+
+HOTWORD_SCOPE_PRESETS = [
+    {
+        'key': 'liver_comorbidity',
+        'label': '肝病+共病问题池',
+        'description': '围绕肝病本身及其相关慢病/共病，找高搜索问题和爆款笔记。',
+        'keywords': [
+            '肝纤维化', '肝硬化', '肝癌', '肝损伤', '肝郁', '体检', '转氨酶',
+            '肝弹', '糖尿病', '冠心病', '乙肝', '丙肝', '肝功能异常',
+        ],
+        'preferred_trend_type': 'note_search',
+        'preferred_template_key': 'xhs_note_search',
+    },
+    {
+        'key': 'science_qna',
+        'label': '科普问题池',
+        'description': '围绕“怎么吃/怎么运动/怎么减肥/怎么护肝”这类高搜索问题找爆款笔记。',
+        'keywords': [
+            '脂肪肝怎么吃', '脂肪肝做什么运动', '如何减肥', '肥胖怎么减',
+            '养肝护肝', '保肝护肝', '肝损伤吃什么', '转氨酶高怎么降',
+            '脂肪肝怎么减肥', '养肝喝什么',
+        ],
+        'preferred_trend_type': 'note_search',
+        'preferred_template_key': 'xhs_note_search',
+    },
+    {
+        'key': 'xhs_trending',
+        'label': '平台热搜/蹭热点池',
+        'description': '围绕平台热搜和相关搜索词，抓适合蹭流量的热点话题。',
+        'keywords': [
+            '养肝护肝', '减肥', '肥胖', '体检', '中医养生', '健康养生',
+        ],
+        'preferred_trend_type': 'hot_queries',
+        'preferred_template_key': 'xhs_hot_queries',
+    },
+]
+
+HOTWORD_TIME_WINDOW_OPTIONS = [
+    {'key': '3d', 'label': '近3天'},
+    {'key': '7d', 'label': '近7天'},
+    {'key': '30d', 'label': '近30天'},
+    {'key': 'custom', 'label': '自定义'},
 ]
 
 TOPIC_CONTENT_TYPES = [
     '真实经历型', '轻科普问答型', '检查解读型', '避坑清单型',
     '知识卡片型', '门诊答疑型', '复查管理型', '场景种草型',
+    '中医调理型', '保肝护肝习惯型', '脂肪肝管理型', '情绪身心型',
+    '饮食营养型', '运动减脂型', '家庭照护型', '观点表达型',
 ]
 
 TOPIC_PERSONAS = [
     '患者本人', '家属视角', '职场应酬族', '体检人群', '门诊答疑视角',
-    '病友经验', '健康管理视角', '医学助理视角',
+    '病友经验', '健康管理视角', '医学助理视角', '中医调理视角',
+    '营养师视角', '运动减脂教练', '职场久坐人群', '女性健康视角',
+    '情绪陪伴视角', '慢病管理视角', '陪诊照护者',
 ]
 
 TOPIC_VISUAL_TYPES = ['医学科普图', '知识卡片', '检查流程图', '误区对照图', '复查清单卡']
@@ -232,6 +299,8 @@ CORPUS_SEED_ENTRIES = [
 
 DEFAULT_SITE_NAV_ITEMS = [
     {'label': '话题广场', 'url': '/', 'icon': 'bi-collection', 'target': '_self'},
+    {'label': '肝健康IP', 'url': '/liver-science', 'icon': 'bi-heart-pulse', 'target': '_self'},
+    {'label': '热搜话题', 'url': '/hot-topics', 'icon': 'bi-lightning-charge', 'target': '_self'},
     {'label': '我的报名', 'url': '/my_registration', 'icon': 'bi-person-check', 'target': '_self'},
     {'label': '数据分析', 'url': '/data_analysis', 'icon': 'bi-bar-chart', 'target': '_self'},
     {'label': '自动化中心', 'url': '/automation_center', 'icon': 'bi-lightning-charge', 'target': '_self'},
@@ -801,12 +870,20 @@ def _serialize_asset_generation_task(task, detail=False):
         'id': task.id,
         'registration_id': task.registration_id,
         'topic_id': task.topic_id,
+        'draft_source_type': task.draft_source_type or '',
+        'draft_source_id': task.draft_source_id,
+        'draft_plan_id': task.draft_plan_id,
         'registration_name': reg.name if reg else '',
         'registration_phone': reg.phone if reg else '',
         'topic_name': topic.topic_name if topic else '',
         'source_provider': task.source_provider or 'svg_fallback',
         'model_name': task.model_name or '',
         'style_preset': task.style_preset or '小红书图文',
+        'generation_mode': task.generation_mode or 'smart_bundle',
+        'cover_style_type': task.cover_style_type or '',
+        'cover_style_label': _asset_style_meta(task.cover_style_type or '').get('label') if (task.cover_style_type or '').strip() else '',
+        'inner_style_type': task.inner_style_type or '',
+        'inner_style_label': _asset_style_meta(task.inner_style_type or '').get('label') if (task.inner_style_type or '').strip() else '',
         'product_profile': task.product_profile or '',
         'product_category': task.product_category or '',
         'product_name': task.product_name or '',
@@ -828,6 +905,32 @@ def _serialize_asset_generation_task(task, detail=False):
         'created_at': _format_datetime(task.created_at),
         'updated_at': _format_datetime(task.updated_at),
         'selected_content_preview': _truncate_text(task.selected_content or '', 120) if not detail else task.selected_content or '',
+    }
+
+
+def _serialize_asset_plan_draft(item):
+    payload = _load_json_value(item.draft_payload, {})
+    plan = payload.get('plan') if isinstance(payload, dict) else {}
+    preview_asset = plan.get('preview_asset') if isinstance(plan, dict) else {}
+    return {
+        'id': item.id,
+        'source_type': item.source_type or '',
+        'source_id': item.source_id,
+        'source_title': item.source_title or '',
+        'bucket_label': item.bucket_label or '',
+        'template_agent_label': item.template_agent_label or '',
+        'image_skill_label': item.image_skill_label or '',
+        'style_type': item.style_type or '',
+        'generation_mode': item.generation_mode or '',
+        'cover_style_type': item.cover_style_type or '',
+        'inner_style_type': item.inner_style_type or '',
+        'title_hint': item.title_hint or '',
+        'selected_content': item.selected_content or '',
+        'status': item.status or 'active',
+        'plan': plan if isinstance(plan, dict) else {},
+        'preview_asset': preview_asset if isinstance(preview_asset, dict) else {},
+        'created_at': _format_datetime(item.created_at),
+        'updated_at': _format_datetime(item.updated_at),
     }
 
 
@@ -969,6 +1072,11 @@ INTEGRATION_PING_META = {
         'success_action': 'image_provider_ping_check',
         'failed_action': 'image_provider_ping_check_failed',
     },
+    'copywriter': {
+        'label': '文案模型',
+        'success_action': 'copywriter_ping_check',
+        'failed_action': 'copywriter_ping_check_failed',
+    },
 }
 
 
@@ -1059,7 +1167,7 @@ def _build_integration_ping_history_payload(limit=12):
 
     summary = {
         'count': len(items),
-        'latest_by_key': [latest_by_key[key] for key in ['hotword', 'creator_sync', 'image_provider'] if key in latest_by_key],
+        'latest_by_key': [latest_by_key[key] for key in ['hotword', 'creator_sync', 'copywriter', 'image_provider'] if key in latest_by_key],
         'success_count': len([item for item in items if item['status'] == 'success']),
         'failed_count': len([item for item in items if item['status'] != 'success']),
     }
@@ -1076,6 +1184,7 @@ def _build_first_run_playbooks_payload():
     hotword_mode = _resolved_hotword_mode(hotword_settings)
     creator_sync_mode = _resolved_creator_sync_mode(creator_sync_settings)
     image_capabilities = _image_provider_capabilities()
+    copywriter_capabilities = _resolve_copywriter_capabilities()
     integration_history = _build_integration_ping_history_payload(limit=30)
     latest_ping_map = {
         item.get('integration_key'): item
@@ -1107,6 +1216,7 @@ def _build_first_run_playbooks_payload():
 
     hotword_ping = latest_ping_map.get('hotword', {})
     creator_ping = latest_ping_map.get('creator_sync', {})
+    copywriter_ping = latest_ping_map.get('copywriter', {})
     image_ping = latest_ping_map.get('image_provider', {})
     crawler_probe = _build_crawler_probe_payload()
     crawler_probe_items = {item.get('key'): item for item in (crawler_probe.get('items') or [])}
@@ -1208,6 +1318,27 @@ def _build_first_run_playbooks_payload():
         ),
     ]
 
+    copywriter_steps = [
+        step_item(
+            '填写文案模型 API URL / 模型名',
+            'ready' if bool(copywriter_capabilities.get('copywriter_api_url')) and bool(copywriter_capabilities.get('copywriter_model')) else 'blocked',
+            '先在自动化中心填写文案模型 API URL 和模型名，支持 DeepSeek 或其他 OpenAI 兼容模型。',
+            f"Provider：{copywriter_capabilities.get('copywriter_provider') or '-'} ｜ 模型：{copywriter_capabilities.get('copywriter_model') or '-'}",
+        ),
+        step_item(
+            '确认文案模型 Key 已配置',
+            'ready' if bool(copywriter_capabilities.get('api_key_configured')) else 'blocked',
+            '文案模型调用发生在服务端，用户不需要翻墙，但服务器需要能访问模型接口。',
+            f"Key：{'已配置' if copywriter_capabilities.get('api_key_configured') else '未配置'}",
+        ),
+        step_item(
+            '点击“测试文案模型”直到成功',
+            'ready' if copywriter_ping.get('status') == 'success' else ('blocked' if copywriter_ping else 'pending'),
+            '通过标准：接口状态成功，并能返回一段真实的口语化测试文案。',
+            copywriter_ping.get('message') or '还没有文案模型联调记录',
+        ),
+    ]
+
     crawler_steps = [
         step_item(
             '保存 Playwright 登录态',
@@ -1265,6 +1396,14 @@ def _build_first_run_playbooks_payload():
             'action_label': '测试图片接口',
             'action_key': 'image_provider',
             'steps': image_steps,
+        },
+        {
+            'key': 'copywriter',
+            'label': '文案模型首轮运行卡',
+            'description': '把文案生成从本地兜底升级为真实模型，并启用规划 Agent -> 写作 Agent -> 去模板味改写。',
+            'action_label': '测试文案模型',
+            'action_key': 'copywriter',
+            'steps': copywriter_steps,
         },
         {
             'key': 'crawler_probe',
@@ -1460,6 +1599,7 @@ def _build_integration_acceptance_payload():
     hotword_mode = _resolved_hotword_mode(hotword_settings)
     creator_sync_mode = _resolved_creator_sync_mode(creator_sync_settings)
     image_capabilities = _image_provider_capabilities()
+    copywriter_capabilities = _resolve_copywriter_capabilities()
 
     hotword_task = _latest_data_source_task('hotword_sync')
     creator_sync_task = _latest_data_source_task('creator_account_sync')
@@ -1626,6 +1766,40 @@ def _build_integration_acceptance_payload():
             next_action='先把 API URL、模型和 Key 调通，直到测试图片接口成功。',
         ))
 
+    copywriter_evidence = [
+        f"Provider：{copywriter_capabilities.get('copywriter_provider') or 'local_fallback'}",
+        f"模型：{copywriter_capabilities.get('copywriter_model') or '-'}",
+        f"最近联调：{(latest_ping_map.get('copywriter') or {}).get('status_label', '无')}",
+    ]
+    copywriter_ping_ok = (latest_ping_map.get('copywriter') or {}).get('status') == 'success'
+    if not copywriter_capabilities.get('copywriter_configured'):
+        items.append(acceptance_item(
+            'copywriter',
+            '文案模型验收',
+            'pending_external',
+            '当前还没有可用的文案模型，文案链路仍会回退到本地兜底。',
+            evidence=copywriter_evidence,
+            next_action='先配置 DeepSeek 或其他 OpenAI 兼容模型，再测试文案模型接口。',
+        ))
+    elif copywriter_ping_ok:
+        items.append(acceptance_item(
+            'copywriter',
+            '文案模型验收',
+            'ready',
+            '文案模型已联通，可用于规划 Agent、写作 Agent 和真人化重写。',
+            evidence=copywriter_evidence,
+            next_action='继续用真实话题验证文案质量和 Agent 差异化表现。',
+        ))
+    else:
+        items.append(acceptance_item(
+            'copywriter',
+            '文案模型验收',
+            'blocked',
+            '文案模型配置已存在，但当前还没联通成功。',
+            evidence=copywriter_evidence,
+            next_action='先在自动化中心点击“测试文案模型”，确认 API URL、模型名和 Key 是否可用。',
+        ))
+
     summary = {
         'total': len(items),
         'ready': len([item for item in items if item['status'] == 'ready']),
@@ -1654,6 +1828,7 @@ def _build_trial_readiness_payload():
     hotword_item = acceptance_map.get('hotword', {})
     creator_item = acceptance_map.get('creator_sync', {})
     image_item = acceptance_map.get('image_provider', {})
+    copywriter_item = acceptance_map.get('copywriter', {})
 
     internal_blockers = []
     if web_item.get('status') != 'ready':
@@ -1664,15 +1839,15 @@ def _build_trial_readiness_payload():
         internal_blockers.append('容量准备度未通过')
 
     acceptance_blockers = [
-        item.get('label') for item in [hotword_item, creator_item, image_item]
+        item.get('label') for item in [hotword_item, creator_item, image_item, copywriter_item]
         if item.get('status') == 'blocked'
     ]
     external_pending = [
-        item.get('label') for item in [hotword_item, creator_item, image_item]
+        item.get('label') for item in [hotword_item, creator_item, image_item, copywriter_item]
         if item.get('status') == 'pending_external'
     ]
     execution_pending = [
-        item.get('label') for item in [hotword_item, creator_item, image_item]
+        item.get('label') for item in [hotword_item, creator_item, image_item, copywriter_item]
         if item.get('status') == 'pending'
     ]
 
@@ -1915,7 +2090,7 @@ def _build_go_live_readiness_payload():
     acceptance_pending_external = []
     acceptance_pending = []
     acceptance_evidence = []
-    for key in ['hotword', 'creator_sync', 'image_provider']:
+    for key in ['hotword', 'creator_sync', 'image_provider', 'copywriter']:
         item = acceptance_map.get(key) or {}
         acceptance_evidence.append(f"{item.get('label', key)}：{item.get('status_label', '未检查')}")
         if item.get('status') == 'blocked':
@@ -2376,11 +2551,16 @@ def _serialize_topic(topic):
 
 
 def _serialize_corpus_entry(entry):
+    template_meta = _corpus_template_meta(getattr(entry, 'template_type_key', '') or '')
     return {
         'id': entry.id,
         'title': entry.title,
         'category': entry.category,
         'source': entry.source,
+        'source_title': getattr(entry, 'source_title', '') or '',
+        'reference_url': getattr(entry, 'reference_url', '') or '',
+        'template_type_key': getattr(entry, 'template_type_key', '') or '',
+        'template_type_label': template_meta.get('label') or '',
         'tags': entry.tags or '',
         'content': entry.content,
         'usage_count': entry.usage_count or 0,
@@ -2405,6 +2585,75 @@ CORPUS_TEMPLATE_TYPE_DEFINITIONS = [
 
 def _split_corpus_tags(raw_tags):
     return [item.strip() for item in re.split(r'[\n,，;；、|/]+', raw_tags or '') if item.strip()]
+
+
+def _split_reference_links(raw_links=''):
+    items = []
+    for part in re.split(r'[\n\r\t ,，;；]+', raw_links or ''):
+        link = (part or '').strip()
+        if not link or 'http' not in link:
+            continue
+        items.append(link)
+    deduped = []
+    seen = set()
+    for link in items:
+        if link in seen:
+            continue
+        deduped.append(link)
+        seen.add(link)
+    return deduped[:30]
+
+
+def _hotword_scope_preset_meta(scope_key=''):
+    key = (scope_key or '').strip()
+    for item in HOTWORD_SCOPE_PRESETS:
+        if item['key'] == key:
+            return dict(item)
+    return dict(HOTWORD_SCOPE_PRESETS[0])
+
+
+def _hotword_scope_presets():
+    return [dict(item) for item in HOTWORD_SCOPE_PRESETS]
+
+
+def _hotword_time_window_options():
+    return [dict(item) for item in HOTWORD_TIME_WINDOW_OPTIONS]
+
+
+def _resolve_hotword_scope_keywords(scope_key='', raw_keywords=''):
+    custom_keywords = split_hotword_keywords(raw_keywords or '')
+    if custom_keywords:
+        return custom_keywords[:30]
+    preset = _hotword_scope_preset_meta(scope_key)
+    return list(preset.get('keywords') or [])[:30]
+
+
+def _resolve_hotword_date_window(window_key='30d', custom_from='', custom_to=''):
+    key = (window_key or '30d').strip().lower() or '30d'
+    now = datetime.now()
+    date_from = (custom_from or '').strip()
+    date_to = (custom_to or '').strip()
+    if key == 'custom':
+        return {
+            'window_key': 'custom',
+            'date_from': date_from,
+            'date_to': date_to,
+            'label': '自定义' if (date_from or date_to) else '未设置',
+        }
+    days = 30
+    if key == '3d':
+        days = 3
+    elif key == '7d':
+        days = 7
+    date_to_value = now.strftime('%Y-%m-%d')
+    date_from_value = (now - timedelta(days=days - 1)).strftime('%Y-%m-%d')
+    label_map = {'3d': '近3天', '7d': '近7天', '30d': '近30天'}
+    return {
+        'window_key': key if key in {'3d', '7d', '30d'} else '30d',
+        'date_from': date_from_value,
+        'date_to': date_to_value,
+        'label': label_map.get(key, '近30天'),
+    }
 
 
 def _corpus_template_meta(template_key=''):
@@ -2433,6 +2682,328 @@ def _infer_corpus_template_type(title='', content=''):
     if numbered_lines >= 2 or any(token in text for token in ['清单', '建议', '做到', '记住', '重点']) or line_count >= 4:
         return _corpus_template_meta('checklist')
     return _corpus_template_meta('standard_explain')
+
+
+def _extract_reference_note_token(link=''):
+    if not link:
+        return ''
+    parsed = urlparse(link)
+    path = (parsed.path or '').rstrip('/')
+    if not path:
+        return ''
+    token = path.split('/')[-1].strip()
+    if len(token) < 6:
+        return ''
+    return token
+
+
+def _resolve_reference_source_by_link(link=''):
+    raw_link = (link or '').strip()
+    if not raw_link:
+        return {
+            'reference_url': '',
+            'source_title': '',
+            'source_text': '',
+        }
+
+    normalized_link = raw_link
+    if 'xiaohongshu.com' in raw_link:
+        note_token = _extract_reference_note_token(raw_link)
+        if note_token and re.fullmatch(r'[0-9a-zA-Z]{8,}', note_token):
+            normalized_link = canonicalize_xhs_post_url(raw_link) or raw_link
+
+    note = TrendNote.query.filter(
+        TrendNote.link.in_([raw_link, normalized_link])
+    ).order_by(TrendNote.created_at.desc(), TrendNote.id.desc()).first()
+    if note:
+        summary_parts = [note.summary or '', f'标题：{note.title or ""}', f'关键词：{note.keyword or ""}']
+        return {
+            'reference_url': note.link or normalized_link,
+            'source_title': note.title or '',
+            'source_text': '\n'.join([part for part in summary_parts if str(part).strip()]).strip(),
+        }
+
+    post = CreatorPost.query.filter(
+        CreatorPost.post_url.in_([raw_link, normalized_link])
+    ).order_by(CreatorPost.created_at.desc(), CreatorPost.id.desc()).first()
+    if post:
+        post_parts = [
+            post.title or '',
+            f'话题：{post.topic_title or ""}',
+            f'阅读：{post.views or 0} 点赞：{post.likes or 0} 收藏：{post.favorites or 0} 评论：{post.comments or 0}',
+        ]
+        return {
+            'reference_url': post.post_url or normalized_link,
+            'source_title': post.title or '',
+            'source_text': '\n'.join([part for part in post_parts if str(part).strip()]).strip(),
+        }
+
+    token = _extract_reference_note_token(normalized_link)
+    if token:
+        fuzzy_note = TrendNote.query.filter(TrendNote.link.contains(token)).order_by(
+            TrendNote.created_at.desc(),
+            TrendNote.id.desc(),
+        ).first()
+        if fuzzy_note:
+            return {
+                'reference_url': fuzzy_note.link or normalized_link,
+                'source_title': fuzzy_note.title or '',
+                'source_text': '\n'.join([part for part in [fuzzy_note.summary or '', fuzzy_note.title or ''] if str(part).strip()]).strip(),
+            }
+        fuzzy_post = CreatorPost.query.filter(CreatorPost.post_url.contains(token)).order_by(
+            CreatorPost.created_at.desc(),
+            CreatorPost.id.desc(),
+        ).first()
+        if fuzzy_post:
+            return {
+                'reference_url': fuzzy_post.post_url or normalized_link,
+                'source_title': fuzzy_post.title or '',
+                'source_text': fuzzy_post.title or '',
+            }
+
+    return {
+        'reference_url': normalized_link,
+        'source_title': '',
+        'source_text': '',
+    }
+
+
+def _infer_reference_style_signals(title='', content=''):
+    text = f"{title or ''}\n{content or ''}".strip()
+    title_logic = '结果/结论前置'
+    if any(token in title for token in ['？', '?', '怎么', '为什么', '要不要']):
+        title_logic = '提问答疑型'
+    elif any(token in title for token in ['别再', '误区', '不是', '搞错', '千万']):
+        title_logic = '误区纠偏型'
+    elif any(token in title for token in ['清单', '步骤', '记住', '攻略', '总结']):
+        title_logic = '清单收藏型'
+    elif any(token in title for token in ['我', '后来', '经历', '踩坑']):
+        title_logic = '经历共鸣型'
+
+    opening_logic = '开头直接给结论或问题'
+    if any(token in text for token in ['我当时', '那天', '后来', '一开始', '我以前']):
+        opening_logic = '先用真实经历/场景带入'
+    elif any(token in text for token in ['先说结论', '先看', '先记住', '第一步']):
+        opening_logic = '先给结论或步骤，再展开解释'
+
+    ending_logic = '结尾自然追问或提醒收藏'
+    if any(token in text for token in ['你们会怎么做', '你会怎么选', '你们一般']):
+        ending_logic = '结尾提问，拉互动'
+    elif any(token in text for token in ['建议收藏', '可以先存', '留着备用']):
+        ending_logic = '结尾偏收藏提醒'
+
+    return {
+        'title_logic': title_logic,
+        'opening_logic': opening_logic,
+        'ending_logic': ending_logic,
+    }
+
+
+def _build_reference_corpus_entry_payload(reference_url='', source_title='', source_text='', style_hint='', product_anchor='', manual_title='', category='爆款拆解', source='参考链接导入', tags=''):
+    clean_title = (manual_title or source_title or '参考链接模板').strip()
+    clean_text = (source_text or '').strip()
+    clean_hint = (style_hint or '').strip()
+    product_anchor = (product_anchor or '').strip()
+    template_meta = _infer_corpus_template_type(title=clean_title, content='\n'.join(filter(None, [clean_text, clean_hint])))
+    signals = _infer_reference_style_signals(clean_title, clean_text or clean_hint)
+    merged_tags = _split_corpus_tags(tags)
+    merged_tags.extend([
+        '参考链接导入',
+        template_meta.get('label') or '',
+        product_anchor,
+    ])
+    merged_tags = [item for item in dict.fromkeys([tag.strip() for tag in merged_tags if tag.strip()])][:12]
+
+    corpus_title = clean_title[:200]
+    if not manual_title:
+        corpus_title = f'参考模板｜{corpus_title}'[:200]
+
+    body_lines = [
+        f'参考链接：{reference_url or "未提供"}',
+        f'参考标题：{source_title or clean_title or "未命名"}',
+        f'模板类型：{template_meta.get("label") or "标准说明"}',
+        f'标题逻辑：{signals["title_logic"]}',
+        f'开头方式：{signals["opening_logic"]}',
+        f'结尾方式：{signals["ending_logic"]}',
+        '仿写要求：只学习结构、节奏、钩子、互动方式和版式感，不照抄原句、不复用原人物故事。',
+    ]
+    if product_anchor:
+        body_lines.append(f'改写锚点：生成时要改写成围绕“{product_anchor}”的产品/服务内容。')
+    else:
+        body_lines.append('改写锚点：生成时要改写成围绕我们的产品/服务内容。')
+    if clean_hint:
+        body_lines.append(f'运营备注：{clean_hint}')
+    if clean_text:
+        body_lines.append('参考文案/拆解：')
+        body_lines.append(clean_text[:3000])
+
+    return {
+        'title': corpus_title,
+        'category': (category or '爆款拆解').strip() or '爆款拆解',
+        'source': (source or '参考链接导入').strip() or '参考链接导入',
+        'source_title': (source_title or clean_title or '').strip()[:300],
+        'reference_url': (reference_url or '').strip()[:500],
+        'template_type_key': (template_meta.get('key') or '').strip()[:50],
+        'tags': ','.join(merged_tags)[:300],
+        'content': '\n'.join([line for line in body_lines if str(line).strip()]).strip(),
+        'status': 'active',
+    }
+
+
+def _build_trend_note_corpus_payload(note, *, category='爆款拆解', source='热点爆款转模板'):
+    template_meta = _infer_corpus_template_type(
+        title=note.title or '',
+        content='\n'.join(filter(None, [note.summary or '', note.keyword or '']))
+    )
+    tags = []
+    for item in [note.keyword or '', note.source_platform or '', note.source_channel or '', template_meta.get('label') or '']:
+        if str(item or '').strip():
+            tags.append(str(item).strip())
+    tags = list(dict.fromkeys(tags))
+    content_lines = [
+        f'参考标题：{note.title or "未命名"}',
+        f'参考链接：{note.link or "无"}',
+        f'来源平台：{note.source_platform or "小红书"}',
+        f'模板类型：{template_meta.get("label") or "标准说明"}',
+        f'互动表现：阅读 {note.views or 0} / 点赞 {note.likes or 0} / 收藏 {note.favorites or 0} / 评论 {note.comments or 0}',
+        '仿写要求：只学习标题逻辑、结构节奏、开头钩子和互动方式，不照抄原句，不复制原作者经历。',
+        '适用方向：优先改写成肝健康IP内容，可按中医调理、脂肪肝管理、检查解读、情绪身心等方向二次生成。',
+    ]
+    if (note.summary or '').strip():
+        content_lines.append(f'摘要拆解：{(note.summary or "").strip()}')
+    if (note.keyword or '').strip():
+        content_lines.append(f'关键词：{(note.keyword or "").strip()}')
+    return {
+        'title': f'热点模板｜{(note.title or "未命名模板")[:40]}'[:200],
+        'category': category,
+        'source': source,
+        'source_title': (note.title or '').strip()[:300],
+        'reference_url': (note.link or '').strip()[:500],
+        'template_type_key': (template_meta.get('key') or '').strip()[:50],
+        'tags': ','.join(tags)[:300],
+        'content': '\n'.join([row for row in content_lines if str(row).strip()]).strip(),
+        'status': 'active',
+    }
+
+
+def _upsert_trend_note_corpus_entries(notes, *, category='爆款拆解', source='热点爆款转模板'):
+    created = []
+    updated = []
+    for note in notes:
+        payload = _build_trend_note_corpus_payload(note, category=category, source=source)
+        existing = None
+        if payload['reference_url']:
+            existing = CorpusEntry.query.filter_by(reference_url=payload['reference_url']).first()
+        if not existing:
+            existing = CorpusEntry.query.filter_by(source=source, source_title=payload['source_title']).first()
+        if existing:
+            existing.title = payload['title']
+            existing.category = payload['category']
+            existing.source = payload['source']
+            existing.source_title = payload['source_title']
+            existing.reference_url = payload['reference_url']
+            existing.template_type_key = payload['template_type_key']
+            existing.tags = payload['tags']
+            existing.content = payload['content']
+            existing.status = 'active'
+            updated.append(existing)
+            continue
+        entry = CorpusEntry(
+            title=payload['title'],
+            category=payload['category'],
+            source=payload['source'],
+            source_title=payload['source_title'],
+            reference_url=payload['reference_url'],
+            template_type_key=payload['template_type_key'],
+            tags=payload['tags'],
+            content=payload['content'],
+            status='active',
+        )
+        db.session.add(entry)
+        db.session.flush()
+        created.append(entry)
+    return {
+        'created': created,
+        'updated': updated,
+    }
+
+
+def _upsert_reference_corpus_entries(reference_links, *, reference_note_text='', style_hint='', product_anchor='', manual_title='', category='爆款拆解', source='参考链接导入', tags=''):
+    created = []
+    updated = []
+    for link in reference_links:
+        source_bundle = _resolve_reference_source_by_link(link)
+        entry_payload = _build_reference_corpus_entry_payload(
+            reference_url=source_bundle.get('reference_url') or link,
+            source_title=source_bundle.get('source_title') or '',
+            source_text=reference_note_text or source_bundle.get('source_text') or '',
+            style_hint=style_hint,
+            product_anchor=product_anchor,
+            manual_title=manual_title,
+            category=category,
+            source=source,
+            tags=tags,
+        )
+        existing = CorpusEntry.query.filter_by(reference_url=entry_payload['reference_url']).first()
+        if existing:
+            existing.title = entry_payload['title']
+            existing.category = entry_payload['category']
+            existing.source = entry_payload['source']
+            existing.source_title = entry_payload['source_title']
+            existing.template_type_key = entry_payload['template_type_key']
+            existing.tags = entry_payload['tags']
+            existing.content = entry_payload['content']
+            existing.status = 'active'
+            updated.append(existing)
+            continue
+
+        entry = CorpusEntry(
+            title=entry_payload['title'],
+            category=entry_payload['category'],
+            source=entry_payload['source'],
+            source_title=entry_payload['source_title'],
+            reference_url=entry_payload['reference_url'],
+            template_type_key=entry_payload['template_type_key'],
+            tags=entry_payload['tags'],
+            content=entry_payload['content'],
+            status='active',
+        )
+        db.session.add(entry)
+        db.session.flush()
+        created.append(entry)
+    return {
+        'created': created,
+        'updated': updated,
+    }
+
+
+def _build_topic_reference_import_payload(topic):
+    reference_links = _split_reference_links(topic.reference_link or '')
+    topic_keywords = ','.join(_split_keywords(topic.keywords or ''))
+    tags = ','.join(filter(None, [
+        topic_keywords,
+        topic.topic_name or '',
+        '话题参考链接',
+    ]))
+    reference_note_text = '\n'.join(filter(None, [
+        (topic.writing_example or '').strip(),
+        (topic.reference_content or '').strip(),
+    ])).strip()
+    style_hint = '\n'.join(filter(None, [
+        f'话题名称：{topic.topic_name or ""}',
+        f'撰写方向：{topic.direction or ""}',
+    ])).strip()
+    product_anchor = _detect_soft_insertion(' '.join(filter(None, [topic.topic_name or '', topic.keywords or '', topic.direction or ''])))
+    return {
+        'reference_links': reference_links,
+        'reference_note_text': reference_note_text,
+        'style_hint': style_hint,
+        'product_anchor': product_anchor,
+        'manual_title': '',
+        'category': '爆款拆解',
+        'source': '话题参考链接导入',
+        'tags': tags,
+    }
 
 
 def _build_corpus_insights_payload(pool_status='', category=''):
@@ -2465,7 +3036,7 @@ def _build_corpus_insights_payload(pool_status='', category=''):
         category_key = (entry.category or '未分类').strip() or '未分类'
         source_key = (entry.source or '未标记来源').strip() or '未标记来源'
         pool_key = (entry.pool_status or 'reserve').strip() or 'reserve'
-        template_meta = _infer_corpus_template_type(title=title, content=content)
+        template_meta = _corpus_template_meta(getattr(entry, 'template_type_key', '') or '') if (getattr(entry, 'template_type_key', '') or '').strip() else _infer_corpus_template_type(title=title, content=content)
         template_key = template_meta['key']
 
         category_counter[category_key] += 1
@@ -2574,10 +3145,98 @@ def _build_corpus_insights_payload(pool_status='', category=''):
     }
 
 
+def _image_template_family_meta_map():
+    return {
+        'medical_science': {
+            'label': '报告解读卡',
+            'description': '适合体检单、指标说明、检查报告和医学解释类内容。',
+        },
+        'knowledge_card': {
+            'label': '课堂笔记卡',
+            'description': '适合知识拆解、误区纠偏、重点提炼和结构化讲解。',
+        },
+        'poster': {
+            'label': '大字封面',
+            'description': '适合冲点击、先抓眼球，再把正文和内页接住。',
+        },
+        'checklist': {
+            'label': '清单卡',
+            'description': '适合步骤、避坑、对照表、可收藏执行清单。',
+        },
+        'memo': {
+            'label': '备忘录/陪伴卡',
+            'description': '适合第一人称经历、陪伴型表达、情绪共鸣和复盘。',
+        },
+        'custom': {
+            'label': '自定义模板',
+            'description': '适合你自己指定画面方向，再由系统选近似模板落图。',
+        },
+    }
+
+
+def _default_lane_to_image_skill_key(lane_key=''):
+    lane_to_image_skill = {
+        'report_interpretation': 'report_decode',
+        'liver_comorbidity': 'report_decode',
+        'fatty_liver_management': 'save_worthy_cards',
+        'diet_nutrition': 'save_worthy_cards',
+        'exercise_fitness': 'save_worthy_cards',
+        'tcm_conditioning': 'story_atmosphere',
+        'emotion_mindbody': 'story_atmosphere',
+        'family_care': 'story_atmosphere',
+        'women_health': 'story_atmosphere',
+        'myth_busting': 'high_click_cover',
+        'liver_care_habits': 'high_click_cover',
+    }
+    return lane_to_image_skill.get((lane_key or '').strip(), 'high_click_cover')
+
+
+def _build_image_template_agent_payload(image_skill_key='high_click_cover'):
+    preset_map = get_image_skill_presets() or {}
+    preset = preset_map.get((image_skill_key or '').strip()) or preset_map.get('high_click_cover') or {}
+    style_meta_map = {
+        (item.get('key') or ''): item
+        for item in (_asset_style_type_options() or [])
+        if isinstance(item, dict)
+    }
+    family_key = preset.get('family_key') or ''
+    cover_style_key = preset.get('cover_style_key') or ''
+    inner_style_key = preset.get('inner_style_key') or ''
+    family_meta = _image_template_family_meta_map().get(family_key, {})
+    return {
+        'image_skill': image_skill_key,
+        'image_skill_label': preset.get('label') or IMAGE_SKILL_OPTIONS.get(image_skill_key) or image_skill_key,
+        'template_agent_label': family_meta.get('label') or '',
+        'template_agent_description': family_meta.get('description') or '',
+        'cover_style_type': cover_style_key,
+        'cover_style_label': (style_meta_map.get(cover_style_key) or {}).get('label') or cover_style_key,
+        'inner_style_type': inner_style_key,
+        'inner_style_label': (style_meta_map.get(inner_style_key) or {}).get('label') or inner_style_key,
+    }
+
+
+def _recommend_image_template_payload(text='', lane_key=''):
+    resolved_lane = (lane_key or '').strip() or _infer_trend_lane_key(text)
+    return _build_image_template_agent_payload(_default_lane_to_image_skill_key(resolved_lane))
+
+
 def _serialize_trend_note(note):
     payload = _load_json_value(note.raw_payload, {})
     metric_sources = payload.get('metric_sources') if isinstance(payload, dict) else {}
     exposures = _safe_int(payload.get('exposures')) if isinstance(payload, dict) else 0
+    linked_entry = None
+    if note.link:
+        linked_entry = CorpusEntry.query.filter_by(reference_url=note.link).order_by(CorpusEntry.updated_at.desc(), CorpusEntry.id.desc()).first()
+    if not linked_entry:
+        linked_entry = CorpusEntry.query.filter_by(
+            source='热点爆款转模板',
+            source_title=note.title or '',
+        ).order_by(CorpusEntry.updated_at.desc(), CorpusEntry.id.desc()).first()
+    recommendation = _recommended_trend_route(note)
+    image_template_recommendation = _recommend_image_template_payload(
+        text=' '.join([note.keyword or '', note.title or '', note.summary or '']),
+        lane_key=recommendation['lane_key'],
+    )
     return {
         'id': note.id,
         'source_platform': note.source_platform,
@@ -2604,8 +3263,340 @@ def _serialize_trend_note(note):
         'metric_source_summary_text': _metric_source_summary_text(metric_sources, preferred_keys=['views', 'exposures', 'hot_value', 'likes', 'favorites', 'comments']),
         'pool_status': note.pool_status or 'reserve',
         'pool_status_label': _pool_status_label(note.pool_status or 'reserve'),
+        'linked_corpus_entry_id': linked_entry.id if linked_entry else None,
+        'has_corpus_template': bool(linked_entry),
+        'planning_score': recommendation['score'],
+        'planning_confidence': recommendation['confidence'],
+        'recommended_target': recommendation['target'],
+        'recommended_target_label': recommendation['target_label'],
+        'recommended_reason': recommendation['reason'],
+        'lane_key': recommendation['lane_key'],
+        'lane_label': recommendation['lane_label'],
+        'persona_key': recommendation['persona_key'],
+        'persona_label': recommendation['persona_label'],
+        **image_template_recommendation,
         'created_at': note.created_at.strftime('%Y-%m-%d %H:%M:%S') if note.created_at else '',
     }
+
+
+def _serialize_hot_topic_entry(item):
+    return {
+        'id': item.id,
+        'reference_note_id': item.reference_note_id,
+        'title': item.title or '',
+        'keyword': item.keyword or '',
+        'source_platform': item.source_platform or '',
+        'source_channel': item.source_channel or '',
+        'reference_url': item.reference_url or '',
+        'summary': item.summary or '',
+        'hot_score': item.hot_score or 0,
+        'lane_key': item.lane_key or '',
+        'persona_key': item.persona_key or '',
+        'audience_hint': item.audience_hint or '',
+        'integration_hint': item.integration_hint or '',
+        'usage_tip': item.usage_tip or '',
+        'status': item.status or 'active',
+        'created_at': item.created_at.strftime('%Y-%m-%d %H:%M:%S') if item.created_at else '',
+        'updated_at': item.updated_at.strftime('%Y-%m-%d %H:%M:%S') if item.updated_at else '',
+    }
+
+
+def _infer_trend_lane_key(text=''):
+    joined = (text or '').strip()
+    if any(token in joined for token in ['中医', '肝气郁结', '肝郁', '肝胆湿热', '疏肝理气', '养肝']):
+        return 'tcm_conditioning'
+    if any(token in joined for token in ['情绪', '焦虑', '压力', '失眠', '熬夜', '睡眠']):
+        return 'emotion_mindbody'
+    if any(token in joined for token in ['脂肪肝', '减脂', '体重', '肥胖', '减肥', '饮食', '运动']):
+        return 'fatty_liver_management'
+    if any(token in joined for token in ['糖尿病', '冠心病', '高血糖', '共病']):
+        return 'liver_comorbidity'
+    if any(token in joined for token in ['体检', '检查', '指标', '转氨酶', 'FibroScan', '福波看', '肝弹', 'B超', '复查']):
+        return 'report_interpretation'
+    if any(token in joined for token in ['误区', '别再', '不是这样', '搞错', '避坑', '反常识']):
+        return 'myth_busting'
+    if any(token in joined for token in ['父母', '家人', '家属', '陪诊', '照护', '老人']):
+        return 'family_care'
+    if any(token in joined for token in ['女性', '经期', '更年期', '姨妈']):
+        return 'women_health'
+    if any(token in joined for token in ['护肝', '保肝', '作息', '应酬', '饮酒', '习惯']):
+        return 'liver_care_habits'
+    return 'report_interpretation'
+
+
+def _infer_trend_persona_key(text=''):
+    joined = (text or '').strip()
+    if any(token in joined for token in ['父母', '家人', '家属', '陪诊', '照护', '老人']):
+        return 'family'
+    if any(token in joined for token in ['中医', '肝气郁结', '肝郁', '疏肝理气', '肝胆湿热', '养肝']):
+        return 'tcm'
+    if any(token in joined for token in ['饮食', '营养', '减脂餐', '早餐', '食谱', '控糖', '控油']):
+        return 'nutrition'
+    if any(token in joined for token in ['运动', '健身', '跑步', '力量', '减脂训练']):
+        return 'fitness'
+    if any(token in joined for token in ['女性', '经期', '更年期', '姨妈']):
+        return 'women'
+    if any(token in joined for token in ['上班', '职场', '久坐', '加班', '应酬']):
+        return 'office'
+    if any(token in joined for token in ['体检', '报告', '指标', 'FibroScan', '福波看', '肝弹', '科普', '问答']):
+        return 'medical'
+    return 'patient'
+
+
+def _trend_lane_label(lane_key=''):
+    label_map = {
+        'report_interpretation': '检查解读线',
+        'fatty_liver_management': '脂肪肝管理线',
+        'liver_care_habits': '保肝护肝习惯线',
+        'tcm_conditioning': '中医调理线',
+        'emotion_mindbody': '情绪与肝线',
+        'family_care': '家庭照护线',
+        'women_health': '女性养肝线',
+        'myth_busting': '误区纠偏线',
+        'liver_comorbidity': '肝病+共病线',
+    }
+    return label_map.get((lane_key or '').strip(), lane_key or '肝健康方向')
+
+
+def _trend_persona_label(persona_key=''):
+    label_map = {
+        'patient': '患者本人',
+        'family': '家属/陪诊者',
+        'medical': '医学科普型',
+        'tcm': '中医调理型',
+        'nutrition': '健管/营养型',
+        'fitness': '运动减脂型',
+        'women': '女性健康型',
+        'office': '细分人群博主',
+    }
+    return label_map.get((persona_key or '').strip(), persona_key or '肝健康创作者')
+
+
+def _trend_route_target_label(target=''):
+    label_map = {
+        'current_topic': '发当前话题广场',
+        'next_activity': '放下一期储备',
+        'ip_column': '放肝健康IP栏目',
+        'hot_topic': '放热搜话题',
+    }
+    return label_map.get((target or '').strip(), target or '待确认')
+
+
+def _trend_planning_score(note):
+    base = note.hot_score or _trend_score(note)
+    keyword_text = ' '.join([note.keyword or '', note.title or '', note.summary or ''])
+    score = int(base)
+    if any(token in keyword_text for token in ['怎么', '如何', '怎么办', '能不能', '吃什么', '做什么', '要不要']):
+        score += 40
+    if any(token in keyword_text for token in ['体检', '转氨酶', '肝弹', 'FibroScan', '脂肪肝']):
+        score += 30
+    if any(token in keyword_text for token in ['中医', '肝气郁结', '肝郁', '情绪', '失眠']):
+        score += 20
+    return score
+
+
+def _recommended_trend_route(note):
+    text = ' '.join([note.keyword or '', note.title or '', note.summary or '']).strip()
+    lane_key = _infer_trend_lane_key(text)
+    score = _trend_planning_score(note)
+    reasons = []
+    target = 'next_activity'
+
+    if (note.source_template_key or '') == 'xhs_hot_queries':
+        target = 'hot_topic'
+        reasons.append('当前是平台热搜/相关搜索词，更适合进热搜话题页')
+    elif lane_key in {'tcm_conditioning', 'emotion_mindbody', 'family_care', 'women_health'}:
+        target = 'ip_column'
+        reasons.append('这类内容更适合沉淀到肝健康IP栏目，做长期人设和栏目内容')
+    elif any(token in text for token in ['怎么', '如何', '怎么办', '吃什么', '做什么', '运动', '减肥', '体检', '转氨酶', '肝弹']):
+        target = 'next_activity'
+        reasons.append('这是高搜索问题型内容，更适合先作为候选话题进入下一期储备')
+    if score >= 220 and lane_key in {'report_interpretation', 'fatty_liver_management', 'liver_care_habits'}:
+        target = 'current_topic'
+        reasons.append('热度和执行价值都较高，适合直接进入当前话题广场')
+    if not reasons:
+        reasons.append('建议先进入下一期储备，由你确认后再决定是否发布')
+
+    confidence = 'low'
+    if score >= 260:
+        confidence = 'high'
+    elif score >= 180:
+        confidence = 'medium'
+
+    return {
+        'target': target,
+        'target_label': _trend_route_target_label(target),
+        'score': score,
+        'confidence': confidence,
+        'reason': '；'.join(reasons),
+        'lane_key': lane_key,
+        'lane_label': _trend_lane_label(lane_key),
+        'persona_key': _infer_trend_persona_key(text),
+        'persona_label': _trend_persona_label(_infer_trend_persona_key(text)),
+    }
+
+
+def _resolve_trend_route_target(note, target=''):
+    current_target = (target or '').strip()
+    if current_target in {'', 'recommended', 'auto'}:
+        return _recommended_trend_route(note).get('target') or 'next_activity'
+    return current_target
+
+
+def _build_trend_topic_payload(note, activity_id, quota=None):
+    lane_key = _infer_trend_lane_key(' '.join([note.keyword or '', note.title or '', note.summary or '']))
+    persona_key = _infer_trend_persona_key(' '.join([note.keyword or '', note.title or '', note.summary or '']))
+    lane_label = _trend_lane_label(lane_key)
+    persona_label = _trend_persona_label(persona_key)
+    return Topic(
+        activity_id=activity_id,
+        topic_name=(note.title or note.keyword or '热点话题')[:200],
+        keywords=(note.keyword or '').strip()[:500],
+        direction='\n'.join(filter(None, [
+            f'来源：{note.source_platform or "小红书"} 热点/爆款笔记',
+            f'内容方向：{lane_label}',
+            f'推荐人设：{persona_label}',
+            f'建议先围绕用户高搜索问题切入，再自然带出肝健康管理建议。',
+            f'摘要：{note.summary or ""}',
+        ])).strip(),
+        reference_content=note.summary or '',
+        reference_link=note.link or '',
+        writing_example=f'参考当前爆款问题的标题逻辑和互动结构，围绕「{note.keyword or note.title or "肝健康"}」重新改写。',
+        quota=_normalize_quota(quota),
+        group_num='自动化热点',
+        pool_status='formal',
+        source_type='trend_note',
+        source_ref_id=note.id,
+        published_at=datetime.now(),
+    )
+
+
+def _build_trend_topic_idea_payload(note, activity_id=None):
+    lane_key = _infer_trend_lane_key(' '.join([note.keyword or '', note.title or '', note.summary or '']))
+    persona_key = _infer_trend_persona_key(' '.join([note.keyword or '', note.title or '', note.summary or '']))
+    lane_label = _trend_lane_label(lane_key)
+    persona_label = _trend_persona_label(persona_key)
+    return TopicIdea(
+        activity_id=activity_id,
+        topic_title=(note.title or note.keyword or '热点候选话题')[:200],
+        keywords=(note.keyword or '').strip()[:500],
+        angle=f'围绕「{note.keyword or note.title or "肝健康"}」这个高搜索问题，按 {lane_label} 切入，内容语气更适合 {persona_label}。',
+        content_type='轻科普问答型',
+        persona=persona_label[:50],
+        soft_insertion=_detect_soft_insertion(' '.join([note.keyword or '', note.title or '', note.summary or ''])),
+        hot_value=note.hot_score or _trend_score(note),
+        source_note_ids=str(note.id),
+        source_links=note.link or '',
+        copy_prompt=f'请参考这条爆款问题的标题逻辑和互动方式，围绕「{note.keyword or note.title or "肝健康"}」输出一篇可发小红书的肝健康内容草稿。',
+        cover_title=_truncate_text(note.title or note.keyword or '热点候选', 18),
+        asset_brief=f'优先做与「{lane_label}」匹配的封面和内页，先抓问题，再给用户可执行答案。',
+        compliance_note=COMPLIANCE_BASELINE,
+        quota=_default_topic_quota(),
+        status='pending_review',
+    )
+
+
+def _build_trend_ip_corpus_payload(note):
+    payload = _build_trend_note_corpus_payload(note, category='医学科普', source='热点转IP栏目')
+    payload['content'] = (
+        f"{payload['content']}\n"
+        "归宿：肝健康IP栏目。\n"
+        "使用方式：适合做长期栏目内容、知识沉淀和IP表达模板，不直接当任务话题。"
+    ).strip()
+    return payload
+
+
+def _build_hot_topic_payload(note):
+    lane_key = _infer_trend_lane_key(' '.join([note.keyword or '', note.title or '', note.summary or '']))
+    persona_key = _infer_trend_persona_key(' '.join([note.keyword or '', note.title or '', note.summary or '']))
+    lane_label = _trend_lane_label(lane_key)
+    persona_label = _trend_persona_label(persona_key)
+    keyword = (note.keyword or note.title or '').strip()
+    return {
+        'reference_note_id': note.id,
+        'title': (note.title or keyword or '热点话题')[:300],
+        'keyword': keyword[:200],
+        'source_platform': (note.source_platform or '小红书')[:50],
+        'source_channel': (note.source_channel or '热点转热搜话题')[:50],
+        'reference_url': (note.link or '').strip()[:500],
+        'summary': (note.summary or '').strip(),
+        'hot_score': note.hot_score or _trend_score(note),
+        'lane_key': lane_key[:50],
+        'persona_key': persona_key[:50],
+        'audience_hint': f'更适合 {persona_label} 来写，方向偏 {lane_label}。',
+        'integration_hint': f'这类热点适合先讲用户最关心的问题，再从 {lane_label} 切入，最后自然带出肝健康管理思路。',
+        'usage_tip': '建议先做成候选标题和切入角度，再决定是否进入当前话题广场或下一期储备。',
+        'status': 'active',
+    }
+
+
+def _route_trend_note_to_target(note, target='corpus_template', activity_id=0, actor='system'):
+    current_target = _resolve_trend_route_target(note, target or 'corpus_template')
+    if current_target == 'current_topic':
+        next_activity_id = max(_safe_int(activity_id, 0), 0)
+        if next_activity_id <= 0:
+            raise ValueError('请先选择目标活动，用于发布到当前话题广场')
+        topic = _build_trend_topic_payload(note, next_activity_id)
+        db.session.add(topic)
+        db.session.flush()
+        _log_operation('route_trend', 'topic', target_id=topic.id, message='热点内容发布到当前话题广场', detail={
+            'trend_note_id': note.id,
+            'topic_name': topic.topic_name,
+            'activity_id': next_activity_id,
+            'actor': actor,
+        })
+        return {'target': current_target, 'item': _serialize_topic(topic)}
+    if current_target == 'next_activity':
+        next_activity_id = max(_safe_int(activity_id, 0), 0)
+        idea = _build_trend_topic_idea_payload(note, activity_id=next_activity_id or None)
+        db.session.add(idea)
+        db.session.flush()
+        _log_operation('route_trend', 'topic_idea', target_id=idea.id, message='热点内容放入下一期候选池', detail={
+            'trend_note_id': note.id,
+            'topic_title': idea.topic_title,
+            'activity_id': next_activity_id,
+            'actor': actor,
+        })
+        return {'target': current_target, 'item': _serialize_topic_idea(idea)}
+    if current_target == 'ip_column':
+        payload = _build_trend_ip_corpus_payload(note)
+        result = _upsert_reference_corpus_entries(
+            [payload['reference_url'] or f'trend-note:{note.id}'],
+            reference_note_text=payload['content'],
+            style_hint='归宿：肝健康IP栏目',
+            product_anchor='',
+            manual_title=payload['title'],
+            category=payload['category'],
+            source=payload['source'],
+            tags=payload['tags'],
+        )
+        created = result['created']
+        updated = result['updated']
+        item = (created + updated)[0] if (created + updated) else None
+        _log_operation('route_trend', 'corpus_entry', target_id=item.id if item else None, message='热点内容放入肝健康IP栏目', detail={
+            'trend_note_id': note.id,
+            'title': payload['title'],
+            'actor': actor,
+        })
+        return {'target': current_target, 'item': _serialize_corpus_entry(item) if item else {}}
+    if current_target == 'hot_topic':
+        payload = _build_hot_topic_payload(note)
+        entry = HotTopicEntry.query.filter_by(reference_note_id=note.id).first()
+        if not entry:
+            entry = HotTopicEntry(reference_note_id=note.id)
+            db.session.add(entry)
+        for key, value in payload.items():
+            if key == 'reference_note_id':
+                continue
+            setattr(entry, key, value)
+        db.session.flush()
+        _log_operation('route_trend', 'hot_topic_entry', target_id=entry.id, message='热点内容放入热搜话题页', detail={
+            'trend_note_id': note.id,
+            'title': entry.title,
+            'actor': actor,
+        })
+        return {'target': current_target, 'item': _serialize_hot_topic_entry(entry)}
+    raise ValueError(f'不支持的目标去向：{current_target}')
 
 
 def _build_activity_snapshot_payload(activity):
@@ -2775,6 +3766,73 @@ def _is_sqlite_backend():
         return app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite')
 
 
+def _copywriter_env_ready():
+    return bool(
+        (os.environ.get('COPYWRITER_API_KEY') or '').strip()
+        or (os.environ.get('OPENAI_API_KEY') or '').strip()
+        or (os.environ.get('DEEPSEEK_API_KEY') or '').strip()
+    )
+
+
+def _resolve_copywriter_capabilities(payload=None):
+    runtime = _copywriter_runtime_config(payload=payload)
+    return {
+        'copywriter_configured': bool(runtime.get('configured')),
+        'copywriter_provider': runtime.get('provider') or 'local_fallback',
+        'copywriter_api_url': runtime.get('api_url') or '',
+        'copywriter_model': runtime.get('model') or '',
+        'copywriter_label': runtime.get('label') or '本地兜底生成',
+        'api_key_configured': bool(runtime.get('api_key')),
+        'server_side_only': True,
+        'end_user_needs_vpn': False,
+        'fallback_mode': not bool(runtime.get('configured')),
+    }
+
+
+def _copywriter_healthcheck(payload=None, timeout_seconds=20):
+    runtime = _copywriter_runtime_config(payload=payload)
+    request_preview = {
+        'api_url': runtime.get('api_url') or '',
+        'model': runtime.get('model') or '',
+        'provider': runtime.get('provider') or 'local_fallback',
+        'prompt': (payload or {}).get('prompt_text') or '请用更像真人的小红书口语风，写一句关于肝健康的开头。',
+    }
+    if not runtime.get('configured'):
+        return {
+            'enabled': False,
+            'ok': False,
+            'message': '当前未配置可用的文案模型，系统会回退到本地兜底。',
+            'provider': runtime.get('provider') or 'local_fallback',
+            'request_preview': request_preview,
+            'response_preview': None,
+        }
+    try:
+        result = _call_copywriter(
+            [{'role': 'user', 'content': request_preview['prompt']}],
+            temperature=0.7,
+            top_p=0.9,
+            timeout=max(min(timeout_seconds, 60), 5),
+            runtime_override=runtime,
+        )
+        return {
+            'enabled': True,
+            'ok': bool(result.get('text')),
+            'message': '文案模型接口可用' if result.get('text') else '文案模型返回为空',
+            'provider': runtime.get('provider') or '',
+            'request_preview': request_preview,
+            'response_preview': {'text': (result.get('text') or '')[:800]},
+        }
+    except Exception as exc:
+        return {
+            'enabled': True,
+            'ok': False,
+            'message': f'文案模型联调失败：{exc}',
+            'provider': runtime.get('provider') or '',
+            'request_preview': request_preview,
+            'response_preview': None,
+        }
+
+
 KNOWN_DIRECT_METRIC_SOURCE_SUFFIXES = {
     'view_count',
     'impression_cnt',
@@ -2835,6 +3893,18 @@ def _metric_source_summary_text(metric_sources, preferred_keys=None):
 
 
 def _serialize_topic_idea(idea):
+    source_note_id_list = _split_keywords(idea.source_note_ids or '')
+    source_links_list = _split_keywords(idea.source_links or '')
+    image_template_recommendation = _recommend_image_template_payload(
+        text=' '.join([
+            idea.topic_title or '',
+            idea.keywords or '',
+            idea.angle or '',
+            idea.content_type or '',
+            idea.persona or '',
+            idea.asset_brief or '',
+        ]),
+    )
     return {
         'id': idea.id,
         'activity_id': idea.activity_id,
@@ -2846,7 +3916,11 @@ def _serialize_topic_idea(idea):
         'soft_insertion': idea.soft_insertion or '',
         'hot_value': idea.hot_value or 0,
         'source_note_ids': idea.source_note_ids or '',
+        'source_note_id_list': source_note_id_list,
+        'source_note_count': len(source_note_id_list),
         'source_links': idea.source_links or '',
+        'source_links_list': source_links_list,
+        'source_link_count': len(source_links_list),
         'copy_prompt': idea.copy_prompt or '',
         'cover_title': idea.cover_title or '',
         'asset_brief': idea.asset_brief or '',
@@ -2858,6 +3932,7 @@ def _serialize_topic_idea(idea):
         'reviewed_at': idea.reviewed_at.strftime('%Y-%m-%d %H:%M:%S') if idea.reviewed_at else '',
         'published_at': idea.published_at.strftime('%Y-%m-%d %H:%M:%S') if idea.published_at else '',
         'published_topic_id': idea.published_topic_id,
+        **image_template_recommendation,
         'created_at': idea.created_at.strftime('%Y-%m-%d %H:%M:%S') if idea.created_at else '',
     }
 
@@ -3047,7 +4122,7 @@ def _build_readiness_checks():
         {'key': 'SECRET_KEY', 'ok': bool((os.environ.get('SECRET_KEY') or '').strip()), 'message': '会话密钥'},
         {'key': 'ADMIN_USERNAME', 'ok': bool((os.environ.get('ADMIN_USERNAME') or '').strip()), 'message': '管理员用户名'},
         {'key': 'ADMIN_PASSWORD', 'ok': bool((os.environ.get('ADMIN_PASSWORD') or '').strip()), 'message': '管理员密码'},
-        {'key': 'DEEPSEEK_API_KEY', 'ok': bool((os.environ.get('DEEPSEEK_API_KEY') or '').strip()), 'message': '文案模型 Key'},
+        {'key': 'COPYWRITER_MODEL', 'ok': _copywriter_env_ready(), 'message': '文案模型 Key（支持 COPYWRITER / OPENAI / DEEPSEEK）'},
         {'key': 'INLINE_AUTOMATION_JOBS', 'ok': True, 'message': f'自动化执行模式：{"inline 本地模式" if inline_jobs else "celery 异步模式"}'},
     ]
 
@@ -3349,6 +4424,11 @@ def _build_project_status_payload():
             'title': '账号看板样本不足',
             'detail': '账号同步链路和看板已经在，但还缺真实账号/笔记样本支撑分析。',
         })
+    if not _resolve_copywriter_capabilities().get('copywriter_configured'):
+        blockers.append({
+            'title': '文案模型仍在本地兜底模式',
+            'detail': '当前文案生成虽然可用，但还没有稳定接入真实文案模型，容易退回本地 fallback。',
+        })
     if not image_real_provider_ready:
         blockers.append({
             'title': '图片中心仍在 fallback 模式',
@@ -3377,6 +4457,13 @@ def _build_project_status_payload():
             'detail': '把候选话题从“有代码”推进到“有真实记录、可复盘”的状态。',
             'url': '/automation_center',
         })
+    if not _resolve_copywriter_capabilities().get('copywriter_configured'):
+        recommended_actions.append({
+            'priority': 'P0',
+            'title': '接入真实文案模型并完成联调',
+            'detail': '当前文案链路已经支持 DeepSeek / OpenAI 兼容模型，但还需要真正接通后端模型调用，避免继续回退本地兜底。',
+            'url': '/automation_center',
+        })
     if not image_real_provider_ready:
         recommended_actions.append({
             'priority': 'P1',
@@ -3396,6 +4483,8 @@ def _build_project_status_payload():
     external_dependencies = []
     if counts['trend_notes'] == 0:
         external_dependencies.append('真实热点 API')
+    if not _resolve_copywriter_capabilities().get('copywriter_configured'):
+        external_dependencies.append('真实文案模型 API')
     if not image_real_provider_ready:
         external_dependencies.append('真实图片 API')
     if counts['creator_accounts'] == 0 and counts['creator_posts'] == 0:
@@ -4005,6 +5094,8 @@ def _deployment_config_value(key, runtime_config=None):
         'HOTWORD_AUTO_GENERATE_TOPIC_COUNT': 'hotword_auto_generate_topic_count',
         'HOTWORD_AUTO_GENERATE_TOPIC_ACTIVITY_ID': 'hotword_auto_generate_topic_activity_id',
         'HOTWORD_AUTO_GENERATE_TOPIC_QUOTA': 'hotword_auto_generate_topic_quota',
+        'HOTWORD_AUTO_CONVERT_CORPUS_TEMPLATES': 'hotword_auto_convert_corpus_templates',
+        'HOTWORD_AUTO_CONVERT_CORPUS_LIMIT': 'hotword_auto_convert_corpus_limit',
         'CREATOR_SYNC_SOURCE_CHANNEL': 'creator_sync_source_channel',
         'CREATOR_SYNC_FETCH_MODE': 'creator_sync_fetch_mode',
         'CREATOR_SYNC_API_URL': 'creator_sync_api_url',
@@ -4055,11 +5146,27 @@ def _build_deployment_helper_payload():
             'example': '<strong password>',
             'placeholder': '<required password>',
         },
-        'DEEPSEEK_API_KEY': {
-            'label': 'DeepSeek API Key',
-            'purpose': '用于候选话题生成、文案生成等 AI 能力。',
-            'example': '<deepseek api key>',
+        'COPYWRITER_API_KEY': {
+            'label': '文案模型 API Key',
+            'purpose': '用于文案规划 Agent、文案生成、真人化重写等 AI 能力，优先支持 OpenAI 兼容接口。',
+            'example': '<copywriter api key>',
             'placeholder': '<required api key>',
+        },
+        'COPYWRITER_API_URL': {
+            'label': '文案模型 API URL',
+            'purpose': '可填 OpenAI 兼容地址，例如 OpenAI / OpenRouter / DeepSeek 的 chat completions 地址或 base URL。',
+            'example': 'https://api.openai.com/v1',
+        },
+        'COPYWRITER_MODEL': {
+            'label': '文案模型名',
+            'purpose': '用于文案规划 Agent、文案生成、真人化改写。',
+            'example': 'gpt-5.4',
+        },
+        'DEEPSEEK_API_KEY': {
+            'label': 'DeepSeek API Key（兼容旧配置）',
+            'purpose': '保留向后兼容；未设置 COPYWRITER_API_KEY 时，系统仍可继续用 DeepSeek。',
+            'example': '<deepseek api key>',
+            'placeholder': '<optional api key>',
         },
         'DATABASE_URL': {
             'label': 'PostgreSQL 连接串',
@@ -4216,6 +5323,8 @@ def _build_deployment_helper_payload():
     sensitive_keys = {
         'SECRET_KEY',
         'ADMIN_PASSWORD',
+        'COPYWRITER_API_KEY',
+        'OPENAI_API_KEY',
         'DEEPSEEK_API_KEY',
         'ASSET_IMAGE_API_KEY',
         'ARK_API_KEY',
@@ -4250,6 +5359,8 @@ def _build_deployment_helper_payload():
         'HOTWORD_AUTO_GENERATE_TOPIC_COUNT': str(hotword_settings.get('hotword_auto_generate_topic_count') or 20),
         'HOTWORD_AUTO_GENERATE_TOPIC_ACTIVITY_ID': str(hotword_settings.get('hotword_auto_generate_topic_activity_id') or 0),
         'HOTWORD_AUTO_GENERATE_TOPIC_QUOTA': str(hotword_settings.get('hotword_auto_generate_topic_quota') or _default_topic_quota()),
+        'HOTWORD_AUTO_CONVERT_CORPUS_TEMPLATES': 'true' if hotword_settings.get('hotword_auto_convert_corpus_templates') else 'false',
+        'HOTWORD_AUTO_CONVERT_CORPUS_LIMIT': str(hotword_settings.get('hotword_auto_convert_corpus_limit') or 10),
         'CREATOR_SYNC_SOURCE_CHANNEL': (creator_sync_settings.get('creator_sync_source_channel') or 'Crawler服务'),
         'CREATOR_SYNC_FETCH_MODE': _resolved_creator_sync_mode(creator_sync_settings),
         'CREATOR_SYNC_API_URL': (creator_sync_settings.get('creator_sync_api_url') or ''),
@@ -4332,7 +5443,7 @@ def _build_deployment_helper_payload():
                 env_item('SECRET_KEY'),
                 env_item('ADMIN_USERNAME'),
                 env_item('ADMIN_PASSWORD'),
-                env_item('DEEPSEEK_API_KEY'),
+                env_item('COPYWRITER_API_KEY'),
                 env_item('DATABASE_URL'),
                 env_item('REDIS_URL'),
                 env_item('CELERY_BROKER_URL'),
@@ -4340,6 +5451,9 @@ def _build_deployment_helper_payload():
             ],
             'optional_envs': [
                 env_item('DEFAULT_TOPIC_QUOTA', required=False),
+                env_item('COPYWRITER_API_URL', required=False),
+                env_item('COPYWRITER_MODEL', required=False),
+                env_item('DEEPSEEK_API_KEY', required=False),
                 env_item('PREFERRED_URL_SCHEME', required=False),
                 env_item('SESSION_COOKIE_SECURE', required=False),
                 env_item('HOTWORD_FETCH_MODE', required=False),
@@ -4376,6 +5490,9 @@ def _build_deployment_helper_payload():
             ],
             'optional_envs': [
                 env_item('DEFAULT_TOPIC_QUOTA', required=False),
+                env_item('COPYWRITER_API_KEY', required=False),
+                env_item('COPYWRITER_API_URL', required=False),
+                env_item('COPYWRITER_MODEL', required=False),
                 env_item('DEEPSEEK_API_KEY', required=False),
                 env_item('HOTWORD_FETCH_MODE', required=False),
                 env_item('HOTWORD_API_URL', required=False),
@@ -4765,6 +5882,7 @@ def _build_integration_checklist_payload():
     hotword_settings = _hotword_runtime_settings()
     creator_sync_settings = _creator_sync_runtime_settings()
     image_capabilities = _image_provider_capabilities()
+    copywriter_capabilities = _resolve_copywriter_capabilities()
 
     def checklist_item(key, label, configured=False, value=''):
         return {
@@ -4809,6 +5927,18 @@ def _build_integration_checklist_payload():
                 checklist_item('image_model', '模型名', bool(image_capabilities.get('image_provider_model')), image_capabilities.get('image_provider_model') or ''),
                 checklist_item('image_api_key', 'API Key', bool(image_capabilities.get('api_key_configured')), '<configured>' if image_capabilities.get('api_key_configured') else ''),
                 checklist_item('image_prompt_case', '测试提示词案例', True, '生成一张小红书医疗科普封面测试图'),
+            ],
+        },
+        {
+            'key': 'copywriter',
+            'label': '文案模型',
+            'description': '用于文案规划 Agent、文案生成和真人化重写。',
+            'items': [
+                checklist_item('copywriter_provider', '文案模型 Provider', bool(copywriter_capabilities.get('copywriter_provider')), copywriter_capabilities.get('copywriter_provider') or ''),
+                checklist_item('copywriter_api_url', '文案模型 API URL', bool(copywriter_capabilities.get('copywriter_api_url')), copywriter_capabilities.get('copywriter_api_url') or ''),
+                checklist_item('copywriter_model', '文案模型名', bool(copywriter_capabilities.get('copywriter_model')), copywriter_capabilities.get('copywriter_model') or ''),
+                checklist_item('copywriter_api_key', 'API Key', bool(copywriter_capabilities.get('api_key_configured')), '<configured>' if copywriter_capabilities.get('api_key_configured') else ''),
+                checklist_item('copywriter_case', '测试提示词案例', True, '请用更像真人的小红书口语风，写一句关于肝健康的开头。'),
             ],
         },
     ]
@@ -4921,9 +6051,9 @@ def _classify_metric_candidate_path(path):
 
 def _build_metric_hint_suggestions(metric_candidates):
     suggestions = {
-        'views': [],
-        'exposures': [],
-        'hot': [],
+        'views': {},
+        'exposures': {},
+        'hot': {},
     }
     for item in metric_candidates or []:
         if not isinstance(item, dict):
@@ -4934,18 +6064,31 @@ def _build_metric_hint_suggestions(metric_candidates):
         for token in _tokenize_metric_path(item.get('path')):
             if token in CRAWLER_HINT_BASELINES[bucket]:
                 continue
-            if token not in suggestions[bucket]:
-                suggestions[bucket].append(token)
+            suggestions[bucket][token] = suggestions[bucket].get(token, 0) + 1
+
+    ranked_tokens = {}
+    plain_tokens = {}
+    for bucket, token_map in suggestions.items():
+        ranked = sorted(token_map.items(), key=lambda item: (-item[1], item[0]))
+        ranked_tokens[bucket] = [
+            {'token': token, 'count': count}
+            for token, count in ranked[:12]
+        ]
+        plain_tokens[bucket] = [item['token'] for item in ranked_tokens[bucket]]
+
     env_examples = {}
-    if suggestions['views']:
-        env_examples['XHS_VIEWS_HINT_TOKENS'] = ','.join(suggestions['views'][:8])
-    if suggestions['exposures']:
-        env_examples['XHS_EXPOSURE_HINT_TOKENS'] = ','.join(suggestions['exposures'][:8])
-    if suggestions['hot']:
-        env_examples['XHS_HOT_HINT_TOKENS'] = ','.join(suggestions['hot'][:8])
+    if plain_tokens['views']:
+        env_examples['XHS_VIEWS_HINT_TOKENS'] = ','.join(plain_tokens['views'][:8])
+    if plain_tokens['exposures']:
+        env_examples['XHS_EXPOSURE_HINT_TOKENS'] = ','.join(plain_tokens['exposures'][:8])
+    if plain_tokens['hot']:
+        env_examples['XHS_HOT_HINT_TOKENS'] = ','.join(plain_tokens['hot'][:8])
+    env_preview = '\n'.join(f'{key}={value}' for key, value in env_examples.items())
     return {
-        'tokens': suggestions,
+        'tokens': plain_tokens,
+        'ranked_tokens': ranked_tokens,
         'env_examples': env_examples,
+        'env_preview': env_preview,
     }
 
 
@@ -5206,6 +6349,7 @@ def _build_recent_failed_jobs_payload(limit=10):
     integration_failed_actions = [
         'hotword_ping_check_failed',
         'creator_sync_ping_check_failed',
+        'copywriter_ping_check_failed',
         'image_provider_ping_check_failed',
     ]
     failed_integration_logs = OperationLog.query.filter(
@@ -5214,6 +6358,7 @@ def _build_recent_failed_jobs_payload(limit=10):
     retry_type_map = {
         'hotword_ping_check_failed': ('hotword_ping', '重试热点接口'),
         'creator_sync_ping_check_failed': ('creator_sync_ping', '重试 crawler 接口'),
+        'copywriter_ping_check_failed': ('copywriter_ping', '重试文案模型'),
         'image_provider_ping_check_failed': ('image_ping', '重试图片接口'),
     }
     for log in failed_integration_logs:
@@ -5269,6 +6414,8 @@ def _build_service_matrix_payload():
     creator_sync_mode = _resolved_creator_sync_mode(creator_sync_settings)
     creator_sync_health = _creator_sync_healthcheck(timeout_seconds=2) if creator_sync_mode == 'remote' else None
 
+    copywriter_capabilities = _resolve_copywriter_capabilities()
+    copywriter_health = _copywriter_healthcheck(timeout_seconds=5) if copywriter_capabilities.get('copywriter_configured') else None
     image_health = _image_provider_healthcheck(timeout_seconds=5)
 
     return [
@@ -5309,6 +6456,17 @@ def _build_service_matrix_payload():
             ),
         },
         {
+            'key': 'copywriter_remote',
+            'label': '文案模型',
+            'ok': bool(copywriter_health and copywriter_health.get('ok')),
+            'status': 'ready' if bool(copywriter_health and copywriter_health.get('ok')) else ('missing' if copywriter_capabilities.get('copywriter_configured') else 'blocked'),
+            'message': (
+                copywriter_health.get('message')
+                if copywriter_health else
+                ('文案模型未配置' if not copywriter_capabilities.get('copywriter_configured') else '文案模型未检测')
+            ),
+        },
+        {
             'key': 'image_remote',
             'label': '图片远端接口',
             'ok': provider_ok if (provider_ok := (not image_health.get('enabled') or bool(image_health.get('ok')))) else False,
@@ -5341,6 +6499,9 @@ SCHEMA_REQUIRED_INDEXES = {
         ('idx_submission_creator_account', ['xhs_creator_account_id']),
         ('idx_submission_primary_post', ['xhs_primary_post_id']),
         ('idx_submission_tracking_status', ['xhs_tracking_status']),
+        ('idx_submission_title_skill', ['selected_title_skill']),
+        ('idx_submission_image_skill', ['selected_image_skill']),
+        ('idx_submission_strategy_updated', ['strategy_updated_at']),
     ],
     'topic': [
         ('idx_topic_activity_pool', ['activity_id', 'pool_status']),
@@ -5353,9 +6514,22 @@ SCHEMA_REQUIRED_INDEXES = {
         ('idx_trend_note_created_at', ['created_at']),
         ('idx_trend_note_hot_score', ['hot_score']),
     ],
+    'hot_topic_entry': [
+        ('idx_hot_topic_status_created', ['status', 'created_at']),
+        ('idx_hot_topic_lane_persona', ['lane_key', 'persona_key']),
+        ('idx_hot_topic_reference_note', ['reference_note_id']),
+    ],
+    'asset_plan_draft': [
+        ('idx_asset_plan_draft_status_created', ['status', 'created_at']),
+        ('idx_asset_plan_draft_source_ref', ['source_type', 'source_id']),
+    ],
     'topic_idea': [
         ('idx_topic_idea_status_activity', ['status', 'activity_id']),
         ('idx_topic_idea_created_at', ['created_at']),
+    ],
+    'asset_plan_draft': [
+        ('idx_asset_plan_draft_status_created', ['status', 'created_at']),
+        ('idx_asset_plan_draft_source_ref', ['source_type', 'source_id']),
     ],
     'data_source_task': [
         ('idx_data_source_task_type_status', ['task_type', 'status']),
@@ -5382,6 +6556,10 @@ SCHEMA_REQUIRED_INDEXES = {
     ],
     'announcement': [
         ('idx_announcement_status_priority', ['status', 'priority']),
+    ],
+    'corpus_entry': [
+        ('idx_corpus_entry_reference_url', ['reference_url']),
+        ('idx_corpus_entry_template_type', ['template_type_key']),
     ],
 }
 
@@ -6037,12 +7215,21 @@ def _matching_corpus_snippets(keyword, limit=3):
 
     hits = []
     for entry in entries:
-        haystack = f"{entry.title or ''} {entry.tags or ''} {entry.content or ''}"
+        haystack = ' '.join([
+            entry.title or '',
+            getattr(entry, 'source_title', '') or '',
+            getattr(entry, 'reference_url', '') or '',
+            getattr(entry, 'template_type_key', '') or '',
+            entry.tags or '',
+            entry.content or '',
+        ])
         score = 0
         for token in _split_keywords(keyword):
             if token and token in haystack:
                 score += 2
         if entry.category in ['合规表达', '爆款拆解', '封面模板']:
+            score += 1
+        if getattr(entry, 'reference_url', None):
             score += 1
         if score > 0:
             hits.append((score, entry))
@@ -6063,6 +7250,106 @@ def _build_topic_prompt(title, keyword, persona, content_type, insertion, corpus
         f"合规要求：{COMPLIANCE_BASELINE}\n"
         "风格要求：真实口语化、去AI腔、首屏有钩子、正文200-350字、结尾自然提问。"
     )
+
+
+def _build_generate_copy_corpus_block(corpus_entries, product_hint=''):
+    if not corpus_entries:
+        return '无'
+    rows = []
+    for entry in corpus_entries[:4]:
+        template_meta = _corpus_template_meta(getattr(entry, 'template_type_key', '') or '')
+        ref_link = getattr(entry, 'reference_url', '') or ''
+        ref_text = _truncate_text(entry.content or '', 120)
+        rows.append(
+            f"- {entry.title or '未命名模板'} ｜ 模板={template_meta.get('label') or '标准说明'}"
+            f"{f' ｜ 链接={ref_link}' if ref_link else ''}\n"
+            f"  {ref_text}"
+        )
+    reminder = '只学这些模板的结构、标题逻辑、开头钩子、互动方式和版式感，不照抄原句；最后必须改写成围绕我们产品/服务的内容。'
+    if product_hint:
+        reminder = f'{reminder} 产品改写主线：{product_hint}'
+    return '\n'.join(rows + [reminder]).strip()
+
+
+def _local_copy_scene_line(scene_text='', lead_keyword=''):
+    text = (scene_text or '').strip()
+    keyword = lead_keyword or '这件事'
+    if any(token in text for token in ['体检', '异常', '提醒']):
+        return f'那次其实也没什么明显不舒服，就是体检单一出来，我对“{keyword}”一下子紧张起来了。'
+    if any(token in text for token in ['报告', '解读', '指标', '复查']):
+        return f'真正让我难受的不是看到“{keyword}”这几个字，而是拿着报告一时不知道先看什么。'
+    if any(token in text for token in ['家属', '陪伴', '照护']):
+        return f'陪着家里人处理“{keyword}”这件事时，我才发现很多焦虑都不是病本身，而是顺序没理清。'
+    if any(token in text for token in ['饮食', '减脂', '运动']):
+        return f'我后来才意识到，“{keyword}”不是一句少吃多动就能带过，真要落地其实很看日常习惯。'
+    if any(token in text for token in ['中医', '情绪', '失眠', '压力']):
+        return f'那段时间我自己最明显的感觉不是疼，而是整个人一直绷着，连“{keyword}”都越想越慌。'
+    return f'我以前对“{keyword}”的理解挺模糊的，真正碰到之后才知道，这事不能只靠想象。'
+
+
+def _local_copy_persona_line(persona_text='', lead_keyword=''):
+    text = (persona_text or '').strip()
+    keyword = lead_keyword or '这件事'
+    if '患者本人' in text:
+        return f'我自己就是那个会把“{keyword}”先往后拖的人，所以这次被提醒时，反而一下子清醒了。'
+    if any(token in text for token in ['家属', '陪诊']):
+        return f'我是站在家属/陪诊者的角度看“{keyword}”，很多时候不是不重视，而是真的不知道该怎么接下一步。'
+    if any(token in text for token in ['医学', '医生助理']):
+        return f'从科普角度看，“{keyword}”最怕的不是复杂，而是大家只记住名词，却没记住该怎么判断。'
+    if any(token in text for token in ['营养', '健管']):
+        return f'从日常管理角度看，“{keyword}”很多问题都不是一顿饭造成的，但确实和长期习惯有关。'
+    if any(token in text for token in ['中医']):
+        return f'从调理视角看，“{keyword}”常常不是一个孤立点，它和情绪、作息、节律会连在一起。'
+    return f'我更想用普通人能听懂的话把“{keyword}”说清楚，而不是只丢一堆概念。'
+
+
+def _local_copy_action_lines(lead_keyword='', scene_text=''):
+    keyword = lead_keyword or '这件事'
+    scene = (scene_text or '').strip()
+    if any(token in keyword for token in ['FibroScan', '福波看', '肝弹', '检查', '体检', '转氨酶']):
+        return [
+            '我后来先做的一件事，就是把这次结果和以前的检查放在一起看，不然很容易只看单次数字把自己吓到。',
+            '如果医生提到要继续检查，我现在会顺手问清楚：这次到底是想看硬度、看脂肪，还是看变化趋势。',
+            '比起到处搜答案，我更建议先把复查时间、指标变化和医生给的重点记下来，这样心里会稳很多。',
+        ]
+    if any(token in keyword for token in ['脂肪肝', '减肥', '肥胖', '代谢']):
+        return [
+            '我后来不再只盯体重，而是先把饭点、活动量和复查节奏定下来，这样反而更容易坚持。',
+            '很多人一着急就开始极端节食，但我自己的体感是，先把能长期做下去的动作留住更重要。',
+            '真正有用的不是今天多狠，而是接下来一个月你能不能把吃饭、运动和复查都接上。',
+        ]
+    if any(token in scene for token in ['家属', '陪伴', '照护']):
+        return [
+            '我后来会先把医生说的重点翻成家里人听得懂的话，不然大家各自脑补，反而更乱。',
+            '很多时候不是不配合，而是不知道先做哪一步，所以把顺序讲清楚比说大道理更有用。',
+            '一旦把检查、复查和生活管理拆开来说，家里人的抵触感会小很多。',
+        ]
+    return [
+        f'我后来慢慢发现，处理“{keyword}”最有用的不是吓自己，而是把下一步动作先落下来。',
+        '先搞清楚自己现在卡在哪，再决定是去复查、去调整生活习惯，还是继续观察，这样会踏实很多。',
+        '把节奏理清之后，整个人反而没那么慌，也更容易把这件事真的做下去。',
+    ]
+
+
+def _local_copy_product_line(product_label=''):
+    label = (product_label or '').strip()
+    if not label or label in {'自动匹配', '不植入产品'}:
+        return '这篇我会先把问题讲明白，不强行塞产品，读起来才更像真实分享。'
+    if label == 'FibroScan福波看':
+        return '像 FibroScan 福波看这类检查，我现在更愿意放在真实经历里顺手讲清楚，而不是单独拎出来硬推。'
+    if label in {'复方鳖甲软肝片', '恩替卡韦联合管理', '壳脂胶囊'}:
+        return f'如果要带到 {label}，我更倾向放在真实管理路径里轻轻带一下，而不是一上来就像推荐单品。'
+    return f'如果要提到 {label}，我也会更偏向真实经验里的自然带出，不会写成硬广。'
+
+
+def _local_variant_middle(index, lead_keyword=''):
+    keyword = lead_keyword or '这件事'
+    variants = [
+        f'真正点醒我的，不是“{keyword}”这个词本身，而是我发现自己之前一直把重点放错了。',
+        f'后来我才明白，“{keyword}”最怕的不是复杂，而是自己脑补太多、真正该确认的事反而没问。',
+        f'如果重新来一次，我不会再对“{keyword}”硬扛着等它自己过去，而是先把顺序理出来。',
+    ]
+    return variants[index % len(variants)]
 
 
 def _generate_topic_ideas(count=80, activity_id=None, quota=None):
@@ -7340,6 +8627,8 @@ def _build_dashboard_stats(activity_id, args):
             reverse=True
         )[0][0]
 
+    strategy_insights = _build_strategy_insights(submissions)
+
     personal_rankings = _build_personal_rankings(registrations, submissions)
     group_rankings = {
         'all_platform': _build_group_rankings(registrations, submissions, 'all'),
@@ -7401,6 +8690,12 @@ def _build_dashboard_stats(activity_id, args):
         note_improvement_suggestions.append('先补齐提交率，建议增加组长催更、截止提醒和二次提交入口。')
     if best_content_type:
         note_improvement_suggestions.append(f'当前最佳内容类型是“{best_content_type}”，建议沉淀成固定模板。')
+    if strategy_insights['captured_count'] and strategy_insights['title_skill_rows']:
+        note_improvement_suggestions.append(
+            f"当前标题打法里表现更靠前的是“{strategy_insights['title_skill_rows'][0]['label']}”，可以优先放大。"
+        )
+    if strategy_insights['capture_rate'] < 60:
+        note_improvement_suggestions.append('当前爆款策略留痕率还不高，建议生成后尽量用系统标题池和封面推荐池。')
     low_groups = [row['group'] for row in group_completion if row['completion_rate'] < 50]
     if low_groups:
         note_improvement_suggestions.append('低完成率小组：' + '、'.join(low_groups) + '，建议安排小组共创和复盘。')
@@ -7464,6 +8759,7 @@ def _build_dashboard_stats(activity_id, args):
         'content_type_stats': content_type_stats,
         'content_type_performance': content_type_perf,
         'best_content_type': best_content_type,
+        'strategy_insights': strategy_insights,
         'group_completion': group_completion,
         'viral_notes': viral_notes[:20],
         'type_note_recommendations': type_note_recommendations,
@@ -7789,15 +9085,149 @@ def update_announcement_status(announcement_id):
     })
 
 
-# AI生成文案API - 接入DeepSeek
+# AI生成文案API - 支持可切换的 OpenAI 兼容模型
 import requests
 
 DEEPSEEK_API_KEY = os.environ.get('DEEPSEEK_API_KEY', '')
 DEEPSEEK_API_URL = os.environ.get('DEEPSEEK_API_URL', 'https://api.deepseek.com/v1/chat/completions')
+COPYWRITER_API_KEY = os.environ.get('COPYWRITER_API_KEY', '').strip()
+COPYWRITER_API_URL = os.environ.get('COPYWRITER_API_URL', '').strip()
+COPYWRITER_MODEL = os.environ.get('COPYWRITER_MODEL', '').strip()
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '').strip()
+OPENAI_API_URL = os.environ.get('OPENAI_API_URL', '').strip()
+OPENAI_MODEL = os.environ.get('OPENAI_MODEL', '').strip()
+
+
+def _normalize_copywriter_api_url(raw_url=''):
+    url = (raw_url or '').strip()
+    if not url:
+        return ''
+    if '/chat/completions' in url:
+        return url
+    url = url.rstrip('/')
+    if url.endswith('/v1'):
+        return f'{url}/chat/completions'
+    if url.endswith('/v1/chat'):
+        return f'{url}/completions'
+    return f'{url}/v1/chat/completions'
+
+
+def _copywriter_runtime_config(payload=None):
+    runtime_config = _automation_runtime_config()
+    payload = payload or {}
+    api_url_override = (payload.get('copywriter_api_url') or runtime_config.get('copywriter_api_url') or '').strip()
+    model_override = (payload.get('copywriter_model') or runtime_config.get('copywriter_model') or '').strip()
+    if COPYWRITER_API_KEY:
+        return {
+            'configured': True,
+            'provider': 'custom_openai_compatible',
+            'api_key': COPYWRITER_API_KEY,
+            'api_url': _normalize_copywriter_api_url(COPYWRITER_API_URL or api_url_override or DEEPSEEK_API_URL),
+            'model': COPYWRITER_MODEL or model_override or 'deepseek-chat',
+            'label': f'可切换模型：{COPYWRITER_MODEL or model_override or "deepseek-chat"}',
+        }
+    if OPENAI_API_KEY:
+        return {
+            'configured': True,
+            'provider': 'openai_compatible',
+            'api_key': OPENAI_API_KEY,
+            'api_url': _normalize_copywriter_api_url(OPENAI_API_URL or api_url_override or 'https://api.openai.com/v1'),
+            'model': OPENAI_MODEL or model_override or 'gpt-5.4',
+            'label': f'OpenAI兼容模型：{OPENAI_MODEL or model_override or "gpt-5.4"}',
+        }
+    if DEEPSEEK_API_KEY:
+        return {
+            'configured': True,
+            'provider': 'deepseek',
+            'api_key': DEEPSEEK_API_KEY,
+            'api_url': _normalize_copywriter_api_url(DEEPSEEK_API_URL or api_url_override or 'https://api.deepseek.com/v1/chat/completions'),
+            'model': model_override or 'deepseek-chat',
+            'label': f'DeepSeek：{model_override or "deepseek-chat"}',
+        }
+    return {
+        'configured': False,
+        'provider': 'local_fallback',
+        'api_key': '',
+        'api_url': _normalize_copywriter_api_url(api_url_override),
+        'model': model_override,
+        'label': '本地兜底生成',
+    }
+
+
+def _extract_copywriter_text(response_json):
+    if not isinstance(response_json, dict):
+        return ''
+    choices = response_json.get('choices') or []
+    if choices:
+        message = (choices[0] or {}).get('message') or {}
+        content = message.get('content')
+        if isinstance(content, str):
+            return content.strip()
+        if isinstance(content, list):
+            parts = []
+            for item in content:
+                if isinstance(item, dict) and item.get('type') == 'text':
+                    parts.append(str(item.get('text') or ''))
+            return '\n'.join(parts).strip()
+    output = response_json.get('output') or []
+    if isinstance(output, list):
+        parts = []
+        for item in output:
+            if isinstance(item, dict):
+                for content in (item.get('content') or []):
+                    if isinstance(content, dict) and content.get('type') == 'output_text':
+                        parts.append(str(content.get('text') or ''))
+        return '\n'.join(parts).strip()
+    return ''
+
+
+def _extract_json_object(text):
+    content = (text or '').strip()
+    if not content:
+        return {}
+    try:
+        data = json.loads(content)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        pass
+    start = content.find('{')
+    end = content.rfind('}')
+    if start >= 0 and end > start:
+        snippet = content[start:end + 1]
+        try:
+            data = json.loads(snippet)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
+def _call_copywriter(messages, *, temperature=1.0, top_p=0.9, timeout=40, extra_payload=None, runtime_override=None):
+    runtime = runtime_override or _copywriter_runtime_config()
+    if not runtime.get('configured'):
+        raise RuntimeError('copywriter_not_configured')
+    headers = {
+        'Authorization': f'Bearer {runtime["api_key"]}',
+        'Content-Type': 'application/json',
+    }
+    payload = {
+        'model': runtime['model'],
+        'messages': messages,
+        'temperature': temperature,
+        'top_p': top_p,
+    }
+    if isinstance(extra_payload, dict):
+        payload.update(extra_payload)
+    resp = requests.post(runtime['api_url'], json=payload, headers=headers, timeout=timeout)
+    resp.raise_for_status()
+    return {
+        'text': _extract_copywriter_text(resp.json()),
+        'runtime': runtime,
+    }
 
 def auto_humanize_text(content):
     """自动去AI化重写（保留原意）"""
-    if not content or not DEEPSEEK_API_KEY:
+    if not content or not _copywriter_runtime_config().get('configured'):
         return content
     try:
         prompt = f"""请把下面这段小红书文案做"真人化重写"，并保持原意：
@@ -7809,21 +9239,20 @@ def auto_humanize_text(content):
 4) 内文保持200-300字
 5) 结尾自然提问，不要出现"评论区"
 6) 合规：不要绝对化词，不引导购买
+7) 不要写“我是从xx身份出发”“我会把xx顺手带出”“围绕xx最容易写空泛”这类模板句
 
 原文：
 {content}
 
 只输出重写后的内容。"""
-        headers = {'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'}
-        payload = {
-            'model': 'deepseek-chat',
-            'messages': [{'role': 'user', 'content': prompt}],
-            'temperature': 1.15,
-            'top_p': 0.9
-        }
-        resp = requests.post(DEEPSEEK_API_URL, json=payload, headers=headers, timeout=30)
-        if resp.status_code == 200:
-            return resp.json()['choices'][0]['message']['content'].strip()
+        result = _call_copywriter(
+            [{'role': 'user', 'content': prompt}],
+            temperature=1.08,
+            top_p=0.9,
+            timeout=30,
+        )
+        if result.get('text'):
+            return result['text']
     except Exception as e:
         print(f"auto_humanize error: {e}")
     return content
@@ -7872,10 +9301,18 @@ COPY_PERSONA_OPTIONS = {
     'doctor_assistant': '医生助理',
     'health_manager': '健管师',
     'nutritionist': '营养师',
+    'tcm_practitioner': '中医调理视角',
+    'fitness_coach': '运动减脂教练',
+    'emotional_support': '情绪陪伴者',
+    'women_health': '女性健康视角',
+    'physical_exam_blogger': '体检复盘博主',
+    'chronic_manager': '慢病管理者',
     'patient_self': '患者本人',
     'patient_family': '患者家属',
     'medical_science': '医学科普',
     'patient_friend': '患者朋友',
+    'office_worker': '职场久坐人群',
+    'caregiver': '陪诊照护者',
     'custom': '自定义身份',
 }
 
@@ -7889,7 +9326,29 @@ COPY_SCENE_OPTIONS = {
     'family_support': '家属陪伴照护',
     'diet_adjustment': '饮食调整建议',
     'report_interpretation': '检查报告解读',
+    'tcm_conditioning': '中医调理养肝',
+    'fatty_liver_management': '脂肪肝减脂管理',
+    'mood_stress': '情绪压力与肝气',
+    'sleep_recovery': '失眠熬夜恢复期',
+    'women_dailycare': '女性日常养肝',
+    'office_sedentary': '久坐久盯屏场景',
+    'exercise_rebuild': '运动减脂重启期',
     'custom': '自定义场景',
+}
+
+COPY_DIRECTION_OPTIONS = {
+    'auto': '系统自动匹配',
+    'report_interpretation': '检查解读线',
+    'fatty_liver_management': '脂肪肝管理线',
+    'liver_care_habits': '保肝护肝习惯线',
+    'tcm_conditioning': '中医调理线',
+    'emotion_mindbody': '情绪与肝线',
+    'diet_nutrition': '饮食营养线',
+    'exercise_fitness': '运动减脂线',
+    'family_care': '家庭照护线',
+    'women_health': '女性养肝线',
+    'myth_busting': '误区纠偏线',
+    'custom': '自定义方向',
 }
 
 COPY_GOAL_OPTIONS = {
@@ -7916,6 +9375,39 @@ def _resolve_copy_selection(option_map, raw_value, *, custom_value=''):
         custom_text = (custom_value or '').strip()
         return custom_text or option_map.get('custom') or ''
     return option_map.get(key, option_map.get('auto') or '')
+
+
+def _resolve_copy_direction_selection(direction_key, topic_text='', user_prompt='', custom_value=''):
+    key = (direction_key or 'auto').strip() if isinstance(direction_key, str) else 'auto'
+    if key == 'custom':
+        custom_text = (custom_value or '').strip()
+        return custom_text or COPY_DIRECTION_OPTIONS.get('custom') or ''
+    if key != 'auto':
+        return COPY_DIRECTION_OPTIONS.get(key, COPY_DIRECTION_OPTIONS.get('auto') or '')
+
+    text = ' '.join(filter(None, [
+        (topic_text or '').strip(),
+        (user_prompt or '').strip(),
+    ]))
+    if any(token in text for token in ['中医', '肝气郁结', '肝郁', '疏肝理气', '肝胆湿热', '养肝']):
+        return COPY_DIRECTION_OPTIONS['tcm_conditioning']
+    if any(token in text for token in ['脂肪肝', '减脂', '代谢', '体重', '减肥']):
+        return COPY_DIRECTION_OPTIONS['fatty_liver_management']
+    if any(token in text for token in ['情绪', '焦虑', '压力', '失眠', '睡眠', '熬夜']):
+        return COPY_DIRECTION_OPTIONS['emotion_mindbody']
+    if any(token in text for token in ['饮食', '营养', '吃什么', '食谱', '控糖', '控油']):
+        return COPY_DIRECTION_OPTIONS['diet_nutrition']
+    if any(token in text for token in ['运动', '健身', '走路', '跑步', '减脂训练']):
+        return COPY_DIRECTION_OPTIONS['exercise_fitness']
+    if any(token in text for token in ['父母', '家人', '陪诊', '照护', '家属']):
+        return COPY_DIRECTION_OPTIONS['family_care']
+    if any(token in text for token in ['女性', '姨妈', '经期', '更年期']):
+        return COPY_DIRECTION_OPTIONS['women_health']
+    if any(token in text for token in ['误区', '别再', '为什么', '是不是', '搞错']):
+        return COPY_DIRECTION_OPTIONS['myth_busting']
+    if any(token in text for token in ['体检', '检查', '报告', '指标', 'FibroScan', '福波看', '肝弹', '转氨酶']):
+        return COPY_DIRECTION_OPTIONS['report_interpretation']
+    return COPY_DIRECTION_OPTIONS['liver_care_habits']
 
 
 def _derive_topic_product_hint(topic_text=''):
@@ -8055,6 +9547,11 @@ def _parse_generated_copy_card(version_text: str, defaults=None):
 
     body = re.sub(r'(?m)^\s*(人设|角色|场景|软植入|软植入产品|标题|开头钩子|钩子|互动结尾|结尾互动)\s*[：:].*$', '', card.get('body') or '')
     body = re.sub(r'\n{3,}', '\n\n', body).strip()
+    hook_text = (card.get('hook') or '').strip()
+    if hook_text and body:
+        body_lines = [line.strip() for line in body.splitlines() if line.strip()]
+        if body_lines and body_lines[0] == hook_text:
+            body = '\n'.join(body_lines[1:]).strip()
     card['body'] = body
 
     if not (card.get('hook') or '').strip() and body:
@@ -8083,6 +9580,567 @@ def _copy_card_usable(card):
         return False
     return True
 
+
+def _load_strategy_payload(raw_payload):
+    if not raw_payload:
+        return {}
+    try:
+        data = json.loads(raw_payload)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _serialize_submission_strategy(submission):
+    payload = _load_strategy_payload(submission.strategy_payload)
+    return {
+        'selected_title': submission.selected_title or payload.get('selected_title') or '',
+        'selected_title_source': submission.selected_title_source or payload.get('selected_title_source') or '',
+        'selected_title_index': submission.selected_title_index if submission.selected_title_index is not None else (payload.get('selected_title_index') or 0),
+        'selected_copy_version_index': submission.selected_copy_version_index if submission.selected_copy_version_index is not None else (payload.get('selected_copy_version_index') or 0),
+        'selected_copy_goal': submission.selected_copy_goal or payload.get('selected_copy_goal') or '',
+        'selected_copy_skill': submission.selected_copy_skill or payload.get('selected_copy_skill') or '',
+        'selected_title_skill': submission.selected_title_skill or payload.get('selected_title_skill') or '',
+        'selected_image_skill': submission.selected_image_skill or payload.get('selected_image_skill') or '',
+        'selected_cover_style_type': submission.selected_cover_style_type or payload.get('selected_cover_style_type') or '',
+        'selected_inner_style_type': submission.selected_inner_style_type or payload.get('selected_inner_style_type') or '',
+        'selected_generation_mode': submission.selected_generation_mode or payload.get('selected_generation_mode') or '',
+        'selected_copy_text': submission.selected_copy_text or payload.get('selected_copy_text') or '',
+        'strategy_updated_at': submission.strategy_updated_at.strftime('%Y-%m-%d %H:%M:%S') if submission.strategy_updated_at else '',
+        'generator_context': payload.get('generator_context') or {},
+        'title_options': payload.get('title_options') or [],
+        'reason': payload.get('reason') or '',
+    }
+
+
+def _apply_submission_strategy_snapshot(submission, payload, registration=None):
+    registration = registration or getattr(submission, 'registration', None)
+    title_options = payload.get('title_options') or []
+    normalized_title_options = []
+    if isinstance(title_options, list):
+        for item in title_options[:8]:
+            if isinstance(item, str):
+                title_text = _normalize_title_candidate(item)
+                if title_text:
+                    normalized_title_options.append({'title': title_text, 'source': '系统推荐'})
+                continue
+            if not isinstance(item, dict):
+                continue
+            title_text = _normalize_title_candidate(item.get('title') or '')
+            if not title_text:
+                continue
+            normalized_title_options.append({
+                'title': title_text,
+                'source': (str(item.get('source') or '系统推荐').strip()[:100] or '系统推荐'),
+            })
+
+    selected_title = _normalize_title_candidate(payload.get('selected_title') or '')
+    selected_title_source = (payload.get('selected_title_source') or '').strip()[:100]
+    selected_title_index = max(_safe_int(payload.get('selected_title_index'), 0), 0)
+    if not selected_title and normalized_title_options and selected_title_index < len(normalized_title_options):
+        selected_title = normalized_title_options[selected_title_index]['title']
+    if not selected_title_source and normalized_title_options and selected_title_index < len(normalized_title_options):
+        selected_title_source = normalized_title_options[selected_title_index].get('source') or '系统推荐'
+
+    selected_copy_text = (payload.get('selected_copy_text') or '').strip()
+    if len(selected_copy_text) > 4000:
+        selected_copy_text = selected_copy_text[:4000]
+
+    generator_context = payload.get('generator_context') if isinstance(payload.get('generator_context'), dict) else {}
+    strategy_snapshot = {
+        'reason': (payload.get('reason') or '').strip()[:80],
+        'registration_id': registration.id if registration else submission.registration_id,
+        'topic_id': registration.topic_id if registration else None,
+        'topic_name': registration.topic.topic_name if registration and registration.topic else '',
+        'selected_title': selected_title,
+        'selected_title_source': selected_title_source,
+        'selected_title_index': selected_title_index,
+        'selected_copy_version_index': max(_safe_int(payload.get('selected_copy_version_index'), 0), 0),
+        'selected_copy_goal': (payload.get('selected_copy_goal') or '').strip()[:50],
+        'selected_copy_skill': (payload.get('selected_copy_skill') or '').strip()[:50],
+        'selected_title_skill': (payload.get('selected_title_skill') or '').strip()[:50],
+        'selected_image_skill': (payload.get('selected_image_skill') or '').strip()[:50],
+        'selected_cover_style_type': (payload.get('selected_cover_style_type') or '').strip()[:50],
+        'selected_inner_style_type': (payload.get('selected_inner_style_type') or '').strip()[:50],
+        'selected_generation_mode': (payload.get('selected_generation_mode') or '').strip()[:50],
+        'selected_copy_text': selected_copy_text,
+        'generator_context': {str(key)[:50]: str(value)[:120] for key, value in generator_context.items()},
+        'title_options': normalized_title_options,
+    }
+
+    submission.selected_title = strategy_snapshot['selected_title'] or submission.selected_title
+    submission.selected_title_source = strategy_snapshot['selected_title_source'] or submission.selected_title_source
+    submission.selected_title_index = strategy_snapshot['selected_title_index']
+    submission.selected_copy_version_index = strategy_snapshot['selected_copy_version_index']
+    submission.selected_copy_goal = strategy_snapshot['selected_copy_goal'] or submission.selected_copy_goal
+    submission.selected_copy_skill = strategy_snapshot['selected_copy_skill'] or submission.selected_copy_skill
+    submission.selected_title_skill = strategy_snapshot['selected_title_skill'] or submission.selected_title_skill
+    submission.selected_image_skill = strategy_snapshot['selected_image_skill'] or submission.selected_image_skill
+    submission.selected_cover_style_type = strategy_snapshot['selected_cover_style_type'] or submission.selected_cover_style_type
+    submission.selected_inner_style_type = strategy_snapshot['selected_inner_style_type'] or submission.selected_inner_style_type
+    submission.selected_generation_mode = strategy_snapshot['selected_generation_mode'] or submission.selected_generation_mode
+    submission.selected_copy_text = strategy_snapshot['selected_copy_text'] or submission.selected_copy_text
+    submission.strategy_payload = json.dumps(strategy_snapshot, ensure_ascii=False)
+    submission.strategy_updated_at = datetime.now()
+    return strategy_snapshot
+
+
+def _build_strategy_insights(submissions):
+    scoped_submissions = [sub for sub in submissions if sub.selected_title_skill or sub.selected_image_skill or sub.strategy_payload]
+    captured_count = len(scoped_submissions)
+    if not scoped_submissions:
+        return {
+            'captured_count': 0,
+            'capture_rate': 0,
+            'capture_rate_display': '0%',
+            'title_skill_rows': [],
+            'image_skill_rows': [],
+            'combo_rows': [],
+            'latest_submissions': [],
+        }
+
+    def build_metric_rows(rows):
+        items = []
+        for key, item in rows.items():
+            avg_views = round(item['views'] / item['count'], 2) if item['count'] else 0
+            avg_interactions = round(item['interactions'] / item['count'], 2) if item['count'] else 0
+            avg_interaction_rate = _calculate_rate(item['interactions'], item['views'])
+            viral_rate = _calculate_rate(item['viral_count'], item['count'])
+            items.append({
+                'key': key,
+                'label': item['label'],
+                'count': item['count'],
+                'views': item['views'],
+                'interactions': item['interactions'],
+                'avg_views': avg_views,
+                'avg_interactions': avg_interactions,
+                'avg_interaction_rate': avg_interaction_rate,
+                'avg_interaction_rate_display': _format_rate(avg_interaction_rate),
+                'viral_count': item['viral_count'],
+                'viral_rate': viral_rate,
+                'viral_rate_display': _format_rate(viral_rate),
+            })
+        items.sort(key=lambda row: ((row['avg_interactions'] or 0), (row['viral_rate'] or 0), row['count']), reverse=True)
+        return items
+
+    title_skill_rows = {}
+    image_skill_rows = {}
+    combo_rows = {}
+    latest_submissions = []
+
+    for sub in scoped_submissions:
+        xhs_interactions = (sub.xhs_likes or 0) + (sub.xhs_favorites or 0) + (sub.xhs_comments or 0)
+        xhs_views = sub.xhs_views or 0
+        is_viral = _infer_viral_post(
+            views=sub.xhs_views or 0,
+            likes=sub.xhs_likes or 0,
+            favorites=sub.xhs_favorites or 0,
+            comments=sub.xhs_comments or 0,
+        ) if _submission_has_platform_link(sub, 'xhs') else False
+        title_skill_key = (sub.selected_title_skill or '未记录').strip() or '未记录'
+        image_skill_key = (sub.selected_image_skill or '未记录').strip() or '未记录'
+        combo_key = f'{title_skill_key} × {image_skill_key}'
+
+        for container, key, label in [
+            (title_skill_rows, title_skill_key, title_skill_key),
+            (image_skill_rows, image_skill_key, image_skill_key),
+            (combo_rows, combo_key, combo_key),
+        ]:
+            row = container.setdefault(key, {
+                'label': label,
+                'count': 0,
+                'views': 0,
+                'interactions': 0,
+                'viral_count': 0,
+            })
+            row['count'] += 1
+            row['views'] += xhs_views
+            row['interactions'] += xhs_interactions
+            row['viral_count'] += 1 if is_viral else 0
+
+        if len(latest_submissions) < 8:
+            latest_submissions.append({
+                'registration_id': sub.registration_id,
+                'title': sub.selected_title or sub.note_title or '未命名标题',
+                'title_skill': title_skill_key,
+                'image_skill': image_skill_key,
+                'views': xhs_views,
+                'interactions': xhs_interactions,
+                'strategy_updated_at': sub.strategy_updated_at.strftime('%Y-%m-%d %H:%M:%S') if sub.strategy_updated_at else '',
+            })
+
+    return {
+        'captured_count': captured_count,
+        'capture_rate': _calculate_rate(captured_count, len(submissions)) or 0,
+        'capture_rate_display': _format_rate(_calculate_rate(captured_count, len(submissions))),
+        'title_skill_rows': build_metric_rows(title_skill_rows)[:8],
+        'image_skill_rows': build_metric_rows(image_skill_rows)[:8],
+        'combo_rows': build_metric_rows(combo_rows)[:8],
+        'latest_submissions': latest_submissions,
+    }
+
+
+def _detect_topic_strategy_traits(topic_name='', keywords='', direction=''):
+    text = ' '.join([
+        str(topic_name or ''),
+        str(keywords or ''),
+        str(direction or ''),
+    ]).strip()
+    lowered = text.lower()
+    return {
+        'report_like': bool(re.search(r'体检|检查|报告|指标|fibroscan|福波看|复查', text, re.I)),
+        'discussion_like': bool(re.search(r'怎么办|怎么选|会怎么做|你会|求助|有人知道|能不能', text, re.I)),
+        'myth_like': bool(re.search(r'误区|为什么|是不是|别再|千万别|想当然|搞错', text, re.I)),
+        'story_like': bool(re.search(r'经历|经验|踩坑|复盘|后来|家属|陪诊|我妈|我爸|我自己', text, re.I)),
+        'emotion_like': bool(re.search(r'焦虑|害怕|崩溃|担心|慌|拖着', text, re.I)),
+        'raw_text': text,
+        'lowered': lowered,
+    }
+
+
+def _build_heuristic_strategy_recommendation(topic):
+    topic_name = topic.topic_name if topic else ''
+    keywords = topic.keywords if topic else ''
+    direction = topic.direction if topic else ''
+    traits = _detect_topic_strategy_traits(topic_name, keywords, direction)
+    if traits['discussion_like']:
+        recommended = {
+            'copy_goal': 'comment_engagement',
+            'copy_skill': 'discussion_hook',
+            'title_skill': 'question_gap',
+            'image_skill': 'story_atmosphere',
+            'cover_style_type': 'memo_mobile',
+            'inner_style_type': 'memo_classroom',
+            'generation_mode': 'smart_bundle',
+        }
+        reason = '当前话题更适合先把评论区打开，优先用提问型标题和陪伴感画面。'
+    elif traits['report_like']:
+        recommended = {
+            'copy_goal': 'save_value',
+            'copy_skill': 'report_interpretation',
+            'title_skill': 'checklist_collect',
+            'image_skill': 'report_decode',
+            'cover_style_type': 'medical_science',
+            'inner_style_type': 'checklist_report',
+            'generation_mode': 'smart_bundle',
+        }
+        reason = '当前是检查/报告类话题，更容易靠“看懂指标 + 收藏备用”起量。'
+    elif traits['myth_like']:
+        recommended = {
+            'copy_goal': 'viral_title',
+            'copy_skill': 'myth_busting',
+            'title_skill': 'conflict_reverse',
+            'image_skill': 'high_click_cover',
+            'cover_style_type': 'poster_bold',
+            'inner_style_type': 'knowledge_card',
+            'generation_mode': 'smart_bundle',
+        }
+        reason = '当前话题自带纠偏和反差感，更适合先冲点击。'
+    elif traits['story_like'] or traits['emotion_like']:
+        recommended = {
+            'copy_goal': 'balanced',
+            'copy_skill': 'story_empathy',
+            'title_skill': 'emotional_diary',
+            'image_skill': 'story_atmosphere',
+            'cover_style_type': 'memo_mobile',
+            'inner_style_type': 'memo_classroom',
+            'generation_mode': 'smart_bundle',
+        }
+        reason = '当前更适合走真实经历和情绪代入，先做共鸣。'
+    else:
+        recommended = {
+            'copy_goal': 'viral_title',
+            'copy_skill': 'story_empathy',
+            'title_skill': 'result_first',
+            'image_skill': 'high_click_cover',
+            'cover_style_type': 'poster_bold',
+            'inner_style_type': 'knowledge_card',
+            'generation_mode': 'smart_bundle',
+        }
+        reason = '默认先走“高点击封面 + 结果前置标题 + 共鸣正文”的通用爆款组合。'
+    return {
+        'recommended': recommended,
+        'reason': reason,
+        'traits': traits,
+    }
+
+
+def _strategy_row_relevance(row, traits):
+    score = 0
+    if traits['report_like']:
+        if row.get('copy_goal') == 'save_value':
+            score += 1
+        if row.get('copy_skill') in {'report_interpretation', 'practical_checklist'}:
+            score += 2
+        if row.get('title_skill') == 'checklist_collect':
+            score += 3
+        if row.get('image_skill') == 'report_decode':
+            score += 3
+    if traits['discussion_like']:
+        if row.get('copy_goal') == 'comment_engagement':
+            score += 2
+        if row.get('copy_skill') == 'discussion_hook':
+            score += 2
+        if row.get('title_skill') == 'question_gap':
+            score += 3
+        if row.get('image_skill') == 'story_atmosphere':
+            score += 1
+    if traits['myth_like']:
+        if row.get('copy_goal') == 'viral_title':
+            score += 2
+        if row.get('copy_skill') == 'myth_busting':
+            score += 2
+        if row.get('title_skill') == 'conflict_reverse':
+            score += 3
+        if row.get('image_skill') == 'high_click_cover':
+            score += 2
+    if traits['story_like'] or traits['emotion_like']:
+        if row.get('copy_skill') == 'story_empathy':
+            score += 2
+        if row.get('title_skill') == 'emotional_diary':
+            score += 3
+        if row.get('image_skill') == 'story_atmosphere':
+            score += 2
+    return score
+
+
+def _build_strategy_recommendation_payload(registration):
+    if not registration or not registration.topic:
+        return {
+            'success': False,
+            'message': '报名信息不存在',
+        }
+
+    heuristic = _build_heuristic_strategy_recommendation(registration.topic)
+    traits = heuristic['traits']
+    base_recommended = dict(heuristic['recommended'])
+    submissions = Submission.query.filter(
+        Submission.strategy_updated_at.isnot(None)
+    ).order_by(
+        Submission.strategy_updated_at.desc(),
+        Submission.id.desc(),
+    ).limit(500).all()
+
+    strategy_rows = {}
+    for sub in submissions:
+        title_skill = (sub.selected_title_skill or '').strip()
+        image_skill = (sub.selected_image_skill or '').strip()
+        copy_skill = (sub.selected_copy_skill or '').strip()
+        copy_goal = (sub.selected_copy_goal or '').strip()
+        if not any([title_skill, image_skill, copy_skill, copy_goal]):
+            continue
+        key = '|'.join([
+            copy_goal or '-',
+            copy_skill or '-',
+            title_skill or '-',
+            image_skill or '-',
+            (sub.selected_cover_style_type or '').strip() or '-',
+            (sub.selected_inner_style_type or '').strip() or '-',
+            (sub.selected_generation_mode or '').strip() or '-',
+        ])
+        row = strategy_rows.setdefault(key, {
+            'copy_goal': copy_goal or base_recommended['copy_goal'],
+            'copy_skill': copy_skill or base_recommended['copy_skill'],
+            'title_skill': title_skill or base_recommended['title_skill'],
+            'image_skill': image_skill or base_recommended['image_skill'],
+            'cover_style_type': (sub.selected_cover_style_type or '').strip() or base_recommended['cover_style_type'],
+            'inner_style_type': (sub.selected_inner_style_type or '').strip() or base_recommended['inner_style_type'],
+            'generation_mode': (sub.selected_generation_mode or '').strip() or base_recommended['generation_mode'],
+            'count': 0,
+            'views': 0,
+            'interactions': 0,
+            'viral_count': 0,
+            'sample_titles': [],
+        })
+        xhs_views = sub.xhs_views or 0
+        xhs_interactions = (sub.xhs_likes or 0) + (sub.xhs_favorites or 0) + (sub.xhs_comments or 0)
+        row['count'] += 1
+        row['views'] += xhs_views
+        row['interactions'] += xhs_interactions
+        row['viral_count'] += 1 if (_submission_has_platform_link(sub, 'xhs') and _infer_viral_post(
+            views=sub.xhs_views or 0,
+            likes=sub.xhs_likes or 0,
+            favorites=sub.xhs_favorites or 0,
+            comments=sub.xhs_comments or 0,
+        )) else 0
+        if len(row['sample_titles']) < 3:
+            row['sample_titles'].append(sub.selected_title or sub.note_title or '未命名标题')
+
+    historical_rows = []
+    for key, row in strategy_rows.items():
+        avg_interactions = round(row['interactions'] / row['count'], 2) if row['count'] else 0
+        viral_rate = _calculate_rate(row['viral_count'], row['count']) or 0
+        avg_interaction_rate = _calculate_rate(row['interactions'], row['views']) or 0
+        relevance = _strategy_row_relevance(row, traits)
+        ranking_score = (relevance * 1000) + (avg_interactions * 10) + (viral_rate * 5) + (avg_interaction_rate * 2) + row['count']
+        historical_rows.append({
+            **row,
+            'key': key,
+            'avg_interactions': avg_interactions,
+            'viral_rate': viral_rate,
+            'viral_rate_display': _format_rate(viral_rate),
+            'avg_interaction_rate': avg_interaction_rate,
+            'avg_interaction_rate_display': _format_rate(avg_interaction_rate),
+            'relevance': relevance,
+            'ranking_score': round(ranking_score, 2),
+        })
+
+    historical_rows.sort(
+        key=lambda item: (item['ranking_score'], item['count'], item['avg_interactions'], item['viral_rate']),
+        reverse=True,
+    )
+    top_rows = historical_rows[:3]
+
+    source = 'heuristic'
+    confidence = 'low'
+    reason = heuristic['reason']
+    recommended = dict(base_recommended)
+    if top_rows:
+        best_row = top_rows[0]
+        if best_row['count'] >= 2 or best_row['relevance'] >= 3:
+            source = 'historical'
+            confidence = 'high' if best_row['count'] >= 3 and best_row['relevance'] >= 3 else 'medium'
+            recommended.update({
+                'copy_goal': best_row['copy_goal'] or recommended['copy_goal'],
+                'copy_skill': best_row['copy_skill'] or recommended['copy_skill'],
+                'title_skill': best_row['title_skill'] or recommended['title_skill'],
+                'image_skill': best_row['image_skill'] or recommended['image_skill'],
+                'cover_style_type': best_row['cover_style_type'] or recommended['cover_style_type'],
+                'inner_style_type': best_row['inner_style_type'] or recommended['inner_style_type'],
+                'generation_mode': best_row['generation_mode'] or recommended['generation_mode'],
+            })
+            reason = (
+                f"参考近期待留痕样本，和当前话题更接近的组合里，“{best_row['title_skill']} × {best_row['image_skill']}”"
+                f"共出现 {best_row['count']} 次，平均互动 {best_row['avg_interactions']}，爆款率 {best_row['viral_rate_display']}。"
+            )
+
+    return {
+        'success': True,
+        'source': source,
+        'confidence': confidence,
+        'reason': reason,
+        'recommended': recommended,
+        'heuristic': heuristic['recommended'],
+        'traits': {key: value for key, value in traits.items() if key not in {'raw_text', 'lowered'}},
+        'historical_rows': [{
+            'copy_goal': row['copy_goal'],
+            'copy_skill': row['copy_skill'],
+            'title_skill': row['title_skill'],
+            'image_skill': row['image_skill'],
+            'cover_style_type': row['cover_style_type'],
+            'inner_style_type': row['inner_style_type'],
+            'generation_mode': row['generation_mode'],
+            'count': row['count'],
+            'avg_interactions': row['avg_interactions'],
+            'viral_rate_display': row['viral_rate_display'],
+            'relevance': row['relevance'],
+            'sample_titles': row['sample_titles'],
+        } for row in top_rows],
+    }
+
+
+def _normalize_title_candidate(title):
+    import re
+
+    text = re.sub(r'^(标题\s*[：:]\s*)+', '', (title or '').strip()).strip('：: =-')
+    text = re.sub(r'[#]+', '', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    if not text:
+        return ''
+    bad_title_tokens = ['带话题', '关键词', '版本']
+    if any(token in text for token in bad_title_tokens):
+        return ''
+    return text[:24]
+
+
+def _build_title_option_pool(cards, title_skill_profile, topic, keywords='', copy_goal='balanced'):
+    import re
+
+    keyword_source = re.sub(r'带话题|#', ' ', keywords or '')
+    keyword_items = [item.strip() for item in re.split(r'[\s,，、/]+', keyword_source) if item.strip()]
+    lead_keyword = next((item for item in keyword_items if 1 < len(item) <= 10), '') or (topic.topic_name or '护肝管理')
+    if len(lead_keyword) > 12:
+        lead_keyword = (topic.topic_name or lead_keyword)[:12]
+
+    title_guidance = build_title_skill_local_guidance(
+        title_skill_profile,
+        lead_keyword=lead_keyword,
+        topic_name=(topic.topic_name or lead_keyword),
+    )
+    guidance_titles = title_guidance.get('titles') or []
+
+    goal_title_templates = []
+    if copy_goal == 'viral_title':
+        goal_title_templates = [
+            f'{lead_keyword}别再拖了',
+            f'很多人把{lead_keyword}想简单了',
+        ]
+    elif copy_goal == 'save_value':
+        goal_title_templates = [
+            f'{lead_keyword}这几步别漏',
+            f'关于{lead_keyword}，先存这份',
+        ]
+    elif copy_goal == 'comment_engagement':
+        goal_title_templates = [
+            f'{lead_keyword}这一步，你会怎么选',
+            f'碰到{lead_keyword}，你会先做什么',
+        ]
+    elif copy_goal == 'trust_building':
+        goal_title_templates = [
+            f'{lead_keyword}先把逻辑看懂',
+            f'关于{lead_keyword}，门诊更关注这几点',
+        ]
+    else:
+        goal_title_templates = [
+            f'{lead_keyword}先看这几点',
+            f'关于{lead_keyword}，我后来才想明白',
+        ]
+
+    candidate_rows = []
+    for index, card in enumerate(cards or []):
+        candidate_rows.append({
+            'title': card.get('title') or '',
+            'source': f'正文版本 {index + 1}',
+        })
+    for item in guidance_titles:
+        candidate_rows.append({
+            'title': item,
+            'source': f'{title_skill_profile.get("label") or "标题技能包"}',
+        })
+    for item in goal_title_templates:
+        candidate_rows.append({
+            'title': item,
+            'source': '目标扩展',
+        })
+    if (topic.topic_name or '').strip():
+        candidate_rows.append({
+            'title': (topic.topic_name or '').strip()[:24],
+            'source': '原始话题',
+        })
+
+    options = []
+    seen = set()
+    for row in candidate_rows:
+        normalized_title = _normalize_title_candidate(row.get('title') or '')
+        if not normalized_title:
+            continue
+        if normalized_title in seen:
+            continue
+        seen.add(normalized_title)
+        options.append({
+            'title': normalized_title,
+            'source': row.get('source') or '系统推荐',
+        })
+        if len(options) >= 6:
+            break
+
+    if not options:
+        options.append({
+            'title': '分享笔记',
+            'source': '系统兜底',
+        })
+    return options
+
 @app.route('/api/generate_copy', methods=['POST'])
 def generate_copy():
     data = request.json or {}
@@ -8093,8 +10151,12 @@ def generate_copy():
     custom_persona = (data.get('custom_persona') or '').strip()
     scene_key = (data.get('scene_key') or 'auto').strip()
     custom_scene = (data.get('custom_scene') or '').strip()
+    direction_key = (data.get('direction_key') or 'auto').strip()
+    custom_direction = (data.get('custom_direction') or '').strip()
     product_key = (data.get('product_key') or 'auto').strip()
     copy_goal = (data.get('copy_goal') or 'balanced').strip()
+    copy_skill = (data.get('copy_skill') or 'auto').strip()
+    title_skill = (data.get('title_skill') or 'auto').strip()
 
     reg = Registration.query.get(registration_id)
     if not reg:
@@ -8126,11 +10188,15 @@ def generate_copy():
         recent_snippets = []
 
     auto_persona_pool = [
-        '医生助理', '健管师', '营养师', '患者本人', '患者家属', '医学科普', '患者朋友'
+        '医生助理', '健管师', '营养师', '中医调理视角', '运动减脂教练',
+        '患者本人', '患者家属', '医学科普', '患者朋友', '职场久坐人群',
+        '女性健康视角', '情绪陪伴者', '慢病管理者', '体检复盘博主'
     ]
     auto_scene_pool = [
         '门诊沟通答疑', '体检异常提醒', '复查对比变化', '日常护肝管理',
-        '熬夜应酬后护肝', '家属陪伴照护', '饮食调整建议', '检查报告解读'
+        '熬夜应酬后护肝', '家属陪伴照护', '饮食调整建议', '检查报告解读',
+        '中医调理养肝', '脂肪肝减脂管理', '情绪压力与肝气', '失眠熬夜恢复期',
+        '女性日常养肝', '久坐久盯屏场景', '运动减脂重启期'
     ]
     default_endings = [
         '你们会怎么做？',
@@ -8142,13 +10208,30 @@ def generate_copy():
 
     selected_persona_label = _resolve_copy_selection(COPY_PERSONA_OPTIONS, persona_key, custom_value=custom_persona)
     selected_scene_label = _resolve_copy_selection(COPY_SCENE_OPTIONS, scene_key, custom_value=custom_scene)
+    selected_direction_label = _resolve_copy_direction_selection(direction_key, topic_text=topic_text, user_prompt=user_prompt, custom_value=custom_direction)
     selected_product_label, product_hint = _resolve_copy_product_selection(product_key, topic_text)
     goal_profile = _goal_strategy_profile(copy_goal)
+    skill_profile = resolve_copy_skill(copy_skill, topic_text=topic_text, copy_goal=copy_goal)
+    skill_prompt_block = build_copy_skill_prompt_block(skill_profile)
+    title_skill_profile = resolve_title_skill(title_skill, topic_text=topic_text, copy_goal=copy_goal, copy_skill_key=skill_profile.get('key') or '')
+    title_skill_prompt_block = build_title_skill_prompt_block(title_skill_profile)
+    reference_corpus_entries = _matching_corpus_snippets(','.join([topic_text, keywords]), limit=4)
+    reference_corpus_block = _build_generate_copy_corpus_block(reference_corpus_entries, product_hint=product_hint)
 
     version_personas = random.sample(auto_persona_pool, output_count) if persona_key == 'auto' else [selected_persona_label] * output_count
     version_scenes = random.sample(auto_scene_pool, output_count) if scene_key == 'auto' else [selected_scene_label] * output_count
-    version_endings = random.sample(default_endings, output_count)
-    version_styles = goal_profile.get('variants') or ['故事共鸣版', '轻科普拆解版', '互动讨论版']
+    skill_default_endings = build_copy_skill_local_guidance(skill_profile, lead_keyword=topic_text or '护肝管理').get('endings') or []
+    ending_pool = skill_default_endings or default_endings
+    if len(ending_pool) >= output_count:
+        version_endings = random.sample(ending_pool, output_count)
+    else:
+        version_endings = [ending_pool[i % len(ending_pool)] for i in range(output_count)]
+    goal_variants = goal_profile.get('variants') or ['故事共鸣版', '轻科普拆解版', '互动讨论版']
+    skill_variants = skill_profile.get('variants') or ['技能版']
+    version_styles = [
+        f"{skill_variants[i % len(skill_variants)]} / {goal_variants[i % len(goal_variants)]}"
+        for i in range(output_count)
+    ]
 
     role_scene_block = '\n'.join([
         f"- 版本{i+1}：人设={version_personas[i]} ｜ 场景={version_scenes[i]} ｜ 风格={version_styles[i % len(version_styles)]}"
@@ -8176,11 +10259,23 @@ def generate_copy():
 【用户自定义提词器】
 {user_prompt or '无，按系统默认策略生成'}
 
+【本次内容方向】
+{selected_direction_label}
+
 【软植入要求】
 {product_hint}
 
 【本轮目标】
 {goal_profile['label']}。{goal_profile['title_rule']}
+
+【写作技能包】
+{skill_prompt_block}
+
+【标题技能包】
+{title_skill_prompt_block}
+
+【可仿写模板语料】（只学结构和节奏，不得照抄）
+{reference_corpus_block}
 
 【每个版本的人设/场景/风格】
 {role_scene_block}
@@ -8238,24 +10333,31 @@ def generate_copy():
     ]
 
     cards = []
+    generation_engine = 'local_fallback'
+    agent_mode = 'rule_based'
+    model_attempted = False
+    model_error_message = ''
     try:
-        if DEEPSEEK_API_KEY:
-            headers = {'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'}
-            payload = {
-                'model': 'deepseek-chat',
-                'messages': [
-                    {'role': 'system', 'content': '你先保证贴题、真实口语化和差异化，再去追求花哨表达。禁止跑题，禁止硬广。'},
-                    {'role': 'user', 'content': prompt}
-                ],
-                'temperature': 1.22,
-                'top_p': 0.92,
-                'presence_penalty': 0.85,
-                'frequency_penalty': 0.45
-            }
-            resp = requests.post(DEEPSEEK_API_URL, json=payload, headers=headers, timeout=40)
-            if resp.status_code == 200:
-                result = resp.json()
-                content = result['choices'][0]['message']['content']
+        runtime = _copywriter_runtime_config()
+        if runtime.get('configured'):
+            generation_engine = runtime['provider']
+            model_attempted = True
+            if fast_mode:
+                single_pass_result = _call_copywriter(
+                    [
+                        {'role': 'system', 'content': f'你先严格执行当前写作技能包，再保证贴题、真实口语化和差异化。禁止跑题，禁止硬广。当前技能包：{skill_profile["label"]}。'},
+                        {'role': 'user', 'content': prompt}
+                    ],
+                    temperature=1.08,
+                    top_p=0.88,
+                    timeout=40,
+                    extra_payload={
+                        'presence_penalty': 0.65,
+                        'frequency_penalty': 0.25,
+                    }
+                )
+                agent_mode = 'single_pass'
+                content = single_pass_result.get('text') or ''
                 parts = re.split(r'===版本\s*\d+\s*===', content)
                 for index, part in enumerate(parts):
                     if len(cards) >= output_count:
@@ -8267,12 +10369,156 @@ def generate_copy():
                     if not (card.get('body') or '').strip():
                         continue
                     cards.append(card)
+            else:
+                planning_prompt = f"""你现在是小红书内容规划 Agent，不直接写正文，先给出 3 条明确不同的写作方案。
+
+请只输出 JSON，不要输出解释。结构如下：
+{{
+  "versions": [
+    {{
+      "persona": "",
+      "scene": "",
+      "angle": "",
+      "hook_focus": "",
+      "body_focus": "",
+      "insertion_strategy": "",
+      "ending_direction": ""
+    }}
+  ]
+}}
+
+要求：
+1. 必须给 3 个版本
+2. 三个版本差异要明显，不是换同义词
+3. 版本要贴合当前话题、人设、场景、内容目标
+4. 不要写官话，不要写空泛描述
+
+当前话题：{topic.topic_name}
+关键词：{keywords or '无'}
+内容方向：{selected_direction_label}
+内容目标：{goal_profile['label']}
+写作技能包：{skill_profile['label']}
+标题技能包：{title_skill_profile['label']}
+用户补充要求：{user_prompt or '无'}
+软植入要求：{product_hint}
+版本默认人设/场景：
+{role_scene_block}
+"""
+                planning_result = _call_copywriter(
+                    [
+                        {'role': 'system', 'content': '你是一个会先做内容规划，再动笔写作的小红书内容策划 Agent。'},
+                        {'role': 'user', 'content': planning_prompt},
+                    ],
+                    temperature=0.72,
+                    top_p=0.82,
+                    timeout=35,
+                )
+                plan_json = _extract_json_object(planning_result.get('text') or '')
+                plan_versions = (plan_json.get('versions') or []) if isinstance(plan_json, dict) else []
+                normalized_plans = []
+                for index in range(output_count):
+                    current_plan = plan_versions[index] if index < len(plan_versions) and isinstance(plan_versions[index], dict) else {}
+                    normalized_plans.append({
+                        'persona': (current_plan.get('persona') or default_cards[index]['persona']).strip(),
+                        'scene': (current_plan.get('scene') or default_cards[index]['scene']).strip(),
+                        'angle': (current_plan.get('angle') or '').strip(),
+                        'hook_focus': (current_plan.get('hook_focus') or '').strip(),
+                        'body_focus': (current_plan.get('body_focus') or '').strip(),
+                        'insertion_strategy': (current_plan.get('insertion_strategy') or selected_product_label).strip(),
+                        'ending_direction': (current_plan.get('ending_direction') or default_cards[index]['ending']).strip(),
+                    })
+                writing_plan_block = '\n'.join([
+                    (
+                        f"版本{i+1}：人设={row['persona']} ｜ 场景={row['scene']} ｜ 切入={row['angle'] or '按当前话题自然切入'} ｜ "
+                        f"钩子重点={row['hook_focus'] or '先接住用户情绪'} ｜ 正文重点={row['body_focus'] or '讲清具体动作'} ｜ "
+                        f"软植入方式={row['insertion_strategy'] or selected_product_label} ｜ 互动方向={row['ending_direction'] or default_cards[i]['ending']}"
+                    )
+                    for i, row in enumerate(normalized_plans)
+                ])
+                writing_prompt = f"""你现在是小红书写作 Agent。请严格按下面 3 条规划分别写出 3 个版本。
+
+写作规划：
+{writing_plan_block}
+
+共通要求：
+1. 每个版本都要像真人在说话
+2. 不要写“我是从xx身份出发”“围绕xx最容易写空泛”“我会把xx顺手带出”这类模板句
+3. 一开头就进入具体情境，不要先做空泛总述
+4. 正文要有细节、判断、动作，不要复读标题
+5. 软植入必须像真实经历里自然出现
+6. 输出格式必须是版本1/2/3的标准结构
+
+话题：{topic.topic_name}
+关键词：{keywords or '无'}
+内容方向：{selected_direction_label}
+参考模板语料：
+{reference_corpus_block}
+"""
+                writing_result = _call_copywriter(
+                    [
+                        {'role': 'system', 'content': '你是一个会按既定规划精确写作、避免 AI 腔的小红书文案 Agent。'},
+                        {'role': 'user', 'content': writing_prompt},
+                    ],
+                    temperature=1.0,
+                    top_p=0.9,
+                    timeout=40,
+                    extra_payload={
+                        'presence_penalty': 0.7,
+                        'frequency_penalty': 0.3,
+                    }
+                )
+                agent_mode = 'planning_agent'
+                content = writing_result.get('text') or ''
+                parts = re.split(r'===版本\s*\d+\s*===', content)
+                for index, part in enumerate(parts):
+                    if len(cards) >= output_count:
+                        break
+                    version_text = (part or '').strip()
+                    if not version_text:
+                        continue
+                    defaults = {
+                        'persona': normalized_plans[min(index, output_count - 1)]['persona'],
+                        'scene': normalized_plans[min(index, output_count - 1)]['scene'],
+                        'insertion': normalized_plans[min(index, output_count - 1)]['insertion_strategy'] or selected_product_label,
+                        'ending': normalized_plans[min(index, output_count - 1)]['ending_direction'] or default_cards[min(index, output_count - 1)]['ending'],
+                    }
+                    card = _parse_generated_copy_card(version_text, defaults=defaults)
+                    if not (card.get('body') or '').strip():
+                        continue
+                    cards.append(card)
+                if cards:
+                    rewrite_prompt = "请把下面 3 个版本做一次去模板味改写，保留结构和核心信息，但让语言更像真人随手发，不要输出任何解释。\n\n" + "\n\n".join(
+                        [f"===版本{idx+1}===\n{_render_generated_copy_card(card)}" for idx, card in enumerate(cards[:output_count])]
+                    )
+                    rewrite_result = _call_copywriter(
+                        [
+                            {'role': 'system', 'content': '你是小红书真人感改写 Agent，只负责把内容去模板味、去AI腔。'},
+                            {'role': 'user', 'content': rewrite_prompt},
+                        ],
+                        temperature=1.02,
+                        top_p=0.9,
+                        timeout=35,
+                    )
+                    rewritten = rewrite_result.get('text') or ''
+                    rewrite_parts = re.split(r'===版本\s*\d+\s*===', rewritten)
+                    rewritten_cards = []
+                    for index, part in enumerate(rewrite_parts):
+                        version_text = (part or '').strip()
+                        if not version_text:
+                            continue
+                        defaults = default_cards[min(index, output_count - 1)]
+                        rewritten_cards.append(_parse_generated_copy_card(version_text, defaults=defaults))
+                    if len(rewritten_cards) >= output_count:
+                        cards = rewritten_cards[:output_count]
         else:
             raise RuntimeError('No API key')
     except Exception as exc:
-        print(f"DeepSeek API error: {exc}")
+        model_error_message = str(exc)
+        print(f"copywriter model error: {exc}")
 
     if len(cards) < output_count or any(not _copy_card_usable(card) for card in cards):
+        generation_engine = 'local_fallback'
+        agent_mode = 'fallback_after_model_error' if model_attempted else 'rule_based'
         fallback_result = generate_local_copy(
             topic,
             keywords,
@@ -8284,6 +10530,9 @@ def generate_copy():
             version_personas=version_personas,
             version_scenes=version_scenes,
             version_endings=version_endings,
+            skill_profile=skill_profile,
+            title_skill_profile=title_skill_profile,
+            reference_corpus_entries=reference_corpus_entries,
         )
         cards = fallback_result['cards']
 
@@ -8335,10 +10584,20 @@ def generate_copy():
             version_personas=version_personas,
             version_scenes=version_scenes,
             version_endings=version_endings,
+            skill_profile=skill_profile,
+            title_skill_profile=title_skill_profile,
+            reference_corpus_entries=reference_corpus_entries,
         )
         cards = fallback_result['cards']
     versions = [card['copy_text'] for card in cards]
     titles = [card.get('title') or '分享笔记' for card in cards]
+    title_options = _build_title_option_pool(
+        cards,
+        title_skill_profile,
+        topic,
+        keywords=keywords,
+        copy_goal=copy_goal,
+    )
 
     try:
         new_snips = []
@@ -8359,15 +10618,48 @@ def generate_copy():
     return jsonify({
         'success': True,
         'titles': titles,
+        'title_options': title_options,
         'versions': versions,
         'cards': cards,
         'reg_id': registration_id,
         'generator_context': {
             'generation_id': generation_id,
+            'engine': generation_engine,
+            'engine_label': (
+                f"当前使用：{_copywriter_runtime_config().get('label')}"
+                if generation_engine != 'local_fallback' else
+                '当前使用：本地兜底生成'
+            ),
+            'engine_message': (
+                '当前已启用规划 Agent -> 写作 Agent -> 去模板味改写链路。'
+                if agent_mode == 'planning_agent' else (
+                    '已接入真实文案模型，但当前还是单轮生成，不是完整规划式 Agent。'
+                    if agent_mode == 'single_pass' else (
+                        f'当前模型调用失败，已自动回退本地兜底。失败原因：{model_error_message[:120] or "未获取到模型结果"}'
+                        if agent_mode == 'fallback_after_model_error' else
+                        '当前没有配置可用的文案模型，所以这次是本地模板兜底，质量会明显差一些。'
+                    )
+                )
+            ),
+            'agent_mode': agent_mode,
+            'agent_mode_label': (
+                '模式：规划 Agent'
+                if agent_mode == 'planning_agent' else (
+                    '模式：单轮生成'
+                    if agent_mode == 'single_pass' else (
+                        '模式：模型失败后兜底'
+                        if agent_mode == 'fallback_after_model_error' else
+                        '模式：规则兜底'
+                    )
+                )
+            ),
             'persona': selected_persona_label,
             'scene': selected_scene_label,
+            'direction': selected_direction_label,
             'product': selected_product_label,
             'goal': goal_profile['label'],
+            'skill': skill_profile['label'],
+            'title_skill': title_skill_profile['label'],
         },
     })
 
@@ -8384,11 +10676,11 @@ def generate_local_copy(
     version_personas=None,
     version_scenes=None,
     version_endings=None,
+    skill_profile=None,
+    title_skill_profile=None,
+    reference_corpus_entries=None,
 ):
     """本地生成文案（无 API 时使用）- 保留人设、场景、软植入和互动结构。"""
-    import random
-    import re
-
     output_count = 3
     keyword_source = re.sub(r'带话题|#', ' ', keywords or '')
     keyword_items = [item.strip() for item in re.split(r'[\s,，、/]+', keyword_source) if item.strip()]
@@ -8397,41 +10689,78 @@ def generate_local_copy(
         lead_keyword = (topic.topic_name or lead_keyword)[:12]
     prompt_terms = _extract_prompt_terms(user_prompt)
     prompt_focus = prompt_terms[0] if prompt_terms else ''
+    resolved_skill = skill_profile or resolve_copy_skill(topic_text=(topic.topic_name or ''), copy_goal='balanced')
+    resolved_title_skill = title_skill_profile or resolve_title_skill(topic_text=(topic.topic_name or ''), copy_goal='balanced', copy_skill_key=resolved_skill.get('key') or '')
+    reference_entry = (reference_corpus_entries or [None])[0]
+    reference_hint = ''
+    if reference_entry:
+        template_meta = _corpus_template_meta(getattr(reference_entry, 'template_type_key', '') or '')
+        reference_hint = f'这篇会参考“{reference_entry.title or "参考模板"}”那种{template_meta.get("label") or "结构模板"}节奏，但内容会改写成围绕当前产品和话题的表达。'
 
     personas = version_personas or [persona_label] * output_count
     scenes = version_scenes or [scene_label] * output_count
     endings = version_endings or ['你们会怎么做？', '有类似经历的人可以说说吗？', '如果是你，你会先从哪一步开始？']
-    strategies = ['故事共鸣版', '轻科普拆解版', '互动讨论版']
-    hooks = [
-        f'我以前一直以为“{lead_keyword}”没那么要紧，直到这次真的被提醒。',
-        f'要不是最近碰到“{lead_keyword}”这个情况，我可能还会继续拖着。',
-        f'关于“{lead_keyword}”，我后来才发现大家最容易忽略的不是治疗，而是前面那一步。',
-    ]
-    title_templates = [
-        f'{lead_keyword}这件事我真拖过',
-        f'关于{lead_keyword}，我终于想明白了',
-        f'{lead_keyword}别再只会硬扛了',
-    ]
+    strategies = resolved_skill.get('variants') or ['故事共鸣版', '轻科普拆解版', '互动讨论版']
 
     cards = []
     for index in range(output_count):
         persona_text = personas[index] or persona_label or '患者本人'
         scene_text = scenes[index] or scene_label or '日常护肝管理'
+        skill_guidance = build_copy_skill_local_guidance(
+            resolved_skill,
+            lead_keyword=lead_keyword,
+            prompt_focus=prompt_focus,
+            scene_text=scene_text,
+        )
+        title_guidance = build_title_skill_local_guidance(
+            resolved_title_skill,
+            lead_keyword=lead_keyword,
+            topic_name=(topic.topic_name or lead_keyword),
+        )
+        hooks = skill_guidance.get('hooks') or [
+            f'我以前一直以为“{lead_keyword}”没那么要紧，直到这次真的被提醒。',
+            f'要不是最近碰到“{lead_keyword}”这个情况，我可能还会继续拖着。',
+            f'关于“{lead_keyword}”，我后来才发现大家最容易忽略的不是治疗，而是前面那一步。',
+        ]
+        title_templates = title_guidance.get('titles') or skill_guidance.get('titles') or [
+            f'{lead_keyword}这件事我真拖过',
+            f'关于{lead_keyword}，我终于想明白了',
+            f'{lead_keyword}别再只会硬扛了',
+        ]
+        skill_body_lines = skill_guidance.get('body_lines') or []
         hook_text = hooks[index % len(hooks)]
         title_text = title_templates[index % len(title_templates)]
         focus_text = f'我这次会重点讲“{prompt_focus}”这个点。' if prompt_focus else ''
+        scene_line = _local_copy_scene_line(scene_text, lead_keyword)
+        persona_line = _local_copy_persona_line(persona_text, lead_keyword)
+        action_lines = _local_copy_action_lines(lead_keyword, scene_text)
+        action_line = action_lines[index % len(action_lines)]
+        supporting_line = action_lines[(index + 1) % len(action_lines)]
+        product_line = _local_copy_product_line(product_label)
+        middle_line = _local_variant_middle(index, lead_keyword)
 
         body_sections = [
-            f'我是从“{persona_text}”这个身份出发，在“{scene_text}”这个场景里真正感受到这件事不能再拖。',
+            scene_line,
+            persona_line,
+            middle_line,
             hook_text,
-            f'后来我发现，围绕“{lead_keyword}”最容易写得空泛，但真正让人愿意看下去的，还是把当时的情绪、判断和具体动作讲清楚。',
+            skill_body_lines[index % len(skill_body_lines)] if skill_body_lines else '',
+            action_line,
+            supporting_line,
             focus_text,
         ]
-        if product_label and product_label not in {'自动匹配', '不植入产品'}:
-            body_sections.append(f'我会把{product_label}放在真实经历里顺手带出，而不是一上来就硬推，这样读起来更自然。')
-        else:
-            body_sections.append('这篇会先把科普和管理建议讲明白，不强行带产品，读起来会更像真实分享。')
-        body_sections.append('最后再留一个自然的问题，让看到的人愿意接话，而不是像在念标准答案。')
+        body_sections.append(product_line)
+        if reference_hint:
+            body_sections.append(reference_hint)
+        body_sections.append('我现在更在意的，是把这件事一步步讲清楚，而不是靠几个专业词把人说懵。')
+        deduped_sections = []
+        seen_sections = set()
+        for row in body_sections:
+            text = (row or '').strip()
+            if not text or text in seen_sections:
+                continue
+            seen_sections.add(text)
+            deduped_sections.append(text)
 
         card = {
             'persona': persona_text,
@@ -8439,7 +10768,7 @@ def generate_local_copy(
             'insertion': product_label or '自动匹配',
             'title': title_text,
             'hook': hook_text,
-            'body': '\n'.join([row for row in body_sections if row]).strip(),
+            'body': '\n'.join(deduped_sections).strip(),
             'ending': endings[index % len(endings)],
             'strategy': strategies[index % len(strategies)],
         }
@@ -8469,6 +10798,7 @@ def humanize_copy():
 4) 保持200-300字
 5) 结尾自然提问，不要出现"评论区"
 6) 合规：不要绝对化词，不引导购买
+7) 不要写“我是从xx身份出发”“我会把xx顺手带出”“围绕xx最容易写空泛”这类模板句
 
 原文：
 {content}
@@ -8476,18 +10806,15 @@ def humanize_copy():
 只输出重写后的正文。"""
 
     try:
-        if DEEPSEEK_API_KEY:
-            headers = {'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'}
-            payload = {
-                'model': 'deepseek-chat',
-                'messages': [{'role': 'user', 'content': prompt}],
-                'temperature': 1.15,
-                'top_p': 0.9
-            }
-            resp = requests.post(DEEPSEEK_API_URL, json=payload, headers=headers, timeout=30)
-            if resp.status_code == 200:
-                result = resp.json()
-                rewritten = result['choices'][0]['message']['content'].strip()
+        if _copywriter_runtime_config().get('configured'):
+            result = _call_copywriter(
+                [{'role': 'user', 'content': prompt}],
+                temperature=1.08,
+                top_p=0.9,
+                timeout=30,
+            )
+            rewritten = (result.get('text') or '').strip()
+            if rewritten:
                 return jsonify({'success': True, 'content': rewritten})
         return jsonify({'success': False, 'message': '重写失败，请重试'})
     except Exception as e:
@@ -8650,6 +10977,14 @@ register_public_routes(app, {
     'default_site_nav_items': DEFAULT_SITE_NAV_ITEMS,
     'default_site_theme': DEFAULT_SITE_THEME,
     'asset_style_type_options': _asset_style_type_options,
+    'copy_skill_options': lambda: dict(COPY_SKILL_OPTIONS),
+    'title_skill_options': lambda: dict(TITLE_SKILL_OPTIONS),
+    'image_skill_options': lambda: dict(IMAGE_SKILL_OPTIONS),
+    'image_skill_presets': get_image_skill_presets,
+    'build_asset_style_recommendation_payload': lambda payload: _build_asset_style_recommendation_payload(payload),
+    'build_strategy_recommendation_payload': _build_strategy_recommendation_payload,
+    'apply_submission_strategy_snapshot': _apply_submission_strategy_snapshot,
+    'serialize_submission_strategy': _serialize_submission_strategy,
     'validate_required_platform_data': _validate_required_platform_data,
     'validate_partial_platform_data': _validate_partial_platform_data,
     'auto_detect_content_type': _auto_detect_content_type,
@@ -8914,6 +11249,9 @@ def corpus_entries():
             title=title,
             category=(data.get('category') or '爆款拆解').strip(),
             source=(data.get('source') or '手动录入').strip(),
+            source_title=(data.get('source_title') or '').strip()[:300],
+            reference_url=(data.get('reference_url') or '').strip()[:500],
+            template_type_key=(data.get('template_type_key') or '').strip()[:50],
             tags=(data.get('tags') or '').strip(),
             content=content,
             status='active'
@@ -8937,6 +11275,127 @@ def corpus_entries():
     return jsonify({
         'success': True,
         'items': [_serialize_corpus_entry(entry) for entry in entries]
+    })
+
+
+@app.route('/api/corpus/import_reference_links', methods=['POST'])
+def import_corpus_reference_links():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    data = request.json or {}
+    reference_links = _split_reference_links(data.get('reference_links') or '')
+    reference_note_text = (data.get('reference_note_text') or '').strip()
+    style_hint = (data.get('style_hint') or '').strip()
+    product_anchor = (data.get('product_anchor') or '').strip()
+    manual_title = (data.get('title') or '').strip()
+    category = (data.get('category') or '爆款拆解').strip() or '爆款拆解'
+    source = (data.get('source') or '参考链接导入').strip() or '参考链接导入'
+    tags = (data.get('tags') or '').strip()
+
+    if not reference_links:
+        return jsonify({'success': False, 'message': '请先填写至少一个参考链接'})
+    if not reference_note_text and not style_hint:
+        return jsonify({'success': False, 'message': '建议至少补一段参考文案摘录或风格拆解，效果会更好'})
+    result = _upsert_reference_corpus_entries(
+        reference_links,
+        reference_note_text=reference_note_text,
+        style_hint=style_hint,
+        product_anchor=product_anchor,
+        manual_title=(manual_title if len(reference_links) == 1 else ''),
+        category=category,
+        source=source,
+        tags=tags,
+    )
+    created = result['created']
+    updated = result['updated']
+
+    _log_operation('import_reference_links', 'corpus_entry', message='按参考链接导入模板语料', detail={
+        'link_count': len(reference_links),
+        'created_count': len(created),
+        'updated_count': len(updated),
+        'category': category,
+        'product_anchor': product_anchor,
+    })
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': f'参考链接模板已处理：新增 {len(created)} 条，更新 {len(updated)} 条',
+        'items': [_serialize_corpus_entry(entry) for entry in (created + updated)],
+    })
+
+
+@app.route('/api/topics/<int:topic_id>/import_reference_corpus', methods=['POST'])
+def import_topic_reference_corpus(topic_id):
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    topic = Topic.query.get_or_404(topic_id)
+    payload = _build_topic_reference_import_payload(topic)
+    if not payload['reference_links']:
+        return jsonify({'success': False, 'message': '该话题还没有参考链接可导入'})
+
+    result = _upsert_reference_corpus_entries(**payload)
+    created = result['created']
+    updated = result['updated']
+    _log_operation('import_topic_reference_links', 'topic', target_id=topic.id, message='按话题参考链接导入模板语料', detail={
+        'topic_name': topic.topic_name,
+        'link_count': len(payload['reference_links']),
+        'created_count': len(created),
+        'updated_count': len(updated),
+    })
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': f'已按话题《{topic.topic_name}》导入模板语料：新增 {len(created)} 条，更新 {len(updated)} 条',
+        'topic': _serialize_topic(topic),
+        'items': [_serialize_corpus_entry(entry) for entry in (created + updated)],
+    })
+
+
+@app.route('/api/activities/<int:activity_id>/import_reference_corpus', methods=['POST'])
+def import_activity_reference_corpus(activity_id):
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    activity = Activity.query.get_or_404(activity_id)
+    topics = Topic.query.filter_by(activity_id=activity.id).order_by(Topic.id.asc()).all()
+    if not topics:
+        return jsonify({'success': False, 'message': '该活动下还没有话题'})
+
+    created = []
+    updated = []
+    skipped = []
+    processed_topics = 0
+    for topic in topics:
+        payload = _build_topic_reference_import_payload(topic)
+        if not payload['reference_links']:
+            skipped.append({'topic_id': topic.id, 'topic_name': topic.topic_name, 'reason': '无参考链接'})
+            continue
+        result = _upsert_reference_corpus_entries(**payload)
+        created.extend(result['created'])
+        updated.extend(result['updated'])
+        processed_topics += 1
+
+    _log_operation('import_activity_reference_links', 'activity', target_id=activity.id, message='按活动批量导入话题参考链接为模板语料', detail={
+        'activity_name': activity.name,
+        'topic_count': len(topics),
+        'processed_topics': processed_topics,
+        'created_count': len(created),
+        'updated_count': len(updated),
+        'skipped': skipped[:20],
+    })
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': f'活动《{activity.name}》参考链接导入完成：处理话题 {processed_topics} 个，新增 {len(created)} 条，更新 {len(updated)} 条',
+        'activity_id': activity.id,
+        'processed_topics': processed_topics,
+        'skipped': skipped,
+        'items': [_serialize_corpus_entry(entry) for entry in (created + updated)[:30]],
     })
 
 
@@ -9060,6 +11519,10 @@ def _build_hotword_request_config(payload=None):
     runtime_settings = _hotword_runtime_settings()
     merged = dict(runtime_settings)
     override_keys = [
+        'hotword_scope_preset',
+        'hotword_time_window',
+        'hotword_date_from',
+        'hotword_date_to',
         'hotword_fetch_mode',
         'hotword_api_url',
         'hotword_api_method',
@@ -9077,6 +11540,10 @@ def _build_hotword_request_config(payload=None):
         if payload.get(key) not in [None, '']:
             merged[key] = payload.get(key)
     merged['hotword_timeout_seconds'] = min(max(_safe_int(merged.get('hotword_timeout_seconds'), 30), 5), 120)
+    merged['hotword_scope_preset'] = (merged.get('hotword_scope_preset') or 'liver_comorbidity').strip() or 'liver_comorbidity'
+    merged['hotword_time_window'] = (merged.get('hotword_time_window') or '30d').strip().lower() or '30d'
+    merged['hotword_date_from'] = (merged.get('hotword_date_from') or '').strip()
+    merged['hotword_date_to'] = (merged.get('hotword_date_to') or '').strip()
     merged['hotword_trend_type'] = (merged.get('hotword_trend_type') or 'note_search').strip().lower() or 'note_search'
     if merged['hotword_trend_type'] not in {'note_search', 'hot_queries'}:
         merged['hotword_trend_type'] = 'note_search'
@@ -9103,6 +11570,8 @@ def _build_hotword_remote_preview(payload=None, keywords=None, source_platform='
             'trend_type': request_config.get('hotword_trend_type'),
             'page_size': request_config.get('hotword_page_size'),
             'max_related_queries': request_config.get('hotword_max_related_queries'),
+            'date_from': request_config.get('hotword_date_from'),
+            'date_to': request_config.get('hotword_date_to'),
         },
         keywords,
         source_platform=source_platform,
@@ -9132,6 +11601,8 @@ def _resolve_hotword_rows(task_record, params, keywords):
                 'trend_type': params.get('hotword_trend_type'),
                 'page_size': params.get('hotword_page_size'),
                 'max_related_queries': params.get('hotword_max_related_queries'),
+                'date_from': params.get('hotword_date_from'),
+                'date_to': params.get('hotword_date_to'),
             },
             keywords,
             source_platform=source_platform,
@@ -9478,19 +11949,33 @@ def _dispatch_hotword_sync(payload, actor='system'):
     mode = request_config.get('hotword_fetch_mode') or 'skeleton'
     keyword_limit = min(max(_safe_int(payload.get('keyword_limit'), runtime_config.get('hotword_keyword_limit') or 10), 1), 30)
     batch_name = (payload.get('batch_name') or datetime.now().strftime('hotword_%Y%m%d_%H%M%S')).strip()[:120]
+    scope_preset = (payload.get('scope_preset') or str(runtime_config.get('hotword_scope_preset') or 'liver_comorbidity')).strip() or 'liver_comorbidity'
+    scope_meta = _hotword_scope_preset_meta(scope_preset)
+    resolved_window = _resolve_hotword_date_window(
+        payload.get('time_window') or request_config.get('hotword_time_window') or '30d',
+        custom_from=(payload.get('date_from') if 'date_from' in payload else request_config.get('hotword_date_from')) or '',
+        custom_to=(payload.get('date_to') if 'date_to' in payload else request_config.get('hotword_date_to')) or '',
+    )
     auto_generate_topic_ideas = _coerce_bool(payload.get('hotword_auto_generate_topic_ideas')) if 'hotword_auto_generate_topic_ideas' in payload else _coerce_bool(runtime_config.get('hotword_auto_generate_topic_ideas'))
     auto_generate_topic_count = min(max(_safe_int(payload.get('hotword_auto_generate_topic_count'), runtime_config.get('hotword_auto_generate_topic_count') or 20), 1), 120)
     auto_generate_topic_activity_id = max(_safe_int(payload.get('hotword_auto_generate_topic_activity_id'), runtime_config.get('hotword_auto_generate_topic_activity_id') or 0), 0)
     if auto_generate_topic_ideas and auto_generate_topic_activity_id <= 0:
         auto_generate_topic_activity_id = _default_activity_id_for_automation()
     auto_generate_topic_quota = min(max(_safe_int(payload.get('hotword_auto_generate_topic_quota'), runtime_config.get('hotword_auto_generate_topic_quota') or _default_topic_quota()), 1), 300)
+    auto_convert_corpus_templates = _coerce_bool(payload.get('hotword_auto_convert_corpus_templates')) if 'hotword_auto_convert_corpus_templates' in payload else _coerce_bool(runtime_config.get('hotword_auto_convert_corpus_templates'))
+    auto_convert_corpus_limit = min(max(_safe_int(payload.get('hotword_auto_convert_corpus_limit'), runtime_config.get('hotword_auto_convert_corpus_limit') or 10), 1), 50)
     raw_keywords = payload.get('keywords')
     if isinstance(raw_keywords, list):
         keyword_items = [str(item).strip() for item in raw_keywords if str(item).strip()]
     else:
         keyword_items = split_hotword_keywords(raw_keywords or '')
-    keywords = keyword_items[:keyword_limit] if keyword_items else _automation_keyword_seeds()[:keyword_limit]
-    template_key = (payload.get('template_key') or runtime_config.get('hotword_source_template') or 'generic_lines').strip()
+    resolved_scope_keywords = _resolve_hotword_scope_keywords(scope_preset, raw_keywords or '')
+    keywords = keyword_items[:keyword_limit] if keyword_items else (resolved_scope_keywords[:keyword_limit] if resolved_scope_keywords else _automation_keyword_seeds()[:keyword_limit])
+    template_key = (payload.get('template_key') or scope_meta.get('preferred_template_key') or runtime_config.get('hotword_source_template') or 'generic_lines').strip()
+    if not payload.get('template_key') and scope_meta.get('preferred_trend_type'):
+        request_config['hotword_trend_type'] = payload.get('hotword_trend_type') or scope_meta.get('preferred_trend_type')
+    request_config['hotword_date_from'] = resolved_window['date_from']
+    request_config['hotword_date_to'] = resolved_window['date_to']
     remote_preview = _build_hotword_remote_preview(
         request_config,
         keywords,
@@ -9517,6 +12002,11 @@ def _dispatch_hotword_sync(payload, actor='system'):
             'mode': mode,
             'template_key': template_key,
             'batch_name': batch_name,
+            'scope_preset': scope_preset,
+            'scope_label': scope_meta.get('label') or scope_preset,
+            'time_window': resolved_window['window_key'],
+            'date_from': resolved_window['date_from'],
+            'date_to': resolved_window['date_to'],
             'hotword_api_url': request_config.get('hotword_api_url'),
             'hotword_api_method': request_config.get('hotword_api_method'),
             'hotword_api_headers_json': request_config.get('hotword_api_headers_json'),
@@ -9532,6 +12022,8 @@ def _dispatch_hotword_sync(payload, actor='system'):
             'hotword_auto_generate_topic_count': auto_generate_topic_count,
             'hotword_auto_generate_topic_activity_id': auto_generate_topic_activity_id,
             'hotword_auto_generate_topic_quota': auto_generate_topic_quota,
+            'hotword_auto_convert_corpus_templates': auto_convert_corpus_templates,
+            'hotword_auto_convert_corpus_limit': auto_convert_corpus_limit,
             'request_preview': remote_preview,
         }, ensure_ascii=False),
     )
@@ -9544,11 +12036,18 @@ def _dispatch_hotword_sync(payload, actor='system'):
         'mode': mode,
         'template_key': template_key,
         'batch_name': batch_name,
+        'scope_preset': scope_preset,
+        'scope_label': scope_meta.get('label') or scope_preset,
+        'time_window': resolved_window['window_key'],
+        'date_from': resolved_window['date_from'],
+        'date_to': resolved_window['date_to'],
         'request_preview': remote_preview,
         'auto_generate_topic_ideas': auto_generate_topic_ideas,
         'auto_generate_topic_count': auto_generate_topic_count,
         'auto_generate_topic_activity_id': auto_generate_topic_activity_id,
         'auto_generate_topic_quota': auto_generate_topic_quota,
+        'auto_convert_corpus_templates': auto_convert_corpus_templates,
+        'auto_convert_corpus_limit': auto_convert_corpus_limit,
     })
 
     from celery_app import sync_hotwords_job
@@ -9571,6 +12070,12 @@ def _dispatch_hotword_sync(payload, actor='system'):
         'keyword_count': len(keywords),
         'mode': mode,
         'template_key': template_key,
+        'scope_preset': scope_preset,
+        'time_window': resolved_window['window_key'],
+        'date_from': resolved_window['date_from'],
+        'date_to': resolved_window['date_to'],
+        'auto_convert_corpus_templates': auto_convert_corpus_templates,
+        'auto_convert_corpus_limit': auto_convert_corpus_limit,
         'actor': actor,
     })
     db.session.commit()
@@ -9578,6 +12083,43 @@ def _dispatch_hotword_sync(payload, actor='system'):
         'task_record': task_record,
         'task_id': async_task.id,
         'keyword_count': len(keywords),
+    }
+
+
+def _dispatch_hotword_planning_bundle(payload, actor='system'):
+    scope_keys = ['liver_comorbidity', 'science_qna', 'xhs_trending']
+    base_time_window = (payload.get('time_window') or '').strip()
+    base_date_from = (payload.get('date_from') or '').strip()
+    base_date_to = (payload.get('date_to') or '').strip()
+    dispatched_items = []
+    base_batch_prefix = datetime.now().strftime('planning_%Y%m%d_%H%M%S')
+    for index, scope_key in enumerate(scope_keys, start=1):
+        scope_meta = _hotword_scope_preset_meta(scope_key)
+        scope_payload = {
+            **dict(payload or {}),
+            'scope_preset': scope_key,
+            'batch_name': f'{base_batch_prefix}_{scope_key}',
+            'template_key': scope_meta.get('preferred_template_key') or payload.get('template_key') or '',
+            'hotword_trend_type': scope_meta.get('preferred_trend_type') or payload.get('hotword_trend_type') or '',
+            'keywords': ','.join(scope_meta.get('keywords') or []),
+        }
+        if base_time_window:
+            scope_payload['time_window'] = base_time_window
+        if base_date_from:
+            scope_payload['date_from'] = base_date_from
+        if base_date_to:
+            scope_payload['date_to'] = base_date_to
+        dispatched = _dispatch_hotword_sync(scope_payload, actor=actor)
+        dispatched_items.append({
+            'scope_preset': scope_key,
+            'scope_label': scope_meta.get('label') or scope_key,
+            'task_id': dispatched.get('task_id'),
+            'task_record_id': dispatched.get('task_record').id if dispatched.get('task_record') else None,
+            'keyword_count': dispatched.get('keyword_count') or 0,
+        })
+    return {
+        'batch_name': base_batch_prefix,
+        'items': dispatched_items,
     }
 
 
@@ -9806,6 +12348,9 @@ def _dispatch_asset_generation(payload, actor='system'):
         source_provider=(os.environ.get('ASSET_IMAGE_PROVIDER') or str(runtime_config.get('image_provider') or 'svg_fallback')).strip() or 'svg_fallback',
         model_name=(os.environ.get('ASSET_IMAGE_MODEL') or str(runtime_config.get('image_model') or '')).strip()[:100],
         style_preset=style_preset,
+        generation_mode=generation_mode,
+        cover_style_type=cover_style_meta.get('key') or '',
+        inner_style_type=inner_style_meta.get('key') or '',
         product_profile=product_profile,
         product_category=product_category,
         product_name=product_name,
@@ -9860,6 +12405,9 @@ def _build_asset_generation_plan_payload(payload):
     reg = Registration.query.get(registration_id) if registration_id else None
     style_value = (payload.get('style_type') or runtime_config.get('image_default_style_type') or 'medical_science')
     style_meta = _asset_style_meta(style_value)
+    cover_style_meta = _asset_style_meta((payload.get('cover_style_type') or style_meta.get('key')))
+    inner_style_meta = _asset_style_meta((payload.get('inner_style_type') or style_meta.get('key')))
+    generation_mode = (payload.get('generation_mode') or style_meta.get('generation_mode') or 'text_to_image').strip()[:50] or 'text_to_image'
     selected_content = (payload.get('selected_content') or '').strip()
     title_hint = (payload.get('title_hint') or _extract_title_from_version(selected_content) or (reg.topic.topic_name if reg and reg.topic else '') or style_meta.get('label') or '图片方案').strip()[:200]
     product_meta = _product_profile_meta(payload.get('product_profile') or '')
@@ -9928,7 +12476,6 @@ def _build_asset_generation_plan_payload(payload):
     )
 
     points = _extract_content_points(selected_content)
-    generation_mode = style_meta.get('generation_mode') or 'text_to_image'
     if reference_assets and generation_mode == 'text_to_image':
         generation_mode = 'reference_guided'
     strategy_reason = ''
@@ -9969,6 +12516,10 @@ def _build_asset_generation_plan_payload(payload):
             'style_type': style_meta.get('key') or '',
             'style_label': style_meta.get('label') or '',
             'generation_mode': generation_mode,
+            'cover_style_type': cover_style_meta.get('key') or '',
+            'cover_style_label': cover_style_meta.get('label') or '',
+            'inner_style_type': inner_style_meta.get('key') or '',
+            'inner_style_label': inner_style_meta.get('label') or '',
             'strategy_reason': strategy_reason,
             'title_hint': title_hint,
             'product_context': product_context,
@@ -10058,6 +12609,102 @@ def _build_asset_style_recommendation_payload(payload):
     }
 
 
+def _build_batch_asset_plan_drafts(payload):
+    source_type = (payload.get('source_type') or 'trend').strip()
+    raw_ids = payload.get('item_ids') or []
+    item_ids = []
+    for item in raw_ids:
+        value = _safe_int(item, 0)
+        if value > 0:
+            item_ids.append(value)
+    item_ids = list(dict.fromkeys(item_ids))[:12]
+    if not item_ids:
+        return {
+            'success': False,
+            'message': '请先选择要生成草案的内容',
+            'items': [],
+        }
+
+    if source_type == 'trend':
+        rows = TrendNote.query.filter(TrendNote.id.in_(item_ids)).all()
+        serialized_rows = [_serialize_trend_note(item) for item in rows]
+    elif source_type == 'idea':
+        rows = TopicIdea.query.filter(TopicIdea.id.in_(item_ids)).all()
+        serialized_rows = [_serialize_topic_idea(item) for item in rows]
+    else:
+        return {
+            'success': False,
+            'message': '不支持的草案来源类型',
+            'items': [],
+        }
+
+    drafts = []
+    bucket_counter = Counter()
+    for item in serialized_rows:
+        if source_type == 'trend':
+            selected_content = '\n'.join(filter(None, [
+                item.get('summary') or '',
+                f"推荐理由：{item.get('recommended_reason')}" if item.get('recommended_reason') else '',
+                f"图片模板：{item.get('template_agent_label')}" if item.get('template_agent_label') else '',
+                f"封面样式：{item.get('cover_style_label')}" if item.get('cover_style_label') else '',
+                f"内页样式：{item.get('inner_style_label')}" if item.get('inner_style_label') else '',
+            ]))
+            title_hint = (item.get('title') or item.get('keyword') or '图片草案').strip()
+        else:
+            selected_content = '\n'.join(filter(None, [
+                item.get('angle') or '',
+                item.get('asset_brief') or '',
+                f"文案提示词：{item.get('copy_prompt')}" if item.get('copy_prompt') else '',
+                f"图片模板：{item.get('template_agent_label')}" if item.get('template_agent_label') else '',
+                f"封面样式：{item.get('cover_style_label')}" if item.get('cover_style_label') else '',
+                f"内页样式：{item.get('inner_style_label')}" if item.get('inner_style_label') else '',
+            ]))
+            title_hint = (item.get('cover_title') or item.get('topic_title') or '图片草案').strip()
+
+        plan_payload = {
+            'style_type': item.get('cover_style_type') or item.get('inner_style_type') or 'medical_science',
+            'generation_mode': 'smart_bundle',
+            'cover_style_type': item.get('cover_style_type') or '',
+            'inner_style_type': item.get('inner_style_type') or '',
+            'title_hint': title_hint[:200],
+            'selected_content': selected_content[:4000],
+            'image_count': 1,
+        }
+        plan_result = _build_asset_generation_plan_payload(plan_payload)
+        plan = (plan_result or {}).get('plan') or {}
+        bucket_label = item.get('template_agent_label') or item.get('image_skill_label') or '未分类'
+        bucket_counter[bucket_label] += 1
+        drafts.append({
+            'source_type': source_type,
+            'source_id': item.get('id'),
+            'source_title': item.get('title') or item.get('topic_title') or title_hint,
+            'template_agent_label': item.get('template_agent_label') or '',
+            'image_skill_label': item.get('image_skill_label') or '',
+            'cover_style_label': item.get('cover_style_label') or '',
+            'inner_style_label': item.get('inner_style_label') or '',
+            'plan': {
+                'style_type': plan.get('style_type') or '',
+                'style_label': plan.get('style_label') or '',
+                'generation_mode': plan.get('generation_mode') or '',
+                'cover_style_type': plan.get('cover_style_type') or '',
+                'cover_style_label': plan.get('cover_style_label') or '',
+                'inner_style_type': plan.get('inner_style_type') or '',
+                'inner_style_label': plan.get('inner_style_label') or '',
+                'strategy_reason': plan.get('strategy_reason') or '',
+                'title_hint': plan.get('title_hint') or '',
+                'content_points': (plan.get('content_points') or [])[:3],
+                'preview_asset': plan.get('preview_asset') or {},
+            },
+        })
+
+    return {
+        'success': True,
+        'message': f'已生成 {len(drafts)} 条图片草案，先确认后再决定是否发起真实图片任务',
+        'bucket_summary': [{'label': key, 'count': count} for key, count in bucket_counter.most_common()],
+        'items': drafts,
+    }
+
+
 def _dispatch_automation_schedule(schedule, actor='system'):
     params = _load_json_value(schedule.params_payload, {})
     schedule.last_run_at = datetime.now()
@@ -10123,6 +12770,9 @@ register_automation_dashboard_routes(app, {
     'build_crawler_probe_payload': _build_crawler_probe_payload,
     'automation_runtime_config': _automation_runtime_config,
     'hotword_runtime_settings': _hotword_runtime_settings,
+    'hotword_scope_preset_meta': _hotword_scope_preset_meta,
+    'resolve_hotword_scope_keywords': _resolve_hotword_scope_keywords,
+    'resolve_hotword_date_window': _resolve_hotword_date_window,
     'creator_sync_runtime_settings': _creator_sync_runtime_settings,
     'image_provider_capabilities': _image_provider_capabilities,
     'build_asset_provider_request_preview': _build_asset_provider_request_preview,
@@ -10139,6 +12789,8 @@ register_automation_dashboard_routes(app, {
     'build_creator_sync_remote_preview': _build_creator_sync_remote_preview,
     'resolved_creator_sync_mode': _resolved_creator_sync_mode,
     'tracked_creator_sync_targets': _tracked_creator_sync_targets,
+    'copywriter_capabilities': _resolve_copywriter_capabilities,
+    'copywriter_healthcheck': _copywriter_healthcheck,
     'creator_sync_healthcheck': _creator_sync_healthcheck,
     'log_operation': _log_operation,
     'serialize_data_source_task': _serialize_data_source_task,
@@ -10160,6 +12812,7 @@ register_automation_asset_routes(app, {
     'admin_json_guard': _admin_json_guard,
     'safe_int': _safe_int,
     'serialize_asset_generation_task': _serialize_asset_generation_task,
+    'serialize_asset_plan_draft': _serialize_asset_plan_draft,
     'serialize_asset_library_item': _serialize_asset_library_item,
     'serialize_automation_schedule': _serialize_automation_schedule,
     'pool_status_label': _pool_status_label,
@@ -10170,6 +12823,7 @@ register_automation_asset_routes(app, {
     'dispatch_creator_account_sync': _dispatch_creator_account_sync,
     'dispatch_automation_schedule': _dispatch_automation_schedule,
     'build_asset_generation_plan_payload': _build_asset_generation_plan_payload,
+    'build_batch_asset_plan_drafts': _build_batch_asset_plan_drafts,
     'build_asset_style_recommendation_payload': _build_asset_style_recommendation_payload,
     'log_operation': _log_operation,
     'db': db,
@@ -10411,6 +13065,219 @@ def update_trend_pool_status(note_id):
         'success': True,
         'message': f'热点已移动到{_pool_status_label(pool_status)}',
         'item': _serialize_trend_note(note)
+    })
+
+
+@app.route('/api/trends/<int:note_id>/to_corpus', methods=['POST'])
+def convert_trend_to_corpus(note_id):
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    note = TrendNote.query.get_or_404(note_id)
+    data = request.json or {}
+    category = (data.get('category') or '爆款拆解').strip() or '爆款拆解'
+    result = _upsert_trend_note_corpus_entries([note], category=category)
+    created = result['created']
+    updated = result['updated']
+    _log_operation('trend_to_corpus', 'trend_note', target_id=note.id, message='将热点爆款笔记转为模板语料', detail={
+        'title': note.title,
+        'reference_url': note.link or '',
+        'created_count': len(created),
+        'updated_count': len(updated),
+        'category': category,
+    })
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': f'已把《{note.title}》转成模板语料',
+        'trend': _serialize_trend_note(note),
+        'items': [_serialize_corpus_entry(item) for item in (created + updated)],
+    })
+
+
+@app.route('/api/trends/<int:note_id>/route_target', methods=['POST'])
+def route_trend_to_target(note_id):
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    note = TrendNote.query.get_or_404(note_id)
+    data = request.json or {}
+    target = (data.get('target') or '').strip()
+    activity_id = _safe_int(data.get('activity_id'), 0)
+    try:
+        routed = _route_trend_note_to_target(note, target=target, activity_id=activity_id, actor=_current_actor())
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)})
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': '热点内容已完成分流',
+        **routed,
+    })
+
+
+@app.route('/api/trends/route_target_batch', methods=['POST'])
+def route_trends_to_target_batch():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    data = request.json or {}
+    requested_target = (data.get('target') or 'recommended').strip() or 'recommended'
+    activity_id = _safe_int(data.get('activity_id'), 0)
+    limit = min(max(_safe_int(data.get('limit'), 20), 1), 50)
+
+    note_ids = []
+    for item in (data.get('note_ids') or []):
+        value = _safe_int(item, 0)
+        if value > 0:
+            note_ids.append(value)
+    note_ids = list(dict.fromkeys(note_ids))
+
+    query = TrendNote.query
+    if note_ids:
+        query = query.filter(TrendNote.id.in_(note_ids))
+    else:
+        keyword = (data.get('keyword') or '').strip()
+        source_platform = (data.get('source_platform') or '').strip()
+        source_template_key = (data.get('source_template_key') or '').strip()
+        pool_status = (data.get('pool_status') or '').strip()
+        if keyword:
+            query = query.filter(or_(
+                TrendNote.keyword.contains(keyword),
+                TrendNote.title.contains(keyword),
+                TrendNote.summary.contains(keyword),
+            ))
+        if source_platform:
+            query = query.filter_by(source_platform=source_platform)
+        if source_template_key:
+            query = query.filter_by(source_template_key=source_template_key)
+        if pool_status:
+            query = query.filter_by(pool_status=pool_status)
+        query = query.order_by(TrendNote.hot_score.desc(), TrendNote.created_at.desc()).limit(limit)
+
+    notes = query.all()
+    if not notes:
+        return jsonify({'success': False, 'message': '当前筛选下没有可分流的热点内容'})
+
+    routed_items = []
+    errors = []
+    target_counts = defaultdict(int)
+    actor = _current_actor()
+    for note in notes:
+        resolved_target = _resolve_trend_route_target(note, requested_target)
+        try:
+            routed = _route_trend_note_to_target(note, target=resolved_target, activity_id=activity_id, actor=actor)
+            target_counts[resolved_target] += 1
+            routed_items.append({
+                'note_id': note.id,
+                'title': note.title or note.keyword or '热点内容',
+                'target': resolved_target,
+                'target_label': _trend_route_target_label(resolved_target),
+            })
+        except ValueError as exc:
+            errors.append({
+                'note_id': note.id,
+                'title': note.title or note.keyword or '热点内容',
+                'message': str(exc),
+            })
+
+    if routed_items:
+        _log_operation('route_trend_batch', 'trend_note', message='批量分流热点内容', detail={
+            'selected_count': len(notes),
+            'requested_target': requested_target,
+            'activity_id': activity_id,
+            'target_counts': dict(target_counts),
+            'success_count': len(routed_items),
+            'error_count': len(errors),
+            'actor': actor,
+        })
+
+    db.session.commit()
+
+    if not routed_items:
+        message = errors[0]['message'] if errors else '批量分流失败'
+        return jsonify({
+            'success': False,
+            'message': message,
+            'errors': errors[:20],
+        })
+
+    count_summary = '，'.join(
+        f'{_trend_route_target_label(target)} {count} 条'
+        for target, count in target_counts.items()
+    ) or f'已处理 {len(routed_items)} 条'
+    if errors:
+        count_summary = f'{count_summary}，跳过 {len(errors)} 条'
+
+    return jsonify({
+        'success': True,
+        'message': f'批量分流完成：{count_summary}',
+        'items': routed_items[:20],
+        'target_counts': dict(target_counts),
+        'errors': errors[:20],
+    })
+
+
+@app.route('/api/trends/to_corpus_batch', methods=['POST'])
+def convert_trends_to_corpus_batch():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    data = request.json or {}
+    category = (data.get('category') or '爆款拆解').strip() or '爆款拆解'
+    note_ids = []
+    for item in (data.get('note_ids') or []):
+        value = _safe_int(item, 0)
+        if value > 0:
+            note_ids.append(value)
+    note_ids = list(dict.fromkeys(note_ids))
+
+    query = TrendNote.query
+    if note_ids:
+        query = query.filter(TrendNote.id.in_(note_ids))
+    else:
+        keyword = (data.get('keyword') or '').strip()
+        source_platform = (data.get('source_platform') or '').strip()
+        source_template_key = (data.get('source_template_key') or '').strip()
+        pool_status = (data.get('pool_status') or '').strip()
+        limit = min(max(_safe_int(data.get('limit'), 20), 1), 50)
+        if keyword:
+            query = query.filter(or_(
+                TrendNote.keyword.contains(keyword),
+                TrendNote.title.contains(keyword),
+                TrendNote.summary.contains(keyword),
+            ))
+        if source_platform:
+            query = query.filter_by(source_platform=source_platform)
+        if source_template_key:
+            query = query.filter_by(source_template_key=source_template_key)
+        if pool_status:
+            query = query.filter_by(pool_status=pool_status)
+        query = query.order_by(TrendNote.hot_score.desc(), TrendNote.created_at.desc()).limit(limit)
+
+    notes = query.all()
+    if not notes:
+        return jsonify({'success': False, 'message': '当前没有可转换的热点笔记'})
+
+    result = _upsert_trend_note_corpus_entries(notes, category=category)
+    created = result['created']
+    updated = result['updated']
+    _log_operation('trend_to_corpus_batch', 'trend_note', message='批量将热点爆款笔记转为模板语料', detail={
+        'selected_count': len(notes),
+        'created_count': len(created),
+        'updated_count': len(updated),
+        'category': category,
+    })
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': f'已批量转换 {len(notes)} 条热点笔记：新增 {len(created)} 条，更新 {len(updated)} 条',
+        'count': len(notes),
+        'items': [_serialize_corpus_entry(item) for item in (created + updated)[:30]],
     })
 
 
@@ -11734,6 +14601,22 @@ def trigger_hotword_sync_job():
     })
 
 
+@app.route('/api/jobs/hotwords/run_planning_bundle', methods=['POST'])
+def trigger_hotword_planning_bundle():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    payload = request.json or {}
+    bundle = _dispatch_hotword_planning_bundle(payload, actor=_current_actor())
+    return jsonify({
+        'success': True,
+        'message': f'已触发三块内容规划搜索任务，共 {len(bundle["items"])} 条',
+        'batch_name': bundle['batch_name'],
+        'items': bundle['items'],
+    })
+
+
 @app.route('/api/jobs/hotwords/ping', methods=['POST'])
 def trigger_hotword_sync_ping():
     guard = _admin_json_guard()
@@ -11799,6 +14682,23 @@ def trigger_asset_provider_ping():
     timeout_seconds = min(max(_safe_int(data.get('wait_seconds'), 10), 1), 60)
     result = _image_provider_healthcheck(payload=data, timeout_seconds=timeout_seconds)
     _log_integration_ping_result('image_provider', result, request_payload=data)
+    db.session.commit()
+    return jsonify({
+        'success': bool(result.get('ok')),
+        **result,
+    })
+
+
+@app.route('/api/jobs/copywriter/ping', methods=['POST'])
+def trigger_copywriter_ping():
+    guard = _admin_json_guard()
+    if guard:
+        return guard
+
+    data = request.json or {}
+    timeout_seconds = min(max(_safe_int(data.get('wait_seconds'), 10), 1), 60)
+    result = _copywriter_healthcheck(payload=data, timeout_seconds=timeout_seconds)
+    _log_integration_ping_result('copywriter', result, request_payload=data)
     db.session.commit()
     return jsonify({
         'success': bool(result.get('ok')),
@@ -12187,6 +15087,9 @@ def init_db():
             },
             'corpus_entry': {
                 'pool_status': {'type': 'VARCHAR(20)', 'default': 'reserve'},
+                'source_title': 'VARCHAR(300)',
+                'reference_url': 'VARCHAR(500)',
+                'template_type_key': 'VARCHAR(50)',
             },
             'trend_note': {
                 'pool_status': {'type': 'VARCHAR(20)', 'default': 'reserve'},
@@ -12224,6 +15127,20 @@ def init_db():
                 'content_type': {'type': 'VARCHAR(30)', 'default': '未识别'},
                 'note_title': 'VARCHAR(300)',
                 'note_content': 'TEXT',
+                'selected_title': 'VARCHAR(200)',
+                'selected_title_source': 'VARCHAR(100)',
+                'selected_title_index': {'type': 'INTEGER', 'default': 0},
+                'selected_copy_version_index': {'type': 'INTEGER', 'default': 0},
+                'selected_copy_goal': 'VARCHAR(50)',
+                'selected_copy_skill': 'VARCHAR(50)',
+                'selected_title_skill': 'VARCHAR(50)',
+                'selected_image_skill': 'VARCHAR(50)',
+                'selected_cover_style_type': 'VARCHAR(50)',
+                'selected_inner_style_type': 'VARCHAR(50)',
+                'selected_generation_mode': 'VARCHAR(50)',
+                'selected_copy_text': 'TEXT',
+                'strategy_payload': 'TEXT',
+                'strategy_updated_at': timestamp_type,
             },
             'topic_idea': {
                 'quota': {'type': 'INTEGER', 'default': 30},
@@ -12238,11 +15155,32 @@ def init_db():
                 'submission_id': 'INTEGER',
             },
             'asset_generation_task': {
+                'draft_source_type': 'VARCHAR(20)',
+                'draft_source_id': 'INTEGER',
+                'draft_plan_id': 'INTEGER',
+                'generation_mode': {'type': 'VARCHAR(50)', 'default': 'smart_bundle'},
+                'cover_style_type': 'VARCHAR(50)',
+                'inner_style_type': 'VARCHAR(50)',
                 'product_profile': 'VARCHAR(80)',
                 'product_category': 'VARCHAR(30)',
                 'product_name': 'VARCHAR(200)',
                 'product_indication': 'VARCHAR(200)',
                 'reference_asset_ids': 'VARCHAR(500)',
+            },
+            'asset_plan_draft': {
+                'source_type': {'type': 'VARCHAR(20)', 'default': 'trend'},
+                'source_id': 'INTEGER',
+                'source_title': 'VARCHAR(200)',
+                'bucket_label': 'VARCHAR(100)',
+                'template_agent_label': 'VARCHAR(100)',
+                'image_skill_label': 'VARCHAR(100)',
+                'style_type': 'VARCHAR(50)',
+                'generation_mode': {'type': 'VARCHAR(50)', 'default': 'smart_bundle'},
+                'cover_style_type': 'VARCHAR(50)',
+                'inner_style_type': 'VARCHAR(50)',
+                'title_hint': 'VARCHAR(200)',
+                'selected_content': 'TEXT',
+                'draft_payload': 'TEXT',
             },
             'asset_library': {
                 'style_type_key': 'VARCHAR(50)',
@@ -12265,6 +15203,10 @@ def init_db():
                 try:
                     conn.execute(text(f'ALTER TABLE {table_name} ADD COLUMN {column_name} {rendered_column_sql}'))
                 except Exception as exc:
+                    message = str(exc).lower()
+                    if 'duplicate column name' in message or 'already exists' in message:
+                        existing.add(column_name)
+                        continue
                     raise RuntimeError(
                         f'auto schema migration failed for {table_name}.{column_name}: {rendered_column_sql}'
                     ) from exc

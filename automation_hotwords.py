@@ -564,6 +564,8 @@ def build_remote_hotword_request_preview(config, keywords, source_platform='', s
         'trend_type': trend_type,
         'page_size': page_size,
         'max_related_queries': max_related_queries,
+        'date_from': (config.get('date_from') or '').strip(),
+        'date_to': (config.get('date_to') or '').strip(),
     }
     rendered_headers = _render_template_value(headers_json, context) if isinstance(headers_json, dict) else {}
     rendered_query = _render_template_value(query_json, context) if isinstance(query_json, dict) else {}
@@ -580,6 +582,8 @@ def build_remote_hotword_request_preview(config, keywords, source_platform='', s
                 'max_related_queries': max_related_queries,
                 'source_channel': source_channel,
                 'batch_name': batch_name,
+                'date_from': context['date_from'],
+                'date_to': context['date_to'],
             }
         else:
             rendered_body = {keyword_param: list(keywords)}
@@ -596,6 +600,8 @@ def build_remote_hotword_request_preview(config, keywords, source_platform='', s
         'trend_type': trend_type,
         'page_size': page_size,
         'max_related_queries': max_related_queries,
+        'date_from': context['date_from'],
+        'date_to': context['date_to'],
     }
 
 

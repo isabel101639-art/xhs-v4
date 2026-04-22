@@ -42,6 +42,7 @@ def _run_basic_endpoint_checks(client):
     endpoints = [
         ('healthz', '/healthz'),
         ('home', '/'),
+        ('liver_science', '/liver-science'),
         ('activity_list', '/activity'),
         ('data_analysis', '/data_analysis'),
         ('admin_login', '/admin/login'),
@@ -158,6 +159,10 @@ def _run_hotword_local_crawler_config_checks(client):
         'hotword_source_template': 'xhs_note_search',
         'hotword_source_channel': 'Crawler热点',
         'hotword_keyword_limit': 5,
+        'hotword_scope_preset': 'science_qna',
+        'hotword_time_window': '30d',
+        'hotword_date_from': '',
+        'hotword_date_to': '',
         'hotword_fetch_mode': 'remote',
         'hotword_api_url': 'http://127.0.0.1:8081/xhs/trends',
         'hotword_api_method': 'POST',
@@ -170,6 +175,8 @@ def _run_hotword_local_crawler_config_checks(client):
         'hotword_trend_type': 'note_search',
         'hotword_page_size': 12,
         'hotword_max_related_queries': 9,
+        'hotword_auto_convert_corpus_templates': True,
+        'hotword_auto_convert_corpus_limit': 8,
     }
     saved = _save_automation_config(client, payload)
     config = saved.get('config') or {}
@@ -178,6 +185,10 @@ def _run_hotword_local_crawler_config_checks(client):
     _assert(config.get('hotword_trend_type') == 'note_search', 'hotword_trend_type should persist note_search')
     _assert(config.get('hotword_page_size') == 12, 'hotword_page_size should persist custom page_size')
     _assert(config.get('hotword_max_related_queries') == 9, 'hotword_max_related_queries should persist custom max_related_queries')
+    _assert(config.get('hotword_scope_preset') == 'science_qna', 'hotword_scope_preset should persist science_qna')
+    _assert(config.get('hotword_time_window') == '30d', 'hotword_time_window should persist 30d')
+    _assert(config.get('hotword_auto_convert_corpus_templates') is True, 'hotword_auto_convert_corpus_templates should persist as True')
+    _assert(config.get('hotword_auto_convert_corpus_limit') == 8, 'hotword_auto_convert_corpus_limit should persist custom limit')
 
     preview = _load_automation_config_preview(client)
     hotword_preview = preview.get('hotword_preview') or {}
@@ -187,12 +198,18 @@ def _run_hotword_local_crawler_config_checks(client):
     _assert(hotword_preview.get('trend_type') == 'note_search', 'hotword preview should keep note_search trend type')
     _assert(hotword_preview.get('page_size') == 12, 'hotword preview should keep configured page_size')
     _assert(hotword_preview.get('max_related_queries') == 9, 'hotword preview should keep configured max_related_queries')
+    _assert(hotword_preview.get('scope_preset') == 'science_qna', 'hotword preview should expose scope preset')
+    _assert(hotword_preview.get('time_window') == '30d', 'hotword preview should expose time window')
+    _assert(hotword_preview.get('auto_convert_corpus_templates') is True, 'hotword preview should expose auto-convert toggle')
+    _assert(hotword_preview.get('auto_convert_corpus_limit') == 8, 'hotword preview should expose auto-convert limit')
     body = request_preview.get('body') or {}
     _assert(body.get('trend_type') == 'note_search', 'hotword request preview should carry note_search trend_type')
     _assert(body.get('page_size') == 12, 'hotword request preview should carry configured page_size')
     _assert(body.get('max_related_queries') == 9, 'hotword request preview should carry configured max_related_queries')
     _assert(isinstance(body.get('keywords'), list) and len(body.get('keywords')) >= 2, 'hotword request preview should render keyword list')
-    _assert((body.get('keywords') or [None])[0] == '脂肪肝', 'hotword request preview should start with default hotword seed')
+    _assert((body.get('keywords') or [None])[0] == '脂肪肝怎么吃', 'hotword request preview should start with scoped science_qna seed')
+    _assert(body.get('date_from'), 'hotword request preview should include resolved date_from')
+    _assert(body.get('date_to'), 'hotword request preview should include resolved date_to')
     _print_check('hotword_local_crawler_config', json.dumps(request_preview, ensure_ascii=False))
 
 
@@ -308,6 +325,8 @@ def _run_hotword_worker_passthrough_check(app_module, db, data_source_task_model
                 'hotword_keyword_param': 'keywords',
                 'hotword_timeout_seconds': 30,
                 'hotword_auto_generate_topic_ideas': False,
+                'hotword_auto_convert_corpus_templates': True,
+                'hotword_auto_convert_corpus_limit': 5,
             }, ensure_ascii=False),
         )
         db.session.add(task)
@@ -367,6 +386,9 @@ def _run_hotword_worker_passthrough_check(app_module, db, data_source_task_model
         _assert(inserted.likes == 123, 'hotword worker should normalize nested likes')
         _assert(inserted.favorites == 45, 'hotword worker should normalize nested favorites')
         _assert(inserted.comments == 12, 'hotword worker should normalize nested comments')
+        result_payload = json.loads(refreshed_task.result_payload or '{}')
+        corpus_conversion = result_payload.get('corpus_conversion') or {}
+        _assert(corpus_conversion.get('selected_count') == 1, 'hotword worker should auto-convert inserted trend to corpus when enabled')
         _print_check('hotword_worker_passthrough', json.dumps({
             'title': inserted.title,
             'author': inserted.author,
@@ -374,6 +396,7 @@ def _run_hotword_worker_passthrough_check(app_module, db, data_source_task_model
             'likes': inserted.likes,
             'favorites': inserted.favorites,
             'comments': inserted.comments,
+            'corpus_conversion': corpus_conversion,
         }, ensure_ascii=False))
 
 
@@ -448,10 +471,344 @@ def _run_xhs_trend_template_checks(client):
     _print_check('xhs_note_search_template', json.dumps(item, ensure_ascii=False))
 
 
+def _run_copy_skill_generation_check(client, db, activity_model, topic_model, registration_model, submission_model):
+    with patch('app.DEEPSEEK_API_KEY', ''):
+        with client.application.app_context():
+            activity = activity_model(
+                name='Smoke Activity',
+                title='Smoke Growth Loop',
+                description='用于验证标题池、封面池和策略复盘',
+                status='published',
+            )
+            db.session.add(activity)
+            db.session.commit()
+
+            topic = topic_model(
+                activity_id=activity.id,
+                topic_name='体检报告里的肝弹指标怎么看',
+                keywords='体检, 报告, FibroScan, 指标',
+                direction='把不会看报告的人最容易误判的点讲清楚。',
+                quota=30,
+                filled=0,
+                group_num='A组',
+            )
+            db.session.add(topic)
+            db.session.commit()
+
+            registration = registration_model(
+                topic_id=topic.id,
+                group_num='A组',
+                name='Smoke Tester',
+                phone='13800000000',
+                xhs_account='smoke_tester',
+            )
+            db.session.add(registration)
+            db.session.commit()
+            registration_id = registration.id
+
+        response = client.post('/api/generate_copy', json={
+            'registration_id': registration_id,
+            'persona_key': 'patient_self',
+            'scene_key': 'report_interpretation',
+            'product_key': 'fibroscan',
+            'copy_goal': 'save_value',
+            'copy_skill': 'practical_checklist',
+            'title_skill': 'checklist_collect',
+            'user_prompt': '重点讲清楚先看什么再看什么',
+            'fast_mode': True,
+        })
+        data = response.get_json()
+        _assert(response.status_code == 200, f'generate_copy failed with {response.status_code}')
+        _assert(data and data.get('success'), f'generate_copy failed: {data}')
+        cards = data.get('cards') or []
+        title_options = data.get('title_options') or []
+        _assert(len(cards) == 3, 'generate_copy should return 3 cards')
+        _assert(len(title_options) >= 4, 'generate_copy should return title option pool')
+        generator_context = data.get('generator_context') or {}
+        _assert(generator_context.get('skill') == '收藏清单型', 'generator_context should expose selected copy skill')
+        _assert(generator_context.get('title_skill') == '收藏清单标题', 'generator_context should expose selected title skill')
+        combined_text = '\n'.join(
+            f"{card.get('title')}\n{card.get('body')}"
+            for card in cards
+        )
+        _assert('先做这3步' in combined_text or '按这个顺序来' in combined_text, 'copy skill should influence local fallback titles/body')
+
+        strategy_response = client.post('/api/strategy_selection', json={
+            'registration_id': registration_id,
+            'selected_title': title_options[0].get('title'),
+            'selected_title_source': title_options[0].get('source'),
+            'selected_title_index': 0,
+            'selected_copy_version_index': 0,
+            'selected_copy_goal': 'save_value',
+            'selected_copy_skill': 'practical_checklist',
+            'selected_title_skill': 'checklist_collect',
+            'selected_image_skill': 'report_decode',
+            'selected_cover_style_type': 'checklist_report',
+            'selected_inner_style_type': 'checklist_report',
+            'selected_generation_mode': 'smart_bundle',
+            'selected_copy_text': cards[0].get('copy_text'),
+            'title_options': title_options,
+        })
+        strategy_data = strategy_response.get_json()
+        _assert(strategy_response.status_code == 200, f'strategy_selection failed with {strategy_response.status_code}')
+        _assert(strategy_data and strategy_data.get('success'), f'strategy_selection failed: {strategy_data}')
+        _assert(strategy_data.get('stored') is False, 'strategy_selection should defer persistence before submission exists')
+
+        submit_response = client.post('/api/submit', json={
+            'registration_id': registration_id,
+            'xhs_link': 'https://www.xiaohongshu.com/explore/smoke-growth-001',
+            'xhs_views': 3200,
+            'xhs_likes': 180,
+            'xhs_favorites': 66,
+            'xhs_comments': 28,
+            'selected_title': title_options[0].get('title'),
+            'selected_title_source': title_options[0].get('source'),
+            'selected_title_index': 0,
+            'selected_copy_version_index': 0,
+            'selected_copy_goal': 'save_value',
+            'selected_copy_skill': 'practical_checklist',
+            'selected_title_skill': 'checklist_collect',
+            'selected_image_skill': 'report_decode',
+            'selected_cover_style_type': 'checklist_report',
+            'selected_inner_style_type': 'checklist_report',
+            'selected_generation_mode': 'smart_bundle',
+            'selected_copy_text': cards[0].get('copy_text'),
+            'title_options': title_options,
+        })
+        submit_data = submit_response.get_json()
+        _assert(submit_response.status_code == 200, f'submit failed with {submit_response.status_code}')
+        _assert(submit_data and submit_data.get('success'), f'submit failed: {submit_data}')
+
+        with client.application.app_context():
+            saved_submission = submission_model.query.filter_by(registration_id=registration_id).first()
+            _assert(saved_submission is not None, 'submit should create submission record')
+            _assert(saved_submission.selected_title_skill == 'checklist_collect', 'submission should store title skill key')
+            _assert(saved_submission.selected_image_skill == 'report_decode', 'submission should store image skill key')
+            _assert((saved_submission.selected_title or '') == (title_options[0].get('title') or ''), 'submission should store selected title')
+
+        recommendation_response = client.get(f'/api/strategy_recommendations/{registration_id}')
+        recommendation_data = recommendation_response.get_json()
+        _assert(recommendation_response.status_code == 200, f'strategy_recommendations failed with {recommendation_response.status_code}')
+        _assert(recommendation_data and recommendation_data.get('success'), f'strategy_recommendations failed: {recommendation_data}')
+        recommended = recommendation_data.get('recommended') or {}
+        _assert(recommended.get('title_skill') == 'checklist_collect', 'strategy_recommendations should prefer historical title skill')
+        _assert(recommended.get('image_skill') == 'report_decode', 'strategy_recommendations should prefer historical image skill')
+
+        cover_response = client.post('/api/asset_style_recommendations', json={
+            'registration_id': registration_id,
+            'selected_content': cards[0].get('copy_text') or '',
+            'title_hint': title_options[0].get('title') if title_options else cards[0].get('title'),
+        })
+        cover_data = cover_response.get_json()
+        _assert(cover_response.status_code == 200, f'asset_style_recommendations failed with {cover_response.status_code}')
+        _assert(cover_data and cover_data.get('success'), f'asset_style_recommendations failed: {cover_data}')
+        _assert(len(cover_data.get('items') or []) >= 1, 'asset_style_recommendations should return at least one recommendation')
+
+        stats_response = client.get(f'/api/stats/{activity.id}')
+        stats_data = stats_response.get_json()
+        _assert(stats_response.status_code == 200, f'stats failed with {stats_response.status_code}')
+        _assert(stats_data and (stats_data.get('strategy_insights') or {}).get('captured_count', 0) >= 1, 'stats should include strategy insights')
+        _print_check('copy_skill_generation', json.dumps({
+            'skill': generator_context.get('skill'),
+            'title_skill': generator_context.get('title_skill'),
+            'title': cards[0].get('title'),
+            'title_option_count': len(title_options),
+            'cover_style': ((cover_data.get('items') or [{}])[0].get('style_key')),
+            'strategy_capture_rate': ((stats_data.get('strategy_insights') or {}).get('capture_rate_display')),
+            'recommendation_source': recommendation_data.get('source'),
+        }, ensure_ascii=False))
+
+
+def _run_reference_corpus_import_check(client):
+    response = client.post('/api/corpus/import_reference_links', json={
+        'title': '',
+        'category': '爆款拆解',
+        'source': '参考链接导入',
+        'tags': '体检,报告,收藏型',
+        'reference_links': 'https://www.xiaohongshu.com/explore/smoke-ref-001',
+        'reference_note_text': '标题是提问式，开头先抛检查焦虑，再用3条清单讲清楚该先看什么，最后收口到互动提问。',
+        'style_hint': '保留提问式标题和清单结构，但改写成围绕 FibroScan 福波看 的检查解读内容。',
+        'product_anchor': 'FibroScan福波看',
+    })
+    data = response.get_json()
+    _assert(response.status_code == 200, f'corpus import failed with {response.status_code}')
+    _assert(data and data.get('success'), f'corpus import failed: {data}')
+    items = data.get('items') or []
+    _assert(len(items) == 1, 'corpus import should create one template entry')
+    item = items[0]
+    _assert(item.get('reference_url') == 'https://www.xiaohongshu.com/explore/smoke-ref-001', 'corpus import should keep reference url')
+    _assert(item.get('template_type_key') in {'checklist', 'qna', 'standard_explain'}, 'corpus import should infer template type')
+    _assert('FibroScan福波看' in (item.get('content') or ''), 'corpus import should include product anchor in corpus content')
+    _print_check('reference_corpus_import', json.dumps({
+        'reference_url': item.get('reference_url'),
+        'template_type_key': item.get('template_type_key'),
+        'title': item.get('title'),
+    }, ensure_ascii=False))
+
+
+def _run_topic_reference_import_check(client, db, activity_model, topic_model):
+    with client.application.app_context():
+        activity = activity_model(
+            name='Reference Topic Activity',
+            title='Reference Topic Import',
+            status='published',
+        )
+        db.session.add(activity)
+        db.session.commit()
+
+        topic = topic_model(
+            activity_id=activity.id,
+            topic_name='体检报告里的肝弹指标怎么看',
+            keywords='体检, 报告, FibroScan, 指标',
+            direction='把不会看报告的人最容易误判的点讲清楚。',
+            writing_example='提问式标题 + 三步清单结构',
+            reference_link='https://www.xiaohongshu.com/explore/topic-ref-001 https://www.xiaohongshu.com/explore/topic-ref-002',
+            quota=30,
+            filled=0,
+            group_num='A组',
+        )
+        db.session.add(topic)
+        db.session.commit()
+        topic_id = topic.id
+        activity_id = activity.id
+
+    topic_response = client.post(f'/api/topics/{topic_id}/import_reference_corpus', json={})
+    topic_data = topic_response.get_json()
+    _assert(topic_response.status_code == 200, f'topic reference import failed with {topic_response.status_code}')
+    _assert(topic_data and topic_data.get('success'), f'topic reference import failed: {topic_data}')
+    _assert(len(topic_data.get('items') or []) == 2, 'topic reference import should generate template corpus entries')
+
+    activity_response = client.post(f'/api/activities/{activity_id}/import_reference_corpus', json={})
+    activity_data = activity_response.get_json()
+    _assert(activity_response.status_code == 200, f'activity reference import failed with {activity_response.status_code}')
+    _assert(activity_data and activity_data.get('success'), f'activity reference import failed: {activity_data}')
+    _assert(activity_data.get('processed_topics') == 1, 'activity reference import should process the topic with links')
+    _print_check('topic_reference_import', json.dumps({
+        'topic_items': len(topic_data.get('items') or []),
+        'processed_topics': activity_data.get('processed_topics'),
+    }, ensure_ascii=False))
+
+
+def _run_trend_to_corpus_check(client, db, trend_note_model):
+    with client.application.app_context():
+        note = trend_note_model(
+            source_platform='小红书',
+            source_channel='Crawler热点',
+            source_template_key='xhs_note_search',
+            import_batch='smoke_trend_to_corpus',
+            keyword='脂肪肝',
+            title='脂肪肝体检后别只盯转氨酶',
+            author='热点样例账号',
+            link='https://www.xiaohongshu.com/explore/smoke-trend-corpus-001',
+            views=8800,
+            likes=320,
+            favorites=118,
+            comments=26,
+            hot_score=860,
+            summary='先抛体检焦虑，再拆3个判断点，最后引导收藏和提问。',
+            pool_status='reserve',
+        )
+        db.session.add(note)
+        db.session.commit()
+        note_id = note.id
+
+    single_response = client.post(f'/api/trends/{note_id}/to_corpus', json={'category': '爆款拆解'})
+    single_data = single_response.get_json()
+    _assert(single_response.status_code == 200, f'trend to corpus failed with {single_response.status_code}')
+    _assert(single_data and single_data.get('success'), f'trend to corpus failed: {single_data}')
+    _assert(len(single_data.get('items') or []) == 1, 'single trend to corpus should create one corpus template')
+    trend_snapshot = single_data.get('trend') or {}
+    _assert(trend_snapshot.get('has_corpus_template') is True, 'trend serialization should expose corpus linkage after conversion')
+
+    batch_response = client.post('/api/trends/to_corpus_batch', json={
+        'category': '爆款拆解',
+        'keyword': '脂肪肝',
+        'source_platform': '小红书',
+        'limit': 20,
+    })
+    batch_data = batch_response.get_json()
+    _assert(batch_response.status_code == 200, f'trend to corpus batch failed with {batch_response.status_code}')
+    _assert(batch_data and batch_data.get('success'), f'trend to corpus batch failed: {batch_data}')
+    _assert((batch_data.get('count') or 0) >= 1, 'batch trend to corpus should process at least one trend')
+    _print_check('trend_to_corpus', json.dumps({
+        'single_title': ((single_data.get('items') or [{}])[0].get('title')),
+        'batch_count': batch_data.get('count'),
+        'linked': trend_snapshot.get('has_corpus_template'),
+    }, ensure_ascii=False))
+
+
+def _run_trend_route_recommendation_check(client, db, activity_model, topic_model, topic_idea_model, trend_note_model, hot_topic_model):
+    with client.application.app_context():
+        activity = activity_model(name='Smoke 推荐分流活动', title='Smoke Route', status='published')
+        db.session.add(activity)
+        db.session.flush()
+
+        current_topic_note = trend_note_model(
+            source_platform='小红书',
+            source_channel='SmokeHotword',
+            source_template_key='xhs_note_search',
+            keyword='脂肪肝',
+            title='脂肪肝怎么吃才稳',
+            author='SmokeUser',
+            summary='高搜索问题，适合收藏型内容',
+            hot_score=230,
+            pool_status='reserve',
+        )
+        hot_topic_note = trend_note_model(
+            source_platform='小红书',
+            source_channel='SmokeHotword',
+            source_template_key='xhs_hot_queries',
+            keyword='减肥',
+            title='减肥热搜问题',
+            author='SmokeUser',
+            summary='平台热搜，适合蹭热点',
+            hot_score=120,
+            pool_status='reserve',
+        )
+        db.session.add_all([current_topic_note, hot_topic_note])
+        db.session.commit()
+        activity_id = activity.id
+        current_note_id = current_topic_note.id
+        hot_note_id = hot_topic_note.id
+
+    single_response = client.post(f'/api/trends/{current_note_id}/route_target', json={
+        'target': 'recommended',
+        'activity_id': activity_id,
+    })
+    single_data = single_response.get_json()
+    _assert(single_response.status_code == 200, f'single recommended route failed with {single_response.status_code}')
+    _assert(single_data and single_data.get('success'), f'single recommended route failed: {single_data}')
+    _assert(single_data.get('target') == 'current_topic', 'high score fatty liver note should route to current_topic')
+
+    batch_response = client.post('/api/trends/route_target_batch', json={
+        'target': 'recommended',
+        'note_ids': [hot_note_id],
+        'activity_id': activity_id,
+    })
+    batch_data = batch_response.get_json()
+    _assert(batch_response.status_code == 200, f'batch recommended route failed with {batch_response.status_code}')
+    _assert(batch_data and batch_data.get('success'), f'batch recommended route failed: {batch_data}')
+    _assert((batch_data.get('target_counts') or {}).get('hot_topic') == 1, 'hot query note should batch-route into hot_topic')
+
+    with client.application.app_context():
+        created_topic = topic_model.query.filter_by(source_type='trend_note', source_ref_id=current_note_id).first()
+        created_hot = hot_topic_model.query.filter_by(reference_note_id=hot_note_id).first()
+        _assert(created_topic is not None, 'recommended current_topic route should create a Topic')
+        _assert(created_hot is not None, 'recommended batch route should create a HotTopicEntry')
+        _assert(topic_idea_model.query.count() == 0, 'this recommendation smoke case should not create TopicIdea rows')
+
+    _print_check('trend_route_recommendation', json.dumps({
+        'single_target': single_data.get('target'),
+        'batch_target_counts': batch_data.get('target_counts'),
+        'topic_created': bool(created_topic),
+        'hot_topic_created': bool(created_hot),
+    }, ensure_ascii=False))
+
+
 def main():
     temp_dir = _bootstrap_smoke_env()
     try:
-        from app import DataSourceTask, TrendNote, app, db, init_db
+        from app import Activity, DataSourceTask, HotTopicEntry, Registration, Submission, Topic, TopicIdea, TrendNote, app, db, init_db
         from celery_app import sync_creator_accounts_job
         from celery_app import sync_hotwords_job
         import app as app_module
@@ -465,6 +822,11 @@ def main():
         _run_creator_sync_config_checks(client)
         _run_hotword_local_crawler_config_checks(client)
         _run_xhs_trend_template_checks(client)
+        _run_reference_corpus_import_check(client)
+        _run_trend_to_corpus_check(client, db, TrendNote)
+        _run_trend_route_recommendation_check(client, db, Activity, Topic, TopicIdea, TrendNote, HotTopicEntry)
+        _run_topic_reference_import_check(client, db, Activity, Topic)
+        _run_copy_skill_generation_check(client, db, Activity, Topic, Registration, Submission)
         _run_hotword_worker_passthrough_check(app_module, db, DataSourceTask, TrendNote, sync_hotwords_job)
         _run_creator_sync_worker_passthrough_check(app_module, db, DataSourceTask, sync_creator_accounts_job)
         print('Smoke check passed.')

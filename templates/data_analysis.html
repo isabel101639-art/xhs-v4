@@ -322,6 +322,78 @@
             <div class="row g-4" id="personalWrap"></div>
         </div>
 
+        <div class="panel p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <div class="section-title mb-0">爆款策略复盘</div>
+                <div class="subtle">看标题打法、图片打法和组合打法，后续推荐会基于这里越来越准。</div>
+            </div>
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="platform-card h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <strong>标题 Skill</strong>
+                            <span class="subtle" id="strategyCaptureRate">留痕率 -</span>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm data-table align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>打法</th>
+                                        <th>样本</th>
+                                        <th>平均互动</th>
+                                        <th>爆款率</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="titleSkillBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="platform-card h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <strong>图片 Skill</strong>
+                            <span class="subtle">按小红书互动看</span>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm data-table align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>打法</th>
+                                        <th>样本</th>
+                                        <th>平均互动</th>
+                                        <th>爆款率</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="imageSkillBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="platform-card h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <strong>组合表现</strong>
+                            <span class="subtle">标题 × 图片</span>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm data-table align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>组合</th>
+                                        <th>样本</th>
+                                        <th>平均互动</th>
+                                        <th>爆款率</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="comboSkillBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="row g-4">
             <div class="col-md-6">
                 <div class="panel p-4 h-100">
@@ -537,6 +609,33 @@
             }).join('');
         }
 
+        function renderStrategyInsights(stats) {
+            const insight = stats.strategy_insights || {};
+            document.getElementById('strategyCaptureRate').textContent = `留痕率 ${escapeHtml(insight.capture_rate_display || '0%')}`;
+
+            const renderRows = (rows, emptyText) => rows.map((row) => `
+                <tr>
+                    <td>${escapeHtml(row.label || row.key || '-')}</td>
+                    <td>${row.count || 0}</td>
+                    <td>${row.avg_interactions || 0}</td>
+                    <td>${escapeHtml(row.viral_rate_display || '-')}</td>
+                </tr>
+            `).join('') || `<tr><td colspan="4" class="text-center text-muted">${escapeHtml(emptyText)}</td></tr>`;
+
+            document.getElementById('titleSkillBody').innerHTML = renderRows(
+                insight.title_skill_rows || [],
+                '当前还没有足够的标题打法留痕'
+            );
+            document.getElementById('imageSkillBody').innerHTML = renderRows(
+                insight.image_skill_rows || [],
+                '当前还没有足够的图片打法留痕'
+            );
+            document.getElementById('comboSkillBody').innerHTML = renderRows(
+                insight.combo_rows || [],
+                '当前还没有足够的组合留痕'
+            );
+        }
+
         function renderAdvice(stats) {
             const topicWrap = document.getElementById('topicAdviceWrap');
             const improvementWrap = document.getElementById('improvementWrap');
@@ -564,6 +663,7 @@
             renderPlatforms(stats);
             renderGroupRankings(stats);
             renderPersonalRankings(stats);
+            renderStrategyInsights(stats);
             renderAdvice(stats);
         }
 

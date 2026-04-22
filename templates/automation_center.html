@@ -192,7 +192,10 @@
                     <div class="section-title mb-1">自动化中心</div>
                     <div class="subtle">这版先把语料库、热点采集池、80话题工厂和素材生产底座搭起来，默认流程为“生成候选话题 → 人工审核 → 发布到活动”。</div>
                 </div>
-                <div class="subtle">建议流程：导入热点 → 积累语料 → 生成80话题 → 发布到活动</div>
+                <div class="d-flex flex-column align-items-end gap-2">
+                    <div class="subtle">建议流程：导入热点 → 积累语料 → 生成80话题 → 发布到活动</div>
+                    <a class="btn btn-outline-primary btn-sm" href="/admin/weekly-delivery">查看本周交付清单</a>
+                </div>
             </div>
         </div>
 
@@ -240,6 +243,38 @@
             </div>
         </div>
 
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="metric">
+                    <div class="metric-number" id="metricHotTopics">0</div>
+                    <div class="subtle">热搜话题数</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric">
+                    <div class="metric-number" id="metricAssetDrafts">0</div>
+                    <div class="subtle">图片草案数</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric">
+                    <div class="metric-number" id="metricDraftAssetTasks">0</div>
+                    <div class="subtle">待执行图片任务</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric">
+                    <div class="metric-number" id="metricCompletedAssetTasks">0</div>
+                    <div class="subtle">已完成图片任务</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel p-4 mb-4">
+            <div class="section-title">自动化漏斗总览</div>
+            <div id="automationFunnelSummary" class="subtle">这里会汇总“热点 -> 候选话题 -> 图片草案 -> 待执行图片任务 -> 已完成图片任务”的全链路状态。</div>
+        </div>
+
         <div class="panel p-4 mb-4">
             <div class="section-title">默认热点词池</div>
             <div id="defaultKeywordWrap"></div>
@@ -271,8 +306,33 @@
                     <input id="configHotwordChannel" class="form-control" placeholder="如 Worker骨架">
                 </div>
                 <div class="col-lg-4">
+                    <label class="form-label subtle">热点默认搜索块</label>
+                    <select id="configHotwordScopePreset" class="form-select">
+                        <option value="liver_comorbidity">肝病+共病问题池</option>
+                        <option value="science_qna">科普问题池</option>
+                        <option value="xhs_trending">平台热搜/蹭热点池</option>
+                    </select>
+                </div>
+                <div class="col-lg-4">
+                    <label class="form-label subtle">热点默认时间窗口</label>
+                    <select id="configHotwordTimeWindow" class="form-select">
+                        <option value="3d">近3天</option>
+                        <option value="7d">近7天</option>
+                        <option value="30d">近30天</option>
+                        <option value="custom">自定义</option>
+                    </select>
+                </div>
+                <div class="col-lg-4">
                     <label class="form-label subtle">热点默认关键词数量</label>
                     <input id="configHotwordKeywordLimit" type="number" min="1" max="30" class="form-control">
+                </div>
+                <div class="col-lg-4">
+                    <label class="form-label subtle">热点默认开始日期</label>
+                    <input id="configHotwordDateFrom" type="date" class="form-control">
+                </div>
+                <div class="col-lg-4">
+                    <label class="form-label subtle">热点默认结束日期</label>
+                    <input id="configHotwordDateTo" type="date" class="form-control">
                 </div>
                 <div class="col-lg-2">
                     <label class="form-label subtle">热点抓取模式</label>
@@ -351,6 +411,17 @@
                     <input id="configHotwordAutoIdeaCount" type="number" min="1" max="120" class="form-control">
                 </div>
                 <div class="col-lg-3">
+                    <label class="form-label subtle">抓完热点后自动转模板语料</label>
+                    <select id="configHotwordAutoConvertCorpus" class="form-select">
+                        <option value="false">关闭</option>
+                        <option value="true">开启</option>
+                    </select>
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label subtle">每轮最多转模板数</label>
+                    <input id="configHotwordAutoCorpusLimit" type="number" min="1" max="50" class="form-control">
+                </div>
+                <div class="col-lg-3">
                     <label class="form-label subtle">自动生成挂到活动</label>
                     <select id="configHotwordAutoIdeaActivityId" class="form-select">
                         <option value="0">自动选择当前活动</option>
@@ -410,6 +481,23 @@
                 <div class="col-lg-6">
                     <label class="form-label subtle">账号同步 Body JSON</label>
                     <textarea id="configCreatorSyncBodyJson" rows="2" class="form-control" placeholder='如 {"targets":"{{targets}}","batch_name":"{{batch_name}}"}'></textarea>
+                </div>
+                <div class="col-12"><hr class="my-1"></div>
+                <div class="col-12">
+                    <div class="section-title mb-1">文案模型配置</div>
+                    <div class="subtle mb-2">这里控制文案 Agent 走哪个大模型。优先支持 DeepSeek，也兼容 OpenAI 兼容接口。用户端一般不需要翻墙，关键是你的服务端要能访问模型接口。</div>
+                </div>
+                <div class="col-lg-6">
+                    <label class="form-label subtle">文案模型 API URL</label>
+                    <input id="configCopywriterApiUrl" class="form-control" placeholder="如 https://api.deepseek.com/v1 或 https://api.openai.com/v1">
+                    <div class="subtle mt-1">支持 OpenAI 兼容地址。用户端不需要翻墙，只要你的服务端能调用即可。</div>
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label subtle">文案模型名</label>
+                    <input id="configCopywriterModel" class="form-control" placeholder="如 deepseek-chat / gpt-5.4">
+                </div>
+                <div class="col-lg-3 d-flex align-items-end">
+                    <button class="btn btn-outline-primary w-100" onclick="pingCopywriter()">测试文案模型</button>
                 </div>
                 <div class="col-12"><hr class="my-1"></div>
                 <div class="col-lg-3">
@@ -481,6 +569,7 @@
                 </div>
             </div>
             <div id="automationConfigPreview" class="detail-card mt-3 text-muted">加载后展示热点任务、账号同步任务与图片任务的请求预览。</div>
+            <div id="copywriterPingPreview" class="detail-card mt-3 text-muted">测试文案模型后，这里会显示当前模型、请求预览和返回摘要。</div>
             <div class="detail-card mt-3">
                 <div class="section-title mb-2">图片调试沙盒</div>
                 <div class="row g-3">
@@ -629,7 +718,26 @@
                         <label class="form-label subtle">语料内容</label>
                         <textarea id="corpusContent" rows="10" class="form-control" placeholder="可粘贴爆款拆解、标准表达、封面结构、选题观察等内容。"></textarea>
                     </div>
-                    <button class="btn btn-accent" onclick="saveCorpus()">保存语料</button>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label subtle">参考链接批量导入</label>
+                            <textarea id="corpusReferenceLinks" rows="4" class="form-control" placeholder="每行一个参考链接。支持小红书正式链接，短链也可以先存档。"></textarea>
+                            <div class="subtle mt-2">如果系统热点池或账号库里已经抓到这些链接，会自动带上标题/摘要；如果没有，建议同时补一段文案摘录或你的风格拆解。</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label subtle">参考文案摘录 / 风格拆解</label>
+                            <textarea id="corpusReferenceText" rows="6" class="form-control" placeholder="可粘贴爆款笔记正文摘录、你的结构拆解，或者你觉得这篇为什么会爆。"></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label subtle">仿写方向 / 产品锚点</label>
+                            <textarea id="corpusReferenceHint" rows="3" class="form-control" placeholder="例如：保留提问式标题和清单结构，但改写成围绕 FibroScan 福波看 的检查解读内容。"></textarea>
+                            <input id="corpusProductAnchor" class="form-control mt-2" placeholder="例如：FibroScan福波看 / 复方鳖甲软肝片 / 壳脂胶囊">
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button class="btn btn-accent" onclick="saveCorpus()">保存语料</button>
+                        <button class="btn btn-outline-primary" onclick="importReferenceCorpus()">按参考链接生成模板语料</button>
+                    </div>
                     <div id="corpusMsg" class="subtle mt-2"></div>
                 </div>
             </div>
@@ -669,6 +777,31 @@
                 </div>
             </div>
             <div id="ideaMsg" class="subtle mt-2"></div>
+        </div>
+
+        <div class="panel p-4 mb-4">
+            <div class="section-title">按话题参考链接沉淀模板语料</div>
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label subtle">目标活动</label>
+                    <select id="topicReferenceActivityId" class="form-select" onchange="loadTopicReferenceOptions()">
+                        {% for activity in activities %}
+                        <option value="{{ activity.id }}">{{ activity.name }} - {{ activity.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label subtle">目标话题</label>
+                    <select id="topicReferenceTopicId" class="form-select">
+                        <option value="">请先选择活动</option>
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex gap-2 flex-wrap">
+                    <button class="btn btn-outline-primary" onclick="importSelectedTopicReferenceCorpus()">导入当前话题参考链接</button>
+                    <button class="btn btn-outline-dark" onclick="importActivityReferenceCorpus()">批量导入本活动全部话题</button>
+                </div>
+            </div>
+            <div id="topicReferenceMsg" class="subtle mt-2">会把 topic 里的 `reference_link + writing_example + direction` 转成模板语料，供一键生成文案复用。</div>
         </div>
 
         <div class="panel p-4 mb-4">
@@ -852,12 +985,37 @@
                     <input id="hotwordSourceChannel" class="form-control" value="Worker骨架">
                 </div>
                 <div class="col-md-3">
+                    <label class="form-label subtle">搜索块</label>
+                    <select id="hotwordScopePreset" class="form-select">
+                        <option value="liver_comorbidity">肝病+共病问题池</option>
+                        <option value="science_qna">科普问题池</option>
+                        <option value="xhs_trending">平台热搜/蹭热点池</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
                     <label class="form-label subtle">批次名</label>
                     <input id="hotwordBatchName" class="form-control" placeholder="例如：2026-04-07 晚间巡检">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label subtle">关键词数量</label>
                     <input id="hotwordKeywordLimit" type="number" min="1" max="30" value="10" class="form-control">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label subtle">时间窗口</label>
+                    <select id="hotwordTimeWindow" class="form-select">
+                        <option value="3d">近3天</option>
+                        <option value="7d">近7天</option>
+                        <option value="30d" selected>近30天</option>
+                        <option value="custom">自定义</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label subtle">自定义开始日期</label>
+                    <input id="hotwordDateFrom" type="date" class="form-control" disabled>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label subtle">自定义结束日期</label>
+                    <input id="hotwordDateTo" type="date" class="form-control" disabled>
                 </div>
                 <div class="col-md-12">
                     <label class="form-label subtle">关键词列表</label>
@@ -866,6 +1024,10 @@
                 <div class="col-md-12 d-flex gap-2 flex-wrap">
                     <button class="btn btn-accent" onclick="runHotwordSync()">异步抓取热点</button>
                     <button class="btn btn-outline-primary" onclick="pingHotwordSync()">测试热点接口</button>
+                    <button class="btn btn-outline-primary" onclick="runHotwordPlanningBundle()">运行三块规划搜索</button>
+                    <button class="btn btn-outline-dark" onclick="applyHotwordSearchPreset('liver_comorbidity')">肝病+共病</button>
+                    <button class="btn btn-outline-dark" onclick="applyHotwordSearchPreset('science_qna')">科普问题</button>
+                    <button class="btn btn-outline-dark" onclick="applyHotwordSearchPreset('xhs_trending')">平台热搜</button>
                     <div class="d-flex gap-2 align-items-center">
                         <input id="hotwordScheduleInterval" type="number" min="1" max="10080" value="360" class="form-control" style="max-width: 120px;" placeholder="分钟">
                         <label class="form-check-label subtle d-flex align-items-center gap-2">
@@ -1019,7 +1181,16 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-5">
+                    <div class="col-md-3">
+                        <label class="form-label subtle">工作流模式</label>
+                        <select id="assetJobGenerationMode" class="form-select">
+                            <option value="smart_bundle">图文套组</option>
+                            <option value="cover_only">只做封面</option>
+                            <option value="inner_only">只做内页</option>
+                            <option value="custom_generate">自定义生成</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
                         <label class="form-label subtle">标题</label>
                         <input id="assetJobTitleHint" class="form-control" placeholder="如 脂肪肝知识卡片 / FibroScan 产品介绍">
                     </div>
@@ -1039,6 +1210,22 @@
                     <div class="col-md-4">
                         <label class="form-label subtle">说明</label>
                         <input id="assetJobNote" class="form-control" placeholder="如 参考知识卡片风格、突出产品主体">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label subtle">封面样式</label>
+                        <select id="assetJobCoverStyleType" class="form-select">
+                            {% for item in asset_style_types %}
+                            <option value="{{ item.key }}">{{ item.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label subtle">内页样式</label>
+                        <select id="assetJobInnerStyleType" class="form-select">
+                            {% for item in asset_style_types %}
+                            <option value="{{ item.key }}">{{ item.label }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
                     <input id="assetJobProductAssetIds" type="hidden">
                     <div class="col-md-12">
@@ -1079,11 +1266,23 @@
                 </div>
             </div>
             <div id="assetJobPlanPreview" class="detail-card mt-3 text-muted">预览图片方案后，这里会显示文案拆解、产品上下文、参考图和请求预览。</div>
+            <div id="batchAssetDraftPreview" class="detail-card mt-3 text-muted">按热点桶或候选话题桶生成图片草案后，这里会展示一组待确认的图片方案，不会直接发起真实图片任务。</div>
+            <div class="detail-card mt-3">
+                <div class="d-flex justify-content-between align-items-center gap-2">
+                    <strong>已保存图片草案池</strong>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="confirmAllSavedAssetDrafts()">全部转待执行任务</button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="loadAssetPlanDrafts()">刷新草案池</button>
+                    </div>
+                </div>
+                <div id="assetPlanDraftWrap" class="mini-note mt-3">这里会展示你已经保留并保存的图片草案，后续可以继续套用到图片任务表单。</div>
+            </div>
             <div class="row g-3 mb-3">
                 <div class="col-md-3">
                     <label class="form-label subtle">状态筛选</label>
                     <select id="assetTaskStatusFilter" class="form-select" onchange="loadAssetTasks()">
                         <option value="">全部</option>
+                        <option value="draft">draft</option>
                         <option value="queued">queued</option>
                         <option value="running">running</option>
                         <option value="success">success</option>
@@ -1360,6 +1559,10 @@
                     </tbody>
                 </table>
             </div>
+            <div class="detail-card mt-3">
+                <div class="section-title mb-2">热点图片模板分桶</div>
+                <div id="trendTemplateBucketWrap" class="mini-note">加载热点池后，这里会按图片模板 Agent 自动分桶，方便先按“清单卡 / 报告解读卡 / 大字封面”看图怎么做。</div>
+            </div>
         </div>
 
         <div class="panel p-4 mb-4">
@@ -1453,7 +1656,14 @@
                     </select>
                 </div>
                 <div class="col-md-3 d-flex align-items-end">
+                    <select id="trendRouteActivityId" class="form-select me-2" style="max-width: 260px;">
+                        {% for activity in activities %}
+                        <option value="{{ activity.id }}">{{ activity.name }} - {{ activity.title }}</option>
+                        {% endfor %}
+                    </select>
                     <button class="btn btn-outline-primary me-2" onclick="promoteReserveTrends()">储备热点推入候选池</button>
+                    <button class="btn btn-outline-success me-2" onclick="routeVisibleTrends('recommended')">当前筛选前20条按建议分流</button>
+                    <button class="btn btn-outline-dark me-2" onclick="convertVisibleTrendsToCorpus()">当前筛选前20条转模板</button>
                     <button class="btn btn-outline-danger" onclick="loadTrends()">刷新热点池</button>
                 </div>
             </div>
@@ -1511,6 +1721,7 @@
                         <tr>
                             <th>分类</th>
                             <th>标题</th>
+                            <th>模板</th>
                             <th>状态</th>
                             <th>标签</th>
                             <th>内容</th>
@@ -1552,18 +1763,22 @@
                         <tr>
                             <th><input type="checkbox" id="selectAllIdeas" onchange="toggleAllIdeas(this.checked)"></th>
                             <th>状态</th>
-                            <th>话题</th>
+                            <th>话题 / 来源</th>
                             <th>类型 / 人设</th>
                             <th>名额</th>
                             <th>热度</th>
-                            <th>软植入</th>
-                            <th>配图建议</th>
+                            <th>策划判断</th>
+                            <th>执行建议</th>
                             <th>文案提示词</th>
                             <th>操作</th>
                         </tr>
                     </thead>
                     <tbody id="ideaTableBody"></tbody>
                 </table>
+            </div>
+            <div class="detail-card mt-3">
+                <div class="section-title mb-2">候选话题图片模板分桶</div>
+                <div id="ideaTemplateBucketWrap" class="mini-note">加载候选话题后，这里会按图片模板 Agent 自动分桶，方便先按“清单卡 / 报告解读卡 / 大字封面”看图怎么做。</div>
             </div>
         </div>
     </div>
@@ -1576,12 +1791,48 @@
         let dataSourceTaskCache = {};
         let assetTaskCache = {};
         let assetLibraryCache = {};
+        let assetPlanDraftCache = {};
+        let trendCache = {};
+        let ideaCache = {};
+        let batchAssetDraftCache = [];
+        let batchAssetDraftMeta = {
+            sourceType: '',
+            bucketLabel: '',
+            bucketSummary: [],
+            message: '',
+        };
         let deploymentHelperCache = {};
         let integrationContractCache = {};
         let integrationHandoffPackCache = null;
         const productProfiles = {{ product_profile_options|tojson }};
         const assetStyleTypeDefinitions = {{ asset_style_types|tojson }};
         const imageModelDefinitions = {{ image_model_options|tojson }};
+        const assetWorkflowModeMap = {
+            smart_bundle: '图文套组',
+            cover_only: '只做封面',
+            inner_only: '只做内页',
+            custom_generate: '自定义生成',
+        };
+        const hotwordSearchPresets = {
+            liver_comorbidity: {
+                label: '肝病+共病问题池',
+                trendType: 'note_search',
+                keywords: '肝纤维化, 肝硬化, 肝癌, 肝损伤, 肝郁, 体检, 转氨酶, 肝弹, 糖尿病, 冠心病, 乙肝, 丙肝, 肝功能异常',
+                timeWindow: '30d',
+            },
+            science_qna: {
+                label: '科普问题池',
+                trendType: 'note_search',
+                keywords: '脂肪肝怎么吃, 脂肪肝做什么运动, 如何减肥, 肥胖怎么减, 养肝护肝, 保肝护肝, 肝损伤吃什么, 转氨酶高怎么降, 脂肪肝怎么减肥, 养肝喝什么',
+                timeWindow: '30d',
+            },
+            xhs_trending: {
+                label: '平台热搜/蹭热点池',
+                trendType: 'hot_queries',
+                keywords: '养肝护肝, 减肥, 肥胖, 体检, 中医养生, 健康养生',
+                timeWindow: '30d',
+            },
+        };
 
         function renderSelectOptions(selectId, items, selectedValue, fallbackValue = '') {
             const select = document.getElementById(selectId);
@@ -1646,6 +1897,36 @@
             document.getElementById('configHotwordMaxRelatedQueries').value = config.hotword_max_related_queries || 20;
             document.getElementById('automationConfigNote').textContent = `已套用热点接口预设：${current.label}`;
             loadAutomationConfigPreview();
+        }
+
+        function syncHotwordDateState() {
+            const timeWindow = document.getElementById('hotwordTimeWindow');
+            const fromInput = document.getElementById('hotwordDateFrom');
+            const toInput = document.getElementById('hotwordDateTo');
+            const configWindow = document.getElementById('configHotwordTimeWindow');
+            const configFrom = document.getElementById('configHotwordDateFrom');
+            const configTo = document.getElementById('configHotwordDateTo');
+            const customSelected = timeWindow?.value === 'custom';
+            if (fromInput) fromInput.disabled = !customSelected;
+            if (toInput) toInput.disabled = !customSelected;
+            const configCustomSelected = configWindow?.value === 'custom';
+            if (configFrom) configFrom.disabled = !configCustomSelected;
+            if (configTo) configTo.disabled = !configCustomSelected;
+        }
+
+        function applyHotwordSearchPreset(scopeKey) {
+            const preset = hotwordSearchPresets[scopeKey];
+            if (!preset) return;
+            const scopeSelect = document.getElementById('hotwordScopePreset');
+            const trendType = document.getElementById('configHotwordTrendType');
+            const keywords = document.getElementById('hotwordKeywordInput');
+            const timeWindow = document.getElementById('hotwordTimeWindow');
+            if (scopeSelect) scopeSelect.value = scopeKey;
+            if (trendType) trendType.value = preset.trendType;
+            if (keywords) keywords.value = preset.keywords;
+            if (timeWindow) timeWindow.value = preset.timeWindow;
+            syncHotwordDateState();
+            document.getElementById('hotwordJobMsg').textContent = `已套用搜索块：${preset.label}`;
         }
 
         function applyLocalCrawlerBundle(trendType = 'note_search') {
@@ -1725,6 +2006,10 @@
                 hotword_source_template: document.getElementById('configHotwordTemplate').value,
                 hotword_source_channel: document.getElementById('configHotwordChannel').value.trim(),
                 hotword_keyword_limit: parseInt(document.getElementById('configHotwordKeywordLimit').value || '10', 10),
+                hotword_scope_preset: document.getElementById('configHotwordScopePreset').value,
+                hotword_time_window: document.getElementById('configHotwordTimeWindow').value,
+                hotword_date_from: document.getElementById('configHotwordDateFrom').value || '',
+                hotword_date_to: document.getElementById('configHotwordDateTo').value || '',
                 hotword_fetch_mode: document.getElementById('configHotwordFetchMode').value,
                 hotword_api_url: document.getElementById('configHotwordApiUrl').value.trim(),
                 hotword_api_method: document.getElementById('configHotwordApiMethod').value,
@@ -1739,6 +2024,8 @@
                 hotword_max_related_queries: parseInt(document.getElementById('configHotwordMaxRelatedQueries').value || '20', 10),
                 hotword_auto_generate_topic_ideas: document.getElementById('configHotwordAutoGenerateIdeas').value === 'true',
                 hotword_auto_generate_topic_count: parseInt(document.getElementById('configHotwordAutoIdeaCount').value || '20', 10),
+                hotword_auto_convert_corpus_templates: document.getElementById('configHotwordAutoConvertCorpus').value === 'true',
+                hotword_auto_convert_corpus_limit: parseInt(document.getElementById('configHotwordAutoCorpusLimit').value || '10', 10),
                 hotword_auto_generate_topic_activity_id: parseInt(document.getElementById('configHotwordAutoIdeaActivityId').value || '0', 10),
                 hotword_auto_generate_topic_quota: parseInt(document.getElementById('configHotwordAutoIdeaQuota').value || '30', 10),
             };
@@ -1777,6 +2064,13 @@
                 };
             }
             return { ok: true };
+        }
+
+        function collectCopywriterRuntimeConfigPayload() {
+            return {
+                copywriter_api_url: document.getElementById('configCopywriterApiUrl').value.trim(),
+                copywriter_model: document.getElementById('configCopywriterModel').value.trim(),
+            };
         }
 
         function collectImageRuntimeConfigPayload() {
@@ -1891,6 +2185,9 @@
             }
             if (focusKeys.has('image_remote')) {
                 actionButtons.push(`<button class="btn btn-sm btn-outline-primary" onclick="pingImageProvider()">测试图片接口</button>`);
+            }
+            if (focusKeys.has('copywriter_remote')) {
+                actionButtons.push(`<button class="btn btn-sm btn-outline-primary" onclick="pingCopywriter()">测试文案模型</button>`);
             }
             if (focusKeys.has('beat')) {
                 actionButtons.push(`<button class="btn btn-sm btn-outline-dark" onclick="loadDeploymentHelper()">打开部署助手</button>`);
@@ -2010,13 +2307,26 @@
             document.getElementById('metricPublishedIdeas').textContent = data.counts.published_ideas || 0;
             document.getElementById('metricDataSourceTasks').textContent = data.counts.data_source_tasks || 0;
             document.getElementById('metricRunningDataSourceTasks').textContent = data.counts.running_data_source_tasks || 0;
+            document.getElementById('metricHotTopics').textContent = data.counts.active_hot_topics || 0;
+            document.getElementById('metricAssetDrafts').textContent = data.counts.active_asset_plan_drafts || 0;
+            document.getElementById('metricDraftAssetTasks').textContent = data.counts.draft_asset_tasks || 0;
+            document.getElementById('metricCompletedAssetTasks').textContent = data.counts.completed_asset_tasks || 0;
             document.getElementById('defaultKeywordWrap').innerHTML = (data.default_keywords || []).map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join('');
             const capability = data.capabilities || {};
+            const copywriter = data.copywriter || {};
             const capabilityWrap = document.getElementById('assetTaskCapability');
             if (capabilityWrap) {
-                capabilityWrap.textContent = capability.image_provider_configured
+                const imageText = capability.image_provider_configured
                     ? `当前图片提供方：${capability.image_provider_name || 'external'}`
                     : '当前未配置图片模型，图片任务将自动使用 SVG 兜底';
+                const copywriterText = copywriter.copywriter_configured
+                    ? `文案模型：${copywriter.copywriter_label || copywriter.copywriter_model || '-'}`
+                    : '文案仍可能回退本地兜底';
+                capabilityWrap.textContent = `${imageText} ｜ ${copywriterText}`;
+            }
+            const funnelWrap = document.getElementById('automationFunnelSummary');
+            if (funnelWrap) {
+                funnelWrap.textContent = `热点 ${data.counts.trend_notes || 0} 条 -> 候选话题 ${data.counts.topic_ideas || 0} 条 -> 图片草案 ${data.counts.active_asset_plan_drafts || 0} 条 -> 待执行图片任务 ${data.counts.draft_asset_tasks || 0} 条 -> 已完成图片任务 ${data.counts.completed_asset_tasks || 0} 条。热搜话题页当前已有 ${data.counts.active_hot_topics || 0} 条可直接用于蹭热点。`;
             }
         }
 
@@ -2028,6 +2338,10 @@
             renderImageProviderPresetOptions(imageProviderPresetItems || []);
             document.getElementById('configHotwordChannel').value = config.hotword_source_channel || 'Worker骨架';
             document.getElementById('configHotwordKeywordLimit').value = config.hotword_keyword_limit || 10;
+            document.getElementById('configHotwordScopePreset').value = config.hotword_scope_preset || 'liver_comorbidity';
+            document.getElementById('configHotwordTimeWindow').value = config.hotword_time_window || '30d';
+            document.getElementById('configHotwordDateFrom').value = config.hotword_date_from || '';
+            document.getElementById('configHotwordDateTo').value = config.hotword_date_to || '';
             document.getElementById('configHotwordFetchMode').value = config.hotword_fetch_mode || 'auto';
             document.getElementById('configHotwordApiUrl').value = config.hotword_api_url || '';
             document.getElementById('configHotwordApiMethod').value = config.hotword_api_method || 'GET';
@@ -2042,8 +2356,11 @@
             document.getElementById('configHotwordBodyJson').value = config.hotword_api_body_json || '';
             document.getElementById('configHotwordAutoGenerateIdeas').value = String(Boolean(config.hotword_auto_generate_topic_ideas));
             document.getElementById('configHotwordAutoIdeaCount').value = config.hotword_auto_generate_topic_count || 20;
+            document.getElementById('configHotwordAutoConvertCorpus').value = String(Boolean(config.hotword_auto_convert_corpus_templates));
+            document.getElementById('configHotwordAutoCorpusLimit').value = config.hotword_auto_convert_corpus_limit || 10;
             document.getElementById('configHotwordAutoIdeaActivityId').value = config.hotword_auto_generate_topic_activity_id || 0;
             document.getElementById('configHotwordAutoIdeaQuota').value = config.hotword_auto_generate_topic_quota || 30;
+            syncHotwordDateState();
             document.getElementById('configCreatorSyncChannel').value = config.creator_sync_source_channel || 'Crawler服务';
             document.getElementById('configCreatorSyncFetchMode').value = config.creator_sync_fetch_mode || 'auto';
             document.getElementById('configCreatorSyncApiUrl').value = config.creator_sync_api_url || '';
@@ -2054,6 +2371,8 @@
             document.getElementById('configCreatorSyncHeadersJson').value = config.creator_sync_api_headers_json || '';
             document.getElementById('configCreatorSyncQueryJson').value = config.creator_sync_api_query_json || '';
             document.getElementById('configCreatorSyncBodyJson').value = config.creator_sync_api_body_json || '';
+            document.getElementById('configCopywriterApiUrl').value = config.copywriter_api_url || '';
+            document.getElementById('configCopywriterModel').value = config.copywriter_model || '';
             document.getElementById('configImageProvider').value = config.image_provider || 'svg_fallback';
             document.getElementById('configImageApiBase').value = config.image_api_base || '';
             document.getElementById('configImageApiUrl').value = config.image_api_url || '';
@@ -2067,9 +2386,9 @@
 
             const noteWrap = document.getElementById('automationConfigNote');
             if (noteWrap) {
-                noteWrap.textContent = notes?.api_key_configured
-                    ? '图片 API Key 已通过环境变量配置'
-                    : '图片 API Key 尚未通过环境变量配置';
+                const imageNote = notes?.api_key_configured ? '图片 API Key 已配置' : '图片 API Key 未配置';
+                const copywriterNote = notes?.copywriter_key_configured ? '文案模型 Key 已配置' : '文案模型 Key 未配置';
+                noteWrap.textContent = `${imageNote} ｜ ${copywriterNote}`;
             }
             refreshStyleTypeHint();
 
@@ -2114,6 +2433,8 @@
                         <div class="subtle mt-2">平台：${escapeHtml(data.hotword_preview?.source_platform || '-')}</div>
                         <div class="subtle">模板：${escapeHtml(data.hotword_template?.label || data.hotword_preview?.source_template || '-')}</div>
                         <div class="subtle">渠道：${escapeHtml(data.hotword_preview?.source_channel || '-')}</div>
+                        <div class="subtle">搜索块：${escapeHtml(data.hotword_preview?.scope_label || data.hotword_preview?.scope_preset || '-')}</div>
+                        <div class="subtle">时间窗口：${escapeHtml(data.hotword_preview?.time_window_label || data.hotword_preview?.time_window || '-')} ｜ ${escapeHtml(data.hotword_preview?.date_from || '-')} ~ ${escapeHtml(data.hotword_preview?.date_to || '-')}</div>
                         <div class="subtle">关键词数量：${data.hotword_preview?.keyword_limit || 0}</div>
                         <div class="subtle">预览关键词：${escapeHtml((data.hotword_preview?.keywords || []).join('、'))}</div>
                         <div class="subtle">抓取模式：${escapeHtml(data.hotword_preview?.fetch_mode || 'skeleton')}</div>
@@ -2125,9 +2446,19 @@
                         <div class="subtle">相关搜索词条数：${data.hotword_preview?.max_related_queries || 0}</div>
                         <div class="subtle">自动生成候选话题：${data.hotword_preview?.auto_generate_topic_ideas ? '开启' : '关闭'}</div>
                         <div class="subtle">自动生成数量：${data.hotword_preview?.auto_generate_topic_count || 0}</div>
+                        <div class="subtle">自动转模板语料：${data.hotword_preview?.auto_convert_corpus_templates ? `开启（每轮 ${data.hotword_preview?.auto_convert_corpus_limit || 0} 条）` : '关闭'}</div>
                         <div class="subtle">目标活动ID：${data.hotword_preview?.auto_generate_topic_activity_resolved_id || data.hotword_preview?.auto_generate_topic_activity_id || 0}</div>
                         <div class="subtle">默认名额：${data.hotword_preview?.auto_generate_topic_quota || 0}</div>
                         ${data.hotword_preview_error ? `<div class="subtle text-danger mt-2">预览错误：${escapeHtml(data.hotword_preview_error)}</div>` : ''}
+                    </div>
+                    <div class="col-lg-3">
+                        <strong>文案模型预览</strong>
+                        <div class="subtle mt-2">Provider：${escapeHtml(data.copywriter_preview?.provider || '-')}</div>
+                        <div class="subtle">模型：${escapeHtml(data.copywriter_preview?.model || '-')}</div>
+                        <div class="subtle">说明：${escapeHtml(data.copywriter_preview?.label || '-')}</div>
+                        <div class="subtle">服务端调用：${data.copywriter_preview?.server_side_only ? '是' : '否'}</div>
+                        <div class="subtle">用户需翻墙：${data.copywriter_preview?.end_user_needs_vpn ? '是' : '否'}</div>
+                        <div class="subtle">API URL：${escapeHtml(data.copywriter_preview?.api_url || '-')}</div>
                     </div>
                     <div class="col-lg-3">
                         <strong>图片类型预览</strong>
@@ -2163,6 +2494,10 @@
                         <strong>账号同步请求预览</strong>
                         <div class="json-box mt-2">${escapeHtml(JSON.stringify(data.creator_sync_request_preview || {}, null, 2))}</div>
                     </div>
+                    <div class="col-lg-4">
+                        <strong>文案模型请求预览</strong>
+                        <div class="json-box mt-2">${escapeHtml(JSON.stringify(data.copywriter_request_preview || {}, null, 2))}</div>
+                    </div>
                 </div>
             `;
         }
@@ -2195,6 +2530,7 @@
             const payload = {
                 ...collectHotwordRuntimeConfigPayload(),
                 ...collectCreatorSyncRuntimeConfigPayload(),
+                ...collectCopywriterRuntimeConfigPayload(),
                 ...collectImageRuntimeConfigPayload()
             };
             const res = await fetch('/api/admin/automation-config', {
@@ -2232,6 +2568,7 @@
                     <td>
                         <strong>${escapeHtml(item.title_hint || '图片任务')}</strong>
                         <div class="subtle">风格：${escapeHtml(item.style_preset || '小红书图文')}</div>
+                        ${item.draft_plan_id ? `<div class="subtle">草案来源：${escapeHtml(item.draft_source_type || '-')} #${item.draft_source_id || '-'} ｜ 草案ID ${item.draft_plan_id}</div>` : ''}
                     </td>
                     <td>
                         <div>${escapeHtml(item.source_provider || '-')}</div>
@@ -2246,11 +2583,14 @@
                         <details>
                             <summary>查看</summary>
                             <div class="subtle mt-2">任务ID：${item.id} ｜ Worker：${escapeHtml(item.celery_task_id || '-')}</div>
+                            <div class="subtle">模式：${escapeHtml(assetWorkflowModeMap[item.generation_mode] || item.generation_mode || '-')} ｜ 封面：${escapeHtml(item.cover_style_label || '-')} ｜ 内页：${escapeHtml(item.inner_style_label || '-')}</div>
                             <pre style="white-space: pre-wrap; word-break: break-word; font-size:12px;">${escapeHtml(JSON.stringify(item.result_payload || [], null, 2))}</pre>
                         </details>
                         <div class="mt-2 d-flex gap-2 flex-wrap">
                             <button class="btn btn-sm btn-outline-primary" onclick="showAssetTaskDetail(${item.id})">详情</button>
-                            <button class="btn btn-sm btn-outline-secondary" onclick="retryAssetTask(${item.id})">重试</button>
+                            ${item.status === 'draft'
+                                ? `<button class="btn btn-sm btn-outline-secondary" onclick="activateDraftAssetTask(${item.id})">补报名ID并派发</button>`
+                                : `<button class="btn btn-sm btn-outline-secondary" onclick="retryAssetTask(${item.id})">重试</button>`}
                         </div>
                     </td>
                 </tr>
@@ -2262,6 +2602,9 @@
                 registration_id: parseInt(document.getElementById('assetJobRegistrationId').value || '0', 10),
                 image_count: parseInt(document.getElementById('assetJobImageCount').value || '1', 10),
                 style_type: document.getElementById('assetJobStyleType').value,
+                generation_mode: document.getElementById('assetJobGenerationMode').value,
+                cover_style_type: document.getElementById('assetJobCoverStyleType').value,
+                inner_style_type: document.getElementById('assetJobInnerStyleType').value,
                 title_hint: document.getElementById('assetJobTitleHint').value.trim(),
                 product_profile: document.getElementById('assetJobProductProfile').value,
                 product_asset_ids: document.getElementById('assetJobProductAssetIds')?.value?.trim() || '',
@@ -2290,6 +2633,9 @@
                 registration_id: parseInt(document.getElementById('assetJobRegistrationId').value || '0', 10),
                 image_count: parseInt(document.getElementById('assetJobImageCount').value || '1', 10),
                 style_type: document.getElementById('assetJobStyleType').value,
+                generation_mode: document.getElementById('assetJobGenerationMode').value,
+                cover_style_type: document.getElementById('assetJobCoverStyleType').value,
+                inner_style_type: document.getElementById('assetJobInnerStyleType').value,
                 title_hint: document.getElementById('assetJobTitleHint').value.trim(),
                 product_profile: document.getElementById('assetJobProductProfile').value,
                 product_asset_ids: document.getElementById('assetJobProductAssetIds')?.value?.trim() || '',
@@ -2316,7 +2662,9 @@
                         <div class="subtle mt-2">报名人：${escapeHtml(plan.registration_name || '-')}</div>
                         <div class="subtle">话题：${escapeHtml(plan.topic_name || '-')}</div>
                         <div class="subtle">图片类型：${escapeHtml(plan.style_label || '-')}</div>
-                        <div class="subtle">生成模式：${escapeHtml(plan.generation_mode || '-')}</div>
+                        <div class="subtle">生成模式：${escapeHtml(assetWorkflowModeMap[plan.generation_mode] || plan.generation_mode || '-')}</div>
+                        <div class="subtle">封面样式：${escapeHtml(plan.cover_style_label || '-')}</div>
+                        <div class="subtle">内页样式：${escapeHtml(plan.inner_style_label || '-')}</div>
                         <div class="subtle">标题：${escapeHtml(plan.title_hint || '-')}</div>
                         <div class="subtle mt-2">策略判断：${escapeHtml(plan.strategy_reason || '-')}</div>
                     </div>
@@ -2404,7 +2752,7 @@
                 <div class="mini-note mb-2">
                     <div class="d-flex justify-content-between align-items-center gap-2">
                         <strong>${escapeHtml(item.style_label || item.style_key || '-')}</strong>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('assetJobStyleType').value='${escapeHtml(item.style_key || '')}'; loadAssetJobReferenceSuggestions(); loadAssetJobProductAssets();">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="applyAssetStyleRecommendation('${escapeHtml(item.style_key || '')}')">
                             使用这个类型
                         </button>
                     </div>
@@ -2413,6 +2761,17 @@
                     ${item.coverage_hint ? `<div class="subtle mt-2">素材判断：${escapeHtml(item.coverage_hint)}</div>` : ''}
                 </div>
             `).join('') || '<div class="text-muted">暂无推荐结果</div>';
+        }
+
+        function applyAssetStyleRecommendation(styleKey) {
+            const styleSelect = document.getElementById('assetJobStyleType');
+            const coverSelect = document.getElementById('assetJobCoverStyleType');
+            const innerSelect = document.getElementById('assetJobInnerStyleType');
+            if (styleSelect && styleKey) styleSelect.value = styleKey;
+            if (coverSelect && styleKey) coverSelect.value = styleKey;
+            if (innerSelect && styleKey) innerSelect.value = styleKey;
+            loadAssetJobReferenceSuggestions();
+            loadAssetJobProductAssets();
         }
 
         function getAssetJobReferenceIds() {
@@ -2870,7 +3229,10 @@
                         <div class="subtle">热点 API：${escapeHtml(runtime.hotword_api_url || '-')}</div>
                         <div class="subtle">热点抓取类型：${escapeHtml(runtime.hotword_trend_type || 'note_search')}</div>
                         <div class="subtle">搜索结果条数：${runtime.hotword_page_size || 0} ｜ 相关搜索词：${runtime.hotword_max_related_queries || 0}</div>
+                        <div class="subtle">热点默认搜索块：${runtime.hotword_scope_preset || '-'}</div>
+                        <div class="subtle">热点默认时间窗口：${runtime.hotword_time_window || '-'} ${runtime.hotword_date_from || ''}${runtime.hotword_date_to ? ` ~ ${runtime.hotword_date_to}` : ''}</div>
                         <div class="subtle">抓完热点后自动生成话题：${runtime.hotword_auto_generate_topic_ideas ? `开启（${runtime.hotword_auto_generate_topic_count || 0}个）` : '关闭'}</div>
+                        <div class="subtle">抓完热点后自动转模板：${runtime.hotword_auto_convert_corpus_templates ? `开启（每轮 ${runtime.hotword_auto_convert_corpus_limit || 0} 条）` : '关闭'}</div>
                         <div class="subtle">账号同步模式：${escapeHtml(runtime.creator_sync_fetch_mode || 'disabled')}</div>
                         <div class="subtle">账号同步 API：${escapeHtml(runtime.creator_sync_api_url || '-')}</div>
                     </div>
@@ -2994,6 +3356,18 @@
                                 <strong>候选字段建议</strong>
                                 ${crawlerProbe.debug_hints?.search?.exists ? `
                                     <div class="subtle mt-2">搜索页候选：${escapeHtml((crawlerProbe.debug_hints.search.metric_candidates || []).map((item) => `${item.path}=${item.value}`).join(' ｜ ') || '-')}</div>
+                                    ${(crawlerProbe.debug_hints?.search?.hint_suggestions?.ranked_tokens?.views || []).length
+                                        ? `<div class="subtle mt-2">搜索页阅读建议：${escapeHtml((crawlerProbe.debug_hints.search.hint_suggestions.ranked_tokens.views || []).map((item) => `${item.token}×${item.count}`).join(' ｜ '))}</div>`
+                                        : ''
+                                    }
+                                    ${(crawlerProbe.debug_hints?.search?.hint_suggestions?.ranked_tokens?.exposures || []).length
+                                        ? `<div class="subtle mt-2">搜索页曝光建议：${escapeHtml((crawlerProbe.debug_hints.search.hint_suggestions.ranked_tokens.exposures || []).map((item) => `${item.token}×${item.count}`).join(' ｜ '))}</div>`
+                                        : ''
+                                    }
+                                    ${(crawlerProbe.debug_hints?.search?.hint_suggestions?.ranked_tokens?.hot || []).length
+                                        ? `<div class="subtle mt-2">搜索页热度建议：${escapeHtml((crawlerProbe.debug_hints.search.hint_suggestions.ranked_tokens.hot || []).map((item) => `${item.token}×${item.count}`).join(' ｜ '))}</div>`
+                                        : ''
+                                    }
                                     ${Object.keys(crawlerProbe.debug_hints?.search?.hint_suggestions?.env_examples || {}).length
                                         ? `<div class="subtle mt-2">搜索页建议：${escapeHtml(Object.entries(crawlerProbe.debug_hints.search.hint_suggestions.env_examples || {}).map(([key, value]) => `${key}=${value}`).join(' ｜ '))}</div>`
                                         : ''
@@ -3001,6 +3375,18 @@
                                 ` : ''}
                                 ${crawlerProbe.debug_hints?.profile?.exists ? `
                                     <div class="subtle mt-2">账号页候选：${escapeHtml((crawlerProbe.debug_hints.profile.metric_candidates || []).map((item) => `${item.path}=${item.value}`).join(' ｜ ') || '-')}</div>
+                                    ${(crawlerProbe.debug_hints?.profile?.hint_suggestions?.ranked_tokens?.views || []).length
+                                        ? `<div class="subtle mt-2">账号页阅读建议：${escapeHtml((crawlerProbe.debug_hints.profile.hint_suggestions.ranked_tokens.views || []).map((item) => `${item.token}×${item.count}`).join(' ｜ '))}</div>`
+                                        : ''
+                                    }
+                                    ${(crawlerProbe.debug_hints?.profile?.hint_suggestions?.ranked_tokens?.exposures || []).length
+                                        ? `<div class="subtle mt-2">账号页曝光建议：${escapeHtml((crawlerProbe.debug_hints.profile.hint_suggestions.ranked_tokens.exposures || []).map((item) => `${item.token}×${item.count}`).join(' ｜ '))}</div>`
+                                        : ''
+                                    }
+                                    ${(crawlerProbe.debug_hints?.profile?.hint_suggestions?.ranked_tokens?.hot || []).length
+                                        ? `<div class="subtle mt-2">账号页热度建议：${escapeHtml((crawlerProbe.debug_hints.profile.hint_suggestions.ranked_tokens.hot || []).map((item) => `${item.token}×${item.count}`).join(' ｜ '))}</div>`
+                                        : ''
+                                    }
                                     ${Object.keys(crawlerProbe.debug_hints?.profile?.hint_suggestions?.env_examples || {}).length
                                         ? `<div class="subtle mt-2">账号页建议：${escapeHtml(Object.entries(crawlerProbe.debug_hints.profile.hint_suggestions.env_examples || {}).map(([key, value]) => `${key}=${value}`).join(' ｜ '))}</div>`
                                         : ''
@@ -3207,8 +3593,14 @@
             if (key === 'creator_sync') {
                 return '<button class="btn btn-sm btn-outline-primary" onclick="pingCreatorAccountSync()">测试 crawler 接口</button>';
             }
+            if (key === 'copywriter') {
+                return '<button class="btn btn-sm btn-outline-primary" onclick="pingCopywriter()">测试文案模型</button>';
+            }
             if (key === 'image_provider') {
                 return '<button class="btn btn-sm btn-outline-primary" onclick="pingImageProvider()">测试图片接口</button>';
+            }
+            if (key === 'copywriter') {
+                return '<button class="btn btn-sm btn-outline-primary" onclick="pingCopywriter()">测试文案模型</button>';
             }
             if (key === 'crawler_probe') {
                 return '<button class="btn btn-sm btn-outline-dark" onclick="loadDiagnostics()">刷新诊断</button><button class="btn btn-sm btn-outline-secondary" onclick="loadFirstRunPlaybooks()">刷新运行卡</button>';
@@ -3929,6 +4321,7 @@
             const res = await fetch(`/api/trends?${params.toString()}`);
             const data = await res.json();
             const body = document.getElementById('trendTableBody');
+            trendCache = Object.fromEntries((data.items || []).map((item) => [item.id, item]));
             body.innerHTML = (data.items || []).map((item) => `
                 <tr>
                     <td>${escapeHtml(item.source_platform)}<div class="subtle">${escapeHtml(item.source_channel)}</div></td>
@@ -3937,6 +4330,20 @@
                     <td>
                         ${item.link ? `<a href="${escapeHtml(item.link)}" target="_blank">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)}
                         <div class="subtle">${escapeHtml((item.summary || '').slice(0, 60))}</div>
+                        <div class="d-flex gap-2 flex-wrap mt-2">
+                            ${item.lane_label ? `<span class="badge bg-light text-dark">${escapeHtml(item.lane_label)}</span>` : ''}
+                            ${item.persona_label ? `<span class="badge bg-light text-secondary">${escapeHtml(item.persona_label)}</span>` : ''}
+                            ${item.recommended_target_label ? `<span class="badge bg-warning-subtle text-dark">推荐：${escapeHtml(item.recommended_target_label)}</span>` : ''}
+                        </div>
+                        ${item.recommended_reason ? `<div class="subtle mt-2">建议理由：${escapeHtml(item.recommended_reason)}</div>` : ''}
+                        ${item.template_agent_label ? `<div class="subtle mt-2">图片模板 Agent：${escapeHtml(item.template_agent_label)}${item.template_agent_description ? ` ｜ ${escapeHtml(item.template_agent_description)}` : ''}</div>` : ''}
+                        ${(item.image_skill_label || item.cover_style_label || item.inner_style_label) ? `
+                            <div class="d-flex gap-2 flex-wrap mt-2">
+                                ${item.image_skill_label ? `<span class="badge bg-info-subtle text-dark">图片打法：${escapeHtml(item.image_skill_label)}</span>` : ''}
+                                ${item.cover_style_label ? `<span class="badge bg-light text-dark">封面：${escapeHtml(item.cover_style_label)}</span>` : ''}
+                                ${item.inner_style_label ? `<span class="badge bg-light text-secondary">内页：${escapeHtml(item.inner_style_label)}</span>` : ''}
+                            </div>
+                        ` : ''}
                         ${item.metric_source_summary_text ? `<div class="subtle">口径：${escapeHtml(item.metric_source_summary_text)}</div>` : ''}
                         ${(item.metric_source_summary && item.metric_source_summary.length)
                             ? `<div class="subtle">来源：${escapeHtml(item.metric_source_summary.map((row) => `${row.key}=${row.mode_label}(${row.source || '-'})`).join(' ｜ '))}</div>`
@@ -3944,20 +4351,500 @@
                         }
                     </td>
                     <td><span class="badge ${poolStatusClass(item.pool_status)}">${escapeHtml(item.pool_status_label || item.pool_status || '储备池')}</span></td>
-                    <td>${item.hot_score || item.score || 0}</td>
+                    <td>
+                        <div>热度 ${item.hot_score || item.score || 0}</div>
+                        <div class="subtle">规划分 ${item.planning_score || 0}</div>
+                        <div class="subtle">置信度 ${item.planning_confidence === 'high' ? '高' : (item.planning_confidence === 'medium' ? '中' : '低')}</div>
+                    </td>
                     <td>${item.interactions || 0}</td>
                     <td>${item.exposures || item.views || 0}</td>
                     <td>${escapeHtml(item.author || '-')}</td>
                     <td>${escapeHtml(item.import_batch || '-')}</td>
                     <td>
                         <div class="d-flex flex-column gap-2">
+                            <button class="btn btn-sm btn-outline-primary" onclick="prefillAssetJobFromTrend(${item.id})">预填图片方案</button>
+                            <button class="btn btn-sm btn-outline-success" onclick="routeTrendTarget(${item.id}, 'recommended')">按建议分流</button>
                             ${item.pool_status === 'reserve' ? `<button class="btn btn-sm btn-outline-primary" onclick="changeTrendPoolStatus(${item.id}, 'candidate')">推入候选</button>` : ''}
                             ${item.pool_status === 'candidate' ? `<button class="btn btn-sm btn-outline-info" onclick="changeTrendPoolStatus(${item.id}, 'reserve')">退回储备</button>` : ''}
+                            <button class="btn btn-sm ${item.has_corpus_template ? 'btn-outline-success' : 'btn-outline-warning'}" onclick="convertTrendToCorpus(${item.id})">${item.has_corpus_template ? '更新模板' : '转模板'}</button>
+                            <button class="btn btn-sm btn-outline-primary" onclick="routeTrendTarget(${item.id}, 'current_topic')">发当前广场</button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="routeTrendTarget(${item.id}, 'next_activity')">放下一期</button>
+                            <button class="btn btn-sm btn-outline-success" onclick="routeTrendTarget(${item.id}, 'ip_column')">放IP栏目</button>
+                            <button class="btn btn-sm btn-outline-dark" onclick="routeTrendTarget(${item.id}, 'hot_topic')">放热搜话题</button>
                             ${item.pool_status !== 'archived' ? `<button class="btn btn-sm btn-outline-dark" onclick="changeTrendPoolStatus(${item.id}, 'archived')">归档</button>` : `<button class="btn btn-sm btn-outline-info" onclick="changeTrendPoolStatus(${item.id}, 'reserve')">恢复储备</button>`}
                         </div>
                     </td>
                 </tr>
             `).join('') || '<tr><td colspan="11" class="text-center text-muted">暂无热点数据</td></tr>';
+            renderTrendTemplateBuckets(data.items || []);
+        }
+
+        function renderTrendTemplateBuckets(items) {
+            const wrap = document.getElementById('trendTemplateBucketWrap');
+            if (!wrap) return;
+            const rows = Array.isArray(items) ? items : [];
+            if (!rows.length) {
+                wrap.innerHTML = '当前没有可分桶的热点内容。';
+                return;
+            }
+            const buckets = {};
+            rows.forEach((item) => {
+                const key = String(item.template_agent_label || item.image_skill_label || '未分类');
+                if (!buckets[key]) {
+                    buckets[key] = {
+                        key,
+                        label: key,
+                        imageSkillLabel: item.image_skill_label || '',
+                        coverStyleLabel: item.cover_style_label || '',
+                        innerStyleLabel: item.inner_style_label || '',
+                        count: 0,
+                        sampleId: item.id,
+                        sampleTitle: item.title || item.keyword || '热点内容',
+                    };
+                }
+                buckets[key].count += 1;
+            });
+            const sorted = Object.values(buckets).sort((a, b) => b.count - a.count);
+            wrap.innerHTML = `
+                <div class="row g-3">
+                    ${sorted.map((bucket) => `
+                        <div class="col-lg-4">
+                            <div class="mini-note h-100">
+                                <div class="d-flex justify-content-between align-items-center gap-2">
+                                    <strong>${escapeHtml(bucket.label)}</strong>
+                                    <span class="badge bg-light text-dark">${bucket.count} 条</span>
+                                </div>
+                                <div class="subtle mt-2">图片打法：${escapeHtml(bucket.imageSkillLabel || '-')}</div>
+                                <div class="subtle">封面：${escapeHtml(bucket.coverStyleLabel || '-')}</div>
+                                <div class="subtle">内页：${escapeHtml(bucket.innerStyleLabel || '-')}</div>
+                                <div class="subtle mt-2">示例：${escapeHtml(bucket.sampleTitle || '-')}</div>
+                                <div class="mt-3 d-flex gap-2 flex-wrap">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="prefillAssetJobFromTrend(${bucket.sampleId})">按此模板预填图片方案</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick='previewAssetDraftsByBucket("trend", ${JSON.stringify(bucket.label)})'>生成该桶图片草案</button>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function prefillAssetJobFromTrend(id) {
+            const item = trendCache[id];
+            if (!item) return;
+            const titleInput = document.getElementById('assetJobTitleHint');
+            const styleSelect = document.getElementById('assetJobStyleType');
+            const modeSelect = document.getElementById('assetJobGenerationMode');
+            const coverSelect = document.getElementById('assetJobCoverStyleType');
+            const innerSelect = document.getElementById('assetJobInnerStyleType');
+            const contentInput = document.getElementById('assetJobSelectedContent');
+            const noteInput = document.getElementById('assetJobNote');
+            if (titleInput) titleInput.value = item.title || item.keyword || '';
+            if (styleSelect) styleSelect.value = item.cover_style_type || item.inner_style_type || item.cover_style_type || 'medical_science';
+            if (modeSelect) modeSelect.value = 'smart_bundle';
+            if (coverSelect && item.cover_style_type) coverSelect.value = item.cover_style_type;
+            if (innerSelect && item.inner_style_type) innerSelect.value = item.inner_style_type;
+            if (contentInput) {
+                contentInput.value = [
+                    item.summary || '',
+                    item.recommended_reason ? `推荐理由：${item.recommended_reason}` : '',
+                    item.template_agent_label ? `图片模板：${item.template_agent_label}` : '',
+                    item.cover_style_label ? `封面样式：${item.cover_style_label}` : '',
+                    item.inner_style_label ? `内页样式：${item.inner_style_label}` : '',
+                ].filter(Boolean).join('\n');
+            }
+            if (noteInput) {
+                noteInput.value = [
+                    item.template_agent_label ? `按${item.template_agent_label}模板路线预填` : '',
+                    item.image_skill_label ? `图片打法：${item.image_skill_label}` : '',
+                ].filter(Boolean).join(' ｜ ');
+            }
+            loadAssetStyleRecommendations();
+            loadAssetJobReferenceSuggestions();
+            loadAssetJobProductAssets();
+            const msg = document.getElementById('assetJobMsg');
+            if (msg) {
+                msg.textContent = '已从热点内容带入图片模板方案。可以先预览图片方案；若要真正创建图片任务，还需要填写报名ID。';
+            }
+        }
+
+        function renderIdeaTemplateBuckets(items) {
+            const wrap = document.getElementById('ideaTemplateBucketWrap');
+            if (!wrap) return;
+            const rows = Array.isArray(items) ? items : [];
+            if (!rows.length) {
+                wrap.innerHTML = '当前没有可分桶的候选话题。';
+                return;
+            }
+            const buckets = {};
+            rows.forEach((item) => {
+                const key = String(item.template_agent_label || item.image_skill_label || '未分类');
+                if (!buckets[key]) {
+                    buckets[key] = {
+                        key,
+                        label: key,
+                        imageSkillLabel: item.image_skill_label || '',
+                        coverStyleLabel: item.cover_style_label || '',
+                        innerStyleLabel: item.inner_style_label || '',
+                        count: 0,
+                        sampleId: item.id,
+                        sampleTitle: item.topic_title || '候选话题',
+                    };
+                }
+                buckets[key].count += 1;
+            });
+            const sorted = Object.values(buckets).sort((a, b) => b.count - a.count);
+            wrap.innerHTML = `
+                <div class="row g-3">
+                    ${sorted.map((bucket) => `
+                        <div class="col-lg-4">
+                            <div class="mini-note h-100">
+                                <div class="d-flex justify-content-between align-items-center gap-2">
+                                    <strong>${escapeHtml(bucket.label)}</strong>
+                                    <span class="badge bg-light text-dark">${bucket.count} 条</span>
+                                </div>
+                                <div class="subtle mt-2">图片打法：${escapeHtml(bucket.imageSkillLabel || '-')}</div>
+                                <div class="subtle">封面：${escapeHtml(bucket.coverStyleLabel || '-')}</div>
+                                <div class="subtle">内页：${escapeHtml(bucket.innerStyleLabel || '-')}</div>
+                                <div class="subtle mt-2">示例：${escapeHtml(bucket.sampleTitle || '-')}</div>
+                                <div class="mt-3 d-flex gap-2 flex-wrap">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="prefillAssetJobFromIdea(${bucket.sampleId})">按此模板预填图片方案</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick='previewAssetDraftsByBucket("idea", ${JSON.stringify(bucket.label)})'>生成该桶图片草案</button>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function prefillAssetJobFromIdea(id) {
+            const item = ideaCache[id];
+            if (!item) return;
+            const titleInput = document.getElementById('assetJobTitleHint');
+            const styleSelect = document.getElementById('assetJobStyleType');
+            const modeSelect = document.getElementById('assetJobGenerationMode');
+            const coverSelect = document.getElementById('assetJobCoverStyleType');
+            const innerSelect = document.getElementById('assetJobInnerStyleType');
+            const contentInput = document.getElementById('assetJobSelectedContent');
+            const noteInput = document.getElementById('assetJobNote');
+            if (titleInput) titleInput.value = item.cover_title || item.topic_title || '';
+            if (styleSelect) styleSelect.value = item.cover_style_type || item.inner_style_type || 'medical_science';
+            if (modeSelect) modeSelect.value = 'smart_bundle';
+            if (coverSelect && item.cover_style_type) coverSelect.value = item.cover_style_type;
+            if (innerSelect && item.inner_style_type) innerSelect.value = item.inner_style_type;
+            if (contentInput) {
+                contentInput.value = [
+                    item.angle || '',
+                    item.asset_brief || '',
+                    item.copy_prompt ? `文案提示词：${item.copy_prompt}` : '',
+                    item.template_agent_label ? `图片模板：${item.template_agent_label}` : '',
+                    item.cover_style_label ? `封面样式：${item.cover_style_label}` : '',
+                    item.inner_style_label ? `内页样式：${item.inner_style_label}` : '',
+                ].filter(Boolean).join('\n');
+            }
+            if (noteInput) {
+                noteInput.value = [
+                    item.template_agent_label ? `按${item.template_agent_label}模板路线预填` : '',
+                    item.image_skill_label ? `图片打法：${item.image_skill_label}` : '',
+                    item.persona ? `适合人设：${item.persona}` : '',
+                ].filter(Boolean).join(' ｜ ');
+            }
+            loadAssetStyleRecommendations();
+            loadAssetJobReferenceSuggestions();
+            loadAssetJobProductAssets();
+            const msg = document.getElementById('assetJobMsg');
+            if (msg) {
+                msg.textContent = '已从候选话题带入图片模板方案。可以先预览图片方案；若要真正创建图片任务，还需要填写报名ID。';
+            }
+        }
+
+        async function previewAssetDraftsByBucket(sourceType, bucketLabel) {
+            const cache = sourceType === 'idea' ? ideaCache : trendCache;
+            const items = Object.values(cache || {}).filter((item) => {
+                const label = String(item.template_agent_label || item.image_skill_label || '未分类');
+                return label === bucketLabel;
+            }).slice(0, 8);
+            const ids = items.map((item) => item.id).filter(Boolean);
+            const wrap = document.getElementById('batchAssetDraftPreview');
+            if (!ids.length) {
+                if (wrap) wrap.textContent = '当前桶下没有可生成草案的内容。';
+                return;
+            }
+            const res = await fetch('/api/admin/assets/batch-plan-preview', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    source_type: sourceType,
+                    item_ids: ids,
+                })
+            });
+            const data = await res.json();
+            if (!data.success) {
+                if (wrap) wrap.textContent = data.message || '批量图片草案生成失败';
+                return;
+            }
+            batchAssetDraftMeta = {
+                sourceType,
+                bucketLabel,
+                bucketSummary: data.bucket_summary || [],
+                message: data.message || '',
+            };
+            batchAssetDraftCache = (data.items || []).map((item) => ({
+                ...item,
+                kept: false,
+                dismissed: false,
+            }));
+            renderBatchAssetDraftPreview();
+        }
+
+        function renderBatchAssetDraftPreview() {
+            const wrap = document.getElementById('batchAssetDraftPreview');
+            if (!wrap) return;
+            const visibleDrafts = batchAssetDraftCache
+                .map((draft, index) => ({ draft, index }))
+                .filter((item) => !item.draft.dismissed);
+            if (!visibleDrafts.length) {
+                wrap.innerHTML = '<div class="text-muted">当前草案都已忽略。你可以重新从热点桶或候选话题桶生成一组草案。</div>';
+                return;
+            }
+            const retainedCount = visibleDrafts.filter((item) => item.draft.kept).length;
+            wrap.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
+                    <strong>批量图片草案预览</strong>
+                    <div class="d-flex gap-2 align-items-center">
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="saveRetainedBatchAssetDrafts()">保存保留草案</button>
+                        <div class="subtle">${escapeHtml(batchAssetDraftMeta.message || '')}</div>
+                    </div>
+                </div>
+                <div class="subtle mb-3">来源：${escapeHtml(batchAssetDraftMeta.sourceType === 'idea' ? '候选话题池' : '热点池')} ｜ 分桶：${escapeHtml(batchAssetDraftMeta.bucketLabel || '-')} ｜ 可见 ${visibleDrafts.length} 条 ｜ 已保留 ${retainedCount} 条</div>
+                <div class="d-flex gap-2 flex-wrap mb-3">
+                    ${(batchAssetDraftMeta.bucketSummary || []).map((bucket) => `<span class="badge bg-light text-dark">${escapeHtml(bucket.label || '-')} ${bucket.count || 0} 条</span>`).join('')}
+                </div>
+                <div class="row g-3">
+                    ${visibleDrafts.map(({draft, index}) => `
+                        <div class="col-lg-6">
+                            <div class="mini-note h-100">
+                                <div class="d-flex justify-content-between align-items-center gap-2">
+                                    <strong>${escapeHtml(draft.source_title || '-')}</strong>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <span class="badge bg-light text-dark">${escapeHtml(draft.template_agent_label || '-')}</span>
+                                        ${draft.kept ? '<span class="badge bg-success-subtle text-dark">已保留</span>' : '<span class="badge bg-warning-subtle text-dark">待确认</span>'}
+                                    </div>
+                                </div>
+                                <div class="subtle mt-2">图片打法：${escapeHtml(draft.image_skill_label || '-')}</div>
+                                <div class="subtle">封面：${escapeHtml(draft.cover_style_label || '-')} ｜ 内页：${escapeHtml(draft.inner_style_label || '-')}</div>
+                                <div class="subtle mt-2">计划类型：${escapeHtml(draft.plan?.style_label || '-')} ｜ 模式：${escapeHtml(assetWorkflowModeMap[draft.plan?.generation_mode] || draft.plan?.generation_mode || '-')}</div>
+                                <div class="subtle mt-2">策略判断：${escapeHtml(draft.plan?.strategy_reason || '-')}</div>
+                                ${(draft.plan?.content_points || []).length ? `<div class="subtle mt-2">内容要点：${escapeHtml((draft.plan.content_points || []).join(' ｜ '))}</div>` : ''}
+                                <div class="mt-3">
+                                    ${draft.plan?.preview_asset?.preview_url ? `<img class="asset-preview" src="${draft.plan.preview_asset.preview_url}" alt="${escapeHtml(draft.plan.preview_asset.title || '')}">` : '<div class="subtle">暂无模板预览图</div>'}
+                                </div>
+                                <div class="mt-3 d-flex gap-2 flex-wrap">
+                                    <button type="button" class="btn btn-sm btn-outline-success" onclick="toggleKeepBatchAssetDraft(${index})">${draft.kept ? '取消保留' : '保留'}</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="applyBatchAssetDraft(${index})">套用到图片任务表单</button>
+                                    <button type="button" class="btn btn-sm btn-outline-dark" onclick="dismissBatchAssetDraft(${index})">忽略</button>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function toggleKeepBatchAssetDraft(index) {
+            const current = batchAssetDraftCache[index];
+            if (!current) return;
+            current.kept = !current.kept;
+            renderBatchAssetDraftPreview();
+        }
+
+        function dismissBatchAssetDraft(index) {
+            const current = batchAssetDraftCache[index];
+            if (!current) return;
+            current.dismissed = true;
+            renderBatchAssetDraftPreview();
+        }
+
+        function applyBatchAssetDraft(index) {
+            const current = batchAssetDraftCache[index];
+            if (!current) return;
+            if (current.source_type === 'idea') {
+                prefillAssetJobFromIdea(current.source_id);
+            } else {
+                prefillAssetJobFromTrend(current.source_id);
+            }
+            const styleSelect = document.getElementById('assetJobStyleType');
+            const modeSelect = document.getElementById('assetJobGenerationMode');
+            const coverSelect = document.getElementById('assetJobCoverStyleType');
+            const innerSelect = document.getElementById('assetJobInnerStyleType');
+            const titleInput = document.getElementById('assetJobTitleHint');
+            if (styleSelect && current.plan?.style_type) styleSelect.value = current.plan.style_type;
+            if (modeSelect && current.plan?.generation_mode) modeSelect.value = current.plan.generation_mode;
+            if (coverSelect && current.plan?.cover_style_type) coverSelect.value = current.plan.cover_style_type;
+            if (innerSelect && current.plan?.inner_style_type) innerSelect.value = current.plan.inner_style_type;
+            if (titleInput && current.plan?.title_hint) titleInput.value = current.plan.title_hint;
+            const msg = document.getElementById('assetJobMsg');
+            if (msg) {
+                msg.textContent = '已把当前草案套用到图片任务表单。你可以继续微调后再预览或创建真实图片任务。';
+            }
+        }
+
+        async function saveRetainedBatchAssetDrafts() {
+            const items = batchAssetDraftCache.filter((item) => item.kept && !item.dismissed);
+            const wrap = document.getElementById('batchAssetDraftPreview');
+            if (!items.length) {
+                if (wrap) wrap.insertAdjacentHTML('afterbegin', '<div class="text-muted mb-3">当前没有“已保留”的草案可保存。</div>');
+                return;
+            }
+            const res = await fetch('/api/admin/assets/draft-plans/save-batch', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    source_type: batchAssetDraftMeta.sourceType,
+                    bucket_label: batchAssetDraftMeta.bucketLabel,
+                    items,
+                })
+            });
+            const data = await res.json();
+            const msg = document.getElementById('assetJobMsg');
+            if (msg) {
+                msg.textContent = data.message || '已处理';
+            }
+            if (data.success) {
+                loadAssetPlanDrafts();
+            }
+        }
+
+        async function loadAssetPlanDrafts() {
+            const res = await fetch('/api/admin/assets/draft-plans?status=active&limit=50');
+            const data = await res.json();
+            const wrap = document.getElementById('assetPlanDraftWrap');
+            if (!wrap) return;
+            if (!data.success) {
+                wrap.textContent = data.message || '图片草案池加载失败';
+                return;
+            }
+            assetPlanDraftCache = Object.fromEntries((data.items || []).map((item) => [item.id, item]));
+            wrap.innerHTML = (data.items || []).map((item) => `
+                <div class="mini-note mb-2">
+                    <div class="d-flex justify-content-between align-items-center gap-2">
+                        <strong>${escapeHtml(item.source_title || item.title_hint || '-')}</strong>
+                        <span class="badge bg-light text-dark">${escapeHtml(item.template_agent_label || '-')}</span>
+                    </div>
+                    <div class="subtle mt-2">来源：${escapeHtml(item.source_type || '-')} #${item.source_id || '-'}</div>
+                    <div class="subtle">图片打法：${escapeHtml(item.image_skill_label || '-')}</div>
+                    <div class="subtle">封面：${escapeHtml(item.plan?.cover_style_label || '-')} ｜ 内页：${escapeHtml(item.plan?.inner_style_label || '-')}</div>
+                    <div class="subtle mt-2">模式：${escapeHtml(assetWorkflowModeMap[item.plan?.generation_mode] || item.plan?.generation_mode || '-')}</div>
+                    <div class="mt-3 d-flex gap-2 flex-wrap">
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="applySavedAssetDraft(${item.id})">套用到图片任务表单</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="confirmSavedAssetDraft(${item.id})">转待执行任务</button>
+                        <button type="button" class="btn btn-sm btn-outline-dark" onclick="updateAssetPlanDraftStatus(${item.id}, 'archived')">归档</button>
+                    </div>
+                </div>
+            `).join('') || '<div class="text-muted">当前还没有已保存的图片草案。</div>';
+        }
+
+        function applySavedAssetDraft(id) {
+            const item = assetPlanDraftCache[id];
+            if (!item) return;
+            const styleSelect = document.getElementById('assetJobStyleType');
+            const modeSelect = document.getElementById('assetJobGenerationMode');
+            const coverSelect = document.getElementById('assetJobCoverStyleType');
+            const innerSelect = document.getElementById('assetJobInnerStyleType');
+            const titleInput = document.getElementById('assetJobTitleHint');
+            const contentInput = document.getElementById('assetJobSelectedContent');
+            const noteInput = document.getElementById('assetJobNote');
+            if (styleSelect && item.plan?.style_type) styleSelect.value = item.plan.style_type;
+            if (modeSelect && item.plan?.generation_mode) modeSelect.value = item.plan.generation_mode;
+            if (coverSelect && item.plan?.cover_style_type) coverSelect.value = item.plan.cover_style_type;
+            if (innerSelect && item.plan?.inner_style_type) innerSelect.value = item.plan.inner_style_type;
+            if (titleInput) titleInput.value = item.title_hint || item.source_title || '';
+            if (contentInput && item.selected_content) contentInput.value = item.selected_content;
+            if (noteInput) {
+                noteInput.value = [
+                    item.template_agent_label ? `已从草案池套用：${item.template_agent_label}` : '',
+                    item.image_skill_label ? `图片打法：${item.image_skill_label}` : '',
+                ].filter(Boolean).join(' ｜ ');
+            }
+            const msg = document.getElementById('assetJobMsg');
+            if (msg) {
+                msg.textContent = '已从草案池套用到图片任务表单。你可以继续微调后再预览或创建真实图片任务。';
+            }
+        }
+
+        async function updateAssetPlanDraftStatus(id, status) {
+            const res = await fetch(`/api/admin/assets/draft-plans/${id}/status`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({status})
+            });
+            const data = await res.json();
+            const msg = document.getElementById('assetJobMsg');
+            if (msg) {
+                msg.textContent = data.message || '已处理';
+            }
+            if (data.success) {
+                loadAssetPlanDrafts();
+            }
+        }
+
+        async function activateDraftAssetTask(taskId) {
+            const registrationId = window.prompt('请输入要绑定的报名ID');
+            if (!registrationId) return;
+            const numericId = parseInt(registrationId, 10);
+            if (!numericId || numericId <= 0) {
+                const msg = document.getElementById('assetJobMsg');
+                if (msg) msg.textContent = '报名ID格式不正确';
+                return;
+            }
+            const res = await fetch(`/api/admin/assets/tasks/${taskId}/activate-draft`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({registration_id: numericId})
+            });
+            const data = await res.json();
+            const msg = document.getElementById('assetJobMsg');
+            if (msg) {
+                msg.textContent = data.message || '已处理';
+            }
+            if (data.success) {
+                loadAssetTasks();
+            }
+        }
+
+        async function confirmSavedAssetDraft(id) {
+            await confirmSavedAssetDrafts([id]);
+        }
+
+        async function confirmAllSavedAssetDrafts() {
+            const ids = Object.keys(assetPlanDraftCache || {}).map((item) => parseInt(item, 10)).filter(Boolean);
+            await confirmSavedAssetDrafts(ids);
+        }
+
+        async function confirmSavedAssetDrafts(ids) {
+            if (!Array.isArray(ids) || !ids.length) {
+                const msg = document.getElementById('assetJobMsg');
+                if (msg) msg.textContent = '当前没有可转成待执行任务的图片草案。';
+                return;
+            }
+            const res = await fetch('/api/admin/assets/draft-plans/confirm-batch', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    draft_ids: ids,
+                    archive_after: true,
+                })
+            });
+            const data = await res.json();
+            const msg = document.getElementById('assetJobMsg');
+            if (msg) {
+                msg.textContent = data.message || '已处理';
+            }
+            if (data.success) {
+                loadAssetPlanDrafts();
+                loadAssetTasks();
+            }
         }
 
         async function loadCorpus() {
@@ -3970,7 +4857,12 @@
             body.innerHTML = (data.items || []).map((item) => `
                 <tr>
                     <td>${escapeHtml(item.category)}</td>
-                    <td>${escapeHtml(item.title)}<div class="subtle">${escapeHtml(item.source || '-')}</div></td>
+                    <td>
+                        ${escapeHtml(item.title)}
+                        <div class="subtle">${escapeHtml(item.source || '-')}</div>
+                        ${item.reference_url ? `<div class="subtle"><a href="${escapeHtml(item.reference_url)}" target="_blank" rel="noreferrer">参考链接</a></div>` : ''}
+                    </td>
+                    <td>${escapeHtml(item.template_type_label || item.template_type_key || '-')}</td>
                     <td><span class="badge ${poolStatusClass(item.pool_status)}">${escapeHtml(item.pool_status_label || item.pool_status || '储备池')}</span></td>
                     <td>${escapeHtml(item.tags || '-')}</td>
                     <td>${escapeHtml((item.content || '').slice(0, 120))}</td>
@@ -3981,7 +4873,7 @@
                         ${item.pool_status !== 'archived' ? `<button class="btn btn-sm btn-outline-dark" onclick="changeCorpusPoolStatus(${item.id}, 'archived')">归档</button>` : `<button class="btn btn-sm btn-outline-info" onclick="changeCorpusPoolStatus(${item.id}, 'reserve')">恢复储备</button>`}
                     </td>
                 </tr>
-            `).join('') || '<tr><td colspan="7" class="text-center text-muted">暂无语料</td></tr>';
+            `).join('') || '<tr><td colspan="8" class="text-center text-muted">暂无语料</td></tr>';
             loadCorpusInsights();
         }
 
@@ -4083,6 +4975,7 @@
             const res = await fetch(`/api/topic_ideas?${params.toString()}`);
             const data = await res.json();
             const body = document.getElementById('ideaTableBody');
+            ideaCache = Object.fromEntries((data.items || []).map((item) => [item.id, item]));
             const selectAll = document.getElementById('selectAllIdeas');
             if (selectAll) selectAll.checked = false;
             body.innerHTML = (data.items || []).map((item) => `
@@ -4095,13 +4988,48 @@
                     <td>
                         <strong>${escapeHtml(item.topic_title)}</strong>
                         <div class="subtle">${escapeHtml(item.keywords || '')}</div>
-                        <div class="subtle">${escapeHtml((item.angle || '').slice(0, 70))}</div>
+                        <div class="subtle">创建于 ${escapeHtml(item.created_at || '-')}</div>
+                        ${(item.source_note_count || item.source_link_count) ? `<div class="subtle mt-1">来源热点 ${item.source_note_count || 0} 条 ｜ 参考链接 ${item.source_link_count || 0} 条</div>` : '<div class="subtle mt-1">来源：系统策划/人工补充</div>'}
+                        ${(item.source_links_list || []).length ? `
+                            <details class="mt-2">
+                                <summary>查看参考爆款</summary>
+                                <div class="subtle mt-2">
+                                    ${(item.source_links_list || []).slice(0, 3).map((link) => `
+                                        <div><a href="${escapeHtml(link)}" target="_blank" rel="noreferrer">${escapeHtml(link)}</a></div>
+                                    `).join('')}
+                                </div>
+                            </details>
+                        ` : ''}
                     </td>
-                    <td>${escapeHtml(item.content_type || '-')}<div class="subtle">${escapeHtml(item.persona || '-')}</div></td>
+                    <td>
+                        <div>${escapeHtml(item.content_type || '-')}</div>
+                        <div class="subtle">${escapeHtml(item.persona || '-')}</div>
+                        ${item.cover_title ? `<div class="subtle mt-2">封面建议：${escapeHtml(item.cover_title)}</div>` : ''}
+                    </td>
                     <td>${item.quota || 30}人</td>
                     <td>${item.hot_value || 0}</td>
-                    <td>${escapeHtml(item.soft_insertion || '-')}</td>
-                    <td>${escapeHtml(item.asset_brief || '-')}</td>
+                    <td>
+                        <div class="subtle" style="white-space: pre-wrap;">${escapeHtml(item.angle || '-')}</div>
+                        <div class="subtle mt-2">软植入：${escapeHtml(item.soft_insertion || '-')}</div>
+                        ${item.compliance_note ? `
+                            <details class="mt-2">
+                                <summary>查看合规提醒</summary>
+                                <div class="subtle mt-2" style="white-space: pre-wrap;">${escapeHtml(item.compliance_note || '')}</div>
+                            </details>
+                        ` : ''}
+                    </td>
+                    <td>
+                        <div class="subtle" style="white-space: pre-wrap;">${escapeHtml(item.asset_brief || '-')}</div>
+                        ${item.template_agent_label ? `<div class="subtle mt-2">图片模板：${escapeHtml(item.template_agent_label)}${item.template_agent_description ? ` ｜ ${escapeHtml(item.template_agent_description)}` : ''}</div>` : ''}
+                        ${(item.image_skill_label || item.cover_style_label || item.inner_style_label) ? `
+                            <div class="d-flex gap-2 flex-wrap mt-2">
+                                ${item.image_skill_label ? `<span class="badge bg-info-subtle text-dark">图片打法：${escapeHtml(item.image_skill_label)}</span>` : ''}
+                                ${item.cover_style_label ? `<span class="badge bg-light text-dark">封面：${escapeHtml(item.cover_style_label)}</span>` : ''}
+                                ${item.inner_style_label ? `<span class="badge bg-light text-secondary">内页：${escapeHtml(item.inner_style_label)}</span>` : ''}
+                            </div>
+                        ` : ''}
+                        ${item.published_topic_id ? `<div class="subtle mt-2">已发布到话题 ID：${item.published_topic_id}</div>` : ''}
+                    </td>
                     <td>
                         <details>
                             <summary>查看提示词</summary>
@@ -4110,6 +5038,7 @@
                     </td>
                     <td>
                         <div class="d-flex flex-column gap-2">
+                            <button class="btn btn-sm btn-outline-primary" onclick="prefillAssetJobFromIdea(${item.id})">预填图片方案</button>
                             ${(item.status === 'pending_review' || item.status === 'rejected' || item.status === 'draft') ? `
                                 <button class="btn btn-sm btn-outline-primary" onclick="changeIdeaQuota(${item.id}, ${item.quota || 30})">调整名额</button>
                                 <button class="btn btn-sm btn-outline-success" onclick="reviewIdea(${item.id}, 'approve')">通过审核</button>
@@ -4132,6 +5061,7 @@
                     </td>
                 </tr>
             `).join('') || '<tr><td colspan="10" class="text-center text-muted">暂无候选话题</td></tr>';
+            renderIdeaTemplateBuckets(data.items || []);
         }
 
         async function importTrends() {
@@ -4284,6 +5214,85 @@
                 document.getElementById('corpusTitle').value = '';
                 document.getElementById('corpusTags').value = '';
                 document.getElementById('corpusContent').value = '';
+                loadOverview();
+                loadCorpus();
+            }
+        }
+
+        async function loadTopicReferenceOptions() {
+            const activityId = document.getElementById('topicReferenceActivityId')?.value;
+            const select = document.getElementById('topicReferenceTopicId');
+            if (!activityId || !select) return;
+            select.innerHTML = '<option value="">正在加载话题...</option>';
+            const res = await fetch(`/api/topics/${activityId}`);
+            const items = await res.json();
+            const rows = Array.isArray(items) ? items : [];
+            select.innerHTML = rows.map((item) => `
+                <option value="${item.id}">${escapeHtml(item.topic_name || '未命名话题')}</option>
+            `).join('') || '<option value="">当前活动暂无话题</option>';
+        }
+
+        async function importReferenceCorpus() {
+            const payload = {
+                title: document.getElementById('corpusTitle').value,
+                category: document.getElementById('corpusCategory').value,
+                source: document.getElementById('corpusSource').value || '参考链接导入',
+                tags: document.getElementById('corpusTags').value,
+                reference_links: document.getElementById('corpusReferenceLinks').value,
+                reference_note_text: document.getElementById('corpusReferenceText').value,
+                style_hint: document.getElementById('corpusReferenceHint').value,
+                product_anchor: document.getElementById('corpusProductAnchor').value,
+            };
+            const res = await fetch('/api/corpus/import_reference_links', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            document.getElementById('corpusMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                document.getElementById('corpusReferenceLinks').value = '';
+                document.getElementById('corpusReferenceText').value = '';
+                document.getElementById('corpusReferenceHint').value = '';
+                document.getElementById('corpusProductAnchor').value = '';
+                loadOverview();
+                loadCorpus();
+            }
+        }
+
+        async function importSelectedTopicReferenceCorpus() {
+            const topicId = document.getElementById('topicReferenceTopicId')?.value;
+            if (!topicId) {
+                document.getElementById('topicReferenceMsg').textContent = '请先选择一个话题';
+                return;
+            }
+            const res = await fetch(`/api/topics/${topicId}/import_reference_corpus`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({})
+            });
+            const data = await res.json();
+            document.getElementById('topicReferenceMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadOverview();
+                loadCorpus();
+            }
+        }
+
+        async function importActivityReferenceCorpus() {
+            const activityId = document.getElementById('topicReferenceActivityId')?.value;
+            if (!activityId) {
+                document.getElementById('topicReferenceMsg').textContent = '请先选择活动';
+                return;
+            }
+            const res = await fetch(`/api/activities/${activityId}/import_reference_corpus`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({})
+            });
+            const data = await res.json();
+            document.getElementById('topicReferenceMsg').textContent = data.message || '已处理';
+            if (data.success) {
                 loadOverview();
                 loadCorpus();
             }
@@ -4478,6 +5487,10 @@
                 source_channel: document.getElementById('hotwordSourceChannel').value,
                 batch_name: document.getElementById('hotwordBatchName').value.trim(),
                 keyword_limit: parseInt(document.getElementById('hotwordKeywordLimit').value || '10', 10),
+                scope_preset: document.getElementById('hotwordScopePreset').value,
+                time_window: document.getElementById('hotwordTimeWindow').value,
+                date_from: document.getElementById('hotwordDateFrom').value || '',
+                date_to: document.getElementById('hotwordDateTo').value || '',
                 keywords: document.getElementById('hotwordKeywordInput').value.trim()
             };
             const res = await fetch('/api/jobs/hotwords/run', {
@@ -4498,10 +5511,39 @@
             }
         }
 
+        async function runHotwordPlanningBundle() {
+            const payload = {
+                ...collectHotwordRuntimeConfigPayload(),
+                source_platform: document.getElementById('hotwordSourcePlatform').value,
+                source_channel: document.getElementById('hotwordSourceChannel').value,
+                batch_name: document.getElementById('hotwordBatchName').value.trim(),
+                keyword_limit: parseInt(document.getElementById('hotwordKeywordLimit').value || '10', 10),
+                time_window: document.getElementById('hotwordTimeWindow').value,
+                date_from: document.getElementById('hotwordDateFrom').value || '',
+                date_to: document.getElementById('hotwordDateTo').value || '',
+            };
+            const res = await fetch('/api/jobs/hotwords/run_planning_bundle', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            document.getElementById('hotwordJobMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadOverview();
+                loadDataSourceTasks();
+                loadJobHistory();
+            }
+        }
+
         async function pingHotwordSync() {
             const payload = {
                 wait_seconds: 3,
                 ...collectHotwordRuntimeConfigPayload(),
+                scope_preset: document.getElementById('hotwordScopePreset').value,
+                time_window: document.getElementById('hotwordTimeWindow').value,
+                date_from: document.getElementById('hotwordDateFrom').value || '',
+                date_to: document.getElementById('hotwordDateTo').value || '',
                 keywords: document.getElementById('hotwordKeywordInput').value.trim()
             };
             const res = await fetch('/api/jobs/hotwords/ping', {
@@ -4702,6 +5744,47 @@
             loadDiagnostics();
             loadIntegrationPings();
             loadFirstRunPlaybooks();
+            loadIntegrationAcceptance();
+            loadTrialReadiness();
+            loadGoLiveReadiness();
+        }
+
+        async function pingCopywriter() {
+            const payload = {
+                ...collectCopywriterRuntimeConfigPayload(),
+                wait_seconds: 20,
+                prompt_text: '请用更像真人的小红书口语风，写一句关于肝健康的开头。',
+            };
+            const res = await fetch('/api/jobs/copywriter/ping', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            document.getElementById('automationConfigNote').textContent = data.message || '已处理';
+            const wrap = document.getElementById('copywriterPingPreview');
+            if (wrap) {
+                wrap.innerHTML = `
+                    <div class="row g-3">
+                        <div class="col-lg-4">
+                            <strong>接口状态</strong>
+                            <div class="subtle mt-2">启用：${data.enabled ? '是' : '否'}</div>
+                            <div class="subtle">Provider：${escapeHtml(data.provider || '-')}</div>
+                            <div class="subtle">说明：${escapeHtml(data.message || '-')}</div>
+                        </div>
+                        <div class="col-lg-4">
+                            <strong>请求预览</strong>
+                            <div class="json-box mt-2">${escapeHtml(JSON.stringify(data.request_preview || {}, null, 2))}</div>
+                        </div>
+                        <div class="col-lg-4">
+                            <strong>返回摘要</strong>
+                            <div class="json-box mt-2">${escapeHtml(JSON.stringify(data.response_preview || {}, null, 2))}</div>
+                        </div>
+                    </div>
+                `;
+            }
+            loadDiagnostics();
+            loadIntegrationPings();
             loadIntegrationAcceptance();
             loadTrialReadiness();
             loadGoLiveReadiness();
@@ -4940,6 +6023,88 @@
             }
         }
 
+        async function convertTrendToCorpus(id) {
+            const res = await fetch(`/api/trends/${id}/to_corpus`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ category: '爆款拆解' })
+            });
+            const data = await res.json();
+            document.getElementById('trendImportMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadOverview();
+                loadCorpus();
+                loadTrends();
+            }
+        }
+
+        async function convertVisibleTrendsToCorpus() {
+            const payload = {
+                category: '爆款拆解',
+                source_platform: document.getElementById('trendPlatformFilter')?.value || '',
+                source_template_key: document.getElementById('trendTemplateFilter')?.value || '',
+                pool_status: document.getElementById('trendPoolFilter')?.value || '',
+                limit: 20,
+            };
+            const res = await fetch('/api/trends/to_corpus_batch', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            document.getElementById('trendImportMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadOverview();
+                loadCorpus();
+                loadTrends();
+            }
+        }
+
+        async function routeTrendTarget(id, target) {
+            const activityId = parseInt(document.getElementById('trendRouteActivityId')?.value || '0', 10);
+            const payload = {
+                target,
+                activity_id: activityId,
+            };
+            const res = await fetch(`/api/trends/${id}/route_target`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            document.getElementById('trendImportMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadOverview();
+                loadCorpus();
+                loadTrends();
+                loadIdeas();
+            }
+        }
+
+        async function routeVisibleTrends(target = 'recommended') {
+            const payload = {
+                target,
+                activity_id: parseInt(document.getElementById('trendRouteActivityId')?.value || '0', 10),
+                source_platform: document.getElementById('trendPlatformFilter')?.value || '',
+                source_template_key: document.getElementById('trendTemplateFilter')?.value || '',
+                pool_status: document.getElementById('trendPoolFilter')?.value || '',
+                limit: 20,
+            };
+            const res = await fetch('/api/trends/route_target_batch', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            document.getElementById('trendImportMsg').textContent = data.message || '已处理';
+            if (data.success) {
+                loadOverview();
+                loadCorpus();
+                loadTrends();
+                loadIdeas();
+            }
+        }
+
         async function promoteReserveTrends() {
             const sourcePlatform = document.getElementById('trendPlatformFilter')?.value || '';
             const res = await fetch('/api/trends/promote_reserve', {
@@ -5011,6 +6176,7 @@
         loadAutomationConfigPreview();
         loadTrends();
         loadCorpus();
+        loadTopicReferenceOptions();
         loadIdeas();
         loadJobHistory();
         loadFailedJobs();
@@ -5019,6 +6185,7 @@
         loadAssetLibrary();
         loadAssetLibraryInsights();
         loadAssetStyleRecommendations();
+        loadAssetPlanDrafts();
         loadSchedules();
         loadDeploymentHelper();
         loadIntegrationChecklist();
@@ -5051,6 +6218,9 @@
         document.getElementById('assetJobReferenceAssetIds')?.addEventListener('input', () => {
             loadAssetJobReferenceSuggestions();
         });
+        document.getElementById('hotwordTimeWindow')?.addEventListener('change', syncHotwordDateState);
+        document.getElementById('configHotwordTimeWindow')?.addEventListener('change', syncHotwordDateState);
+        syncHotwordDateState();
     </script>
 </body>
 </html>

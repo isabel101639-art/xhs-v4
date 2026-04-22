@@ -1,13 +1,18 @@
 import asyncio
 import os
+import sys
 from pathlib import Path
+
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 
 from crawler_service.config import get_settings
 
 
 async def main():
     try:
-        from playwright.async_api import async_playwright
+        from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
     except ImportError as exc:
         raise SystemExit('Playwright 未安装，请先执行 crawler_service/scripts/bootstrap_venv.sh') from exc
 
@@ -28,7 +33,10 @@ async def main():
         context = await browser.new_context()
         page = await context.new_page()
         await page.goto(login_url, wait_until='domcontentloaded', timeout=settings.playwright_navigation_timeout_ms)
-        await page.wait_for_load_state('networkidle', timeout=settings.playwright_navigation_timeout_ms)
+        try:
+            await page.wait_for_load_state('networkidle', timeout=settings.playwright_navigation_timeout_ms)
+        except PlaywrightTimeoutError:
+            print('页面在 30s 内未进入 networkidle，通常是站点持续请求导致，继续等待你手动登录即可。')
 
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, input, '')

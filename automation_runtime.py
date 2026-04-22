@@ -8,6 +8,10 @@ AUTOMATION_RUNTIME_CONFIG_DEFAULTS = {
     'hotword_source_template': 'generic_lines',
     'hotword_source_channel': 'Worker骨架',
     'hotword_keyword_limit': 10,
+    'hotword_scope_preset': 'liver_comorbidity',
+    'hotword_time_window': '30d',
+    'hotword_date_from': '',
+    'hotword_date_to': '',
     'hotword_fetch_mode': 'auto',
     'hotword_api_url': '',
     'hotword_api_method': 'GET',
@@ -24,6 +28,8 @@ AUTOMATION_RUNTIME_CONFIG_DEFAULTS = {
     'hotword_auto_generate_topic_count': 20,
     'hotword_auto_generate_topic_activity_id': 0,
     'hotword_auto_generate_topic_quota': 30,
+    'hotword_auto_convert_corpus_templates': False,
+    'hotword_auto_convert_corpus_limit': 10,
     'creator_sync_source_channel': 'Crawler服务',
     'creator_sync_fetch_mode': 'auto',
     'creator_sync_api_url': '',
@@ -38,6 +44,8 @@ AUTOMATION_RUNTIME_CONFIG_DEFAULTS = {
     'creator_sync_date_from': '',
     'creator_sync_date_to': '',
     'creator_sync_max_posts_per_account': 60,
+    'copywriter_api_url': '',
+    'copywriter_model': '',
     'image_provider': 'svg_fallback',
     'image_api_url': '',
     'image_api_base': '',
@@ -554,6 +562,10 @@ def _hotword_runtime_settings():
     config = dict(_automation_runtime_config())
     env_overrides = {
         'hotword_fetch_mode': (os.environ.get('HOTWORD_FETCH_MODE') or '').strip(),
+        'hotword_scope_preset': (os.environ.get('HOTWORD_SCOPE_PRESET') or '').strip(),
+        'hotword_time_window': (os.environ.get('HOTWORD_TIME_WINDOW') or '').strip(),
+        'hotword_date_from': (os.environ.get('HOTWORD_DATE_FROM') or '').strip(),
+        'hotword_date_to': (os.environ.get('HOTWORD_DATE_TO') or '').strip(),
         'hotword_api_url': (os.environ.get('HOTWORD_API_URL') or '').strip(),
         'hotword_api_method': (os.environ.get('HOTWORD_API_METHOD') or '').strip(),
         'hotword_api_headers_json': (os.environ.get('HOTWORD_API_HEADERS_JSON') or '').strip(),
@@ -563,6 +575,7 @@ def _hotword_runtime_settings():
         'hotword_keyword_param': (os.environ.get('HOTWORD_KEYWORD_PARAM') or '').strip(),
         'hotword_trend_type': (os.environ.get('HOTWORD_TREND_TYPE') or '').strip(),
         'hotword_auto_generate_topic_ideas': (os.environ.get('HOTWORD_AUTO_GENERATE_TOPIC_IDEAS') or '').strip(),
+        'hotword_auto_convert_corpus_templates': (os.environ.get('HOTWORD_AUTO_CONVERT_CORPUS_TEMPLATES') or '').strip(),
     }
     timeout_value = (os.environ.get('HOTWORD_TIMEOUT_SECONDS') or '').strip()
     if timeout_value:
@@ -582,12 +595,21 @@ def _hotword_runtime_settings():
     auto_generate_quota = (os.environ.get('HOTWORD_AUTO_GENERATE_TOPIC_QUOTA') or '').strip()
     if auto_generate_quota:
         env_overrides['hotword_auto_generate_topic_quota'] = _safe_int(auto_generate_quota, config.get('hotword_auto_generate_topic_quota', 30))
+    auto_convert_limit = (os.environ.get('HOTWORD_AUTO_CONVERT_CORPUS_LIMIT') or '').strip()
+    if auto_convert_limit:
+        env_overrides['hotword_auto_convert_corpus_limit'] = _safe_int(auto_convert_limit, config.get('hotword_auto_convert_corpus_limit', 10))
 
     for key, value in env_overrides.items():
         if value not in [None, '']:
             config[key] = value
     config['hotword_timeout_seconds'] = min(max(_safe_int(config.get('hotword_timeout_seconds'), 30), 5), 120)
     config['hotword_fetch_mode'] = (config.get('hotword_fetch_mode') or 'auto').strip().lower() or 'auto'
+    config['hotword_scope_preset'] = (config.get('hotword_scope_preset') or 'liver_comorbidity').strip() or 'liver_comorbidity'
+    config['hotword_time_window'] = (config.get('hotword_time_window') or '30d').strip().lower() or '30d'
+    if config['hotword_time_window'] not in {'3d', '7d', '30d', 'custom'}:
+        config['hotword_time_window'] = '30d'
+    config['hotword_date_from'] = (config.get('hotword_date_from') or '').strip()
+    config['hotword_date_to'] = (config.get('hotword_date_to') or '').strip()
     config['hotword_api_method'] = (config.get('hotword_api_method') or 'GET').strip().upper() or 'GET'
     config['hotword_keyword_param'] = (config.get('hotword_keyword_param') or 'keyword').strip() or 'keyword'
     config['hotword_trend_type'] = (config.get('hotword_trend_type') or 'note_search').strip().lower() or 'note_search'
@@ -599,6 +621,8 @@ def _hotword_runtime_settings():
     config['hotword_auto_generate_topic_count'] = min(max(_safe_int(config.get('hotword_auto_generate_topic_count'), 20), 1), 120)
     config['hotword_auto_generate_topic_activity_id'] = max(_safe_int(config.get('hotword_auto_generate_topic_activity_id'), 0), 0)
     config['hotword_auto_generate_topic_quota'] = min(max(_safe_int(config.get('hotword_auto_generate_topic_quota'), 30), 1), 300)
+    config['hotword_auto_convert_corpus_templates'] = str(config.get('hotword_auto_convert_corpus_templates') or '').strip().lower() in {'1', 'true', 'yes', 'y', 'on'}
+    config['hotword_auto_convert_corpus_limit'] = min(max(_safe_int(config.get('hotword_auto_convert_corpus_limit'), 10), 1), 50)
     return config
 
 

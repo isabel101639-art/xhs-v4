@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title }} - {{ site_config.site_name or '福瑞医科' }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/static/css/public_site.css">
+    <style>
+        :root {
+            --primary: {{ site_theme.primary_color or '#ff2442' }};
+            --primary-soft: {{ site_theme.primary_soft_color or '#ffe5e8' }};
+            --secondary: {{ site_theme.secondary_color or '#ff7a59' }};
+            --nav-start: {{ site_theme.nav_gradient_start or '#ff2442' }};
+            --nav-end: {{ site_theme.nav_gradient_end or '#ff6b6b' }};
+            --hero-start: {{ site_theme.hero_gradient_start or '#ff2442' }};
+            --hero-end: {{ site_theme.hero_gradient_end or '#ff7a59' }};
+            --bg-start: {{ site_theme.background_gradient_start or '#fff7f5' }};
+            --bg-end: {{ site_theme.background_gradient_end or '#ffffff' }};
+            --ink: {{ site_theme.text_color or '#1f2937' }};
+            --muted: {{ site_theme.muted_text_color or '#6b7280' }};
+            --surface: {{ site_theme.surface_color or '#ffffff' }};
+        }
+
+        body.public-body {
+            font-family: 'Manrope', 'Noto Sans SC', {{ site_theme.font_family or 'sans-serif' }};
+            background:
+                radial-gradient(circle at top right, {{ site_theme.primary_soft_color or '#ffe5e8' }} 0%, transparent 34%),
+                linear-gradient(180deg, var(--bg-start) 0%, var(--bg-end) 100%);
+            color: var(--ink);
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: linear-gradient(135deg, var(--nav-start) 0%, var(--nav-end) 100%);
+            box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+        }
+
+        .hero {
+            background: linear-gradient(135deg, var(--hero-start) 0%, var(--hero-end) 100%);
+            color: white;
+            padding: 32px 0 36px;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.14);
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+
+        .hero-title {
+            font-size: 34px;
+            line-height: 1.15;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .hero-subtitle {
+            font-size: 15px;
+            line-height: 1.8;
+            max-width: 840px;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 0;
+        }
+
+        .hero-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 18px;
+        }
+
+        .hero-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border-radius: 999px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 600;
+            transition: transform 0.18s ease;
+        }
+
+        .hero-action:hover {
+            transform: translateY(-1px);
+        }
+
+        .hero-action-primary {
+            background: white;
+            color: var(--primary);
+        }
+
+        .hero-action-secondary {
+            background: rgba(255, 255, 255, 0.14);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+        }
+
+        .main-wrap {
+            margin-top: -22px;
+            padding-bottom: 40px;
+        }
+
+        .panel-card,
+        .content-card {
+            background: rgba(255, 255, 255, 0.94);
+            border: 1px solid rgba(255, 255, 255, 0.55);
+            border-radius: 22px;
+            box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+        }
+
+        .panel-card {
+            padding: 20px;
+            height: 100%;
+        }
+
+        .metric-number {
+            font-size: 32px;
+            line-height: 1;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+
+        .metric-label {
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .section-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .section-head h5 {
+            margin: 0;
+            font-size: 19px;
+            font-weight: 700;
+        }
+
+        .section-subtle {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .content-card {
+            padding: 20px;
+            height: 100%;
+        }
+
+        .science-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .science-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: var(--primary-soft);
+            color: var(--primary);
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .meta-line {
+            color: var(--muted);
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+
+        .body-copy {
+            font-size: 14px;
+            line-height: 1.8;
+            color: var(--ink);
+            white-space: pre-wrap;
+        }
+
+        .ref-link-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            text-decoration: none;
+            border-radius: 999px;
+            font-size: 13px;
+            padding: 9px 14px;
+            color: var(--primary);
+            border: 1px solid rgba(255, 36, 66, 0.14);
+            background: white;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--muted);
+            padding: 40px 16px;
+        }
+
+        .lane-card {
+            background: rgba(255, 255, 255, 0.98);
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            border-radius: 18px;
+            padding: 18px;
+            height: 100%;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding-left: 12px;
+                padding-right: 12px;
+            }
+
+            .hero-title {
+                font-size: 26px;
+            }
+
+            .hero-actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+    </style>
+</head>
+<body class="public-body">
+    <div class="public-shell">
+        <nav class="navbar navbar-dark public-navbar">
+            <div class="container public-container">
+                <a class="navbar-brand" href="/">
+                    <i class="bi bi-heart-pulse-fill"></i>
+                    {{ site_config.site_name or '福瑞医科' }}
+                </a>
+                <ul class="navbar-nav ms-auto d-flex flex-row">
+                    {% for item in site_config.nav_items %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if not loop.first %}ms-3{% endif %}" href="{{ item.url }}" {% if item.target == '_blank' %}target="_blank" rel="noreferrer"{% endif %}>
+                            {% if item.icon %}<i class="bi {{ item.icon }}"></i>{% endif %}
+                            {{ item.label }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </nav>
+
+        <section class="hero">
+            <div class="container">
+                <div class="hero-badge">
+                    <i class="bi bi-grid"></i>
+                    {{ page_badge }}
+                </div>
+                <div class="hero-title">{{ page_heading }}</div>
+                <p class="hero-subtitle">{{ page_description }}</p>
+                <div class="hero-actions">
+                    <a class="hero-action hero-action-primary" href="/">
+                        <i class="bi bi-house-door"></i>
+                        返回首页
+                    </a>
+                    <a class="hero-action hero-action-secondary" href="/trends">
+                        <i class="bi bi-lightning-charge"></i>
+                        查看全部热点池
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <div class="container public-container main-wrap">
+            <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                    <div class="panel-card">
+                        <div class="metric-number">{{ trend_items|length }}</div>
+                        <div class="metric-label">爆款科普案例</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="panel-card">
+                        <div class="metric-number">{{ template_items|length }}</div>
+                        <div class="metric-label">表达模板</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="panel-card">
+                        <div class="metric-number">{{ science_items|length }}</div>
+                        <div class="metric-label">长期知识内容</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="panel-card">
+                        <div class="section-subtle mb-2">近期高频选题词</div>
+                        <div class="science-chip-row">
+                            {% for keyword in top_keywords %}
+                            <span class="science-chip">{{ keyword }}</span>
+                            {% endfor %}
+                            {% if not top_keywords %}
+                            <span class="section-subtle">暂无关键词</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel-card mb-4">
+                <div class="section-head">
+                    <h5>页面说明</h5>
+                    <div class="section-subtle">推荐先看爆款案例，再学表达模板，最后沉淀长期内容</div>
+                </div>
+                <div class="body-copy">这个页面的定位是“帮用户养肝健康方向 IP”，不是单纯堆产品内容。上面放的是值得研究的爆款科普案例，中间放的是可以学结构和节奏的表达模板，下面放的是适合长期稳定输出的知识内容。这样用户既能追热点，也能慢慢形成自己的账号风格和内容体系。</div>
+                <div class="body-copy mt-3">这里默认不把它做成“产品素材页”。如果后续要放图片，也更适合放“封面风格、排版方式、个人IP视觉表达”这类参考，而不是直接堆产品图。</div>
+            </div>
+
+            <section class="mb-5">
+                <div class="section-head">
+                    <h5>肝健康IP规划Agent（草版）</h5>
+                    <div class="section-subtle">先帮用户找到“适合自己长期更新”的方向，不是一上来就直接写稿</div>
+                </div>
+                <div class="row g-3">
+                    <div class="col-lg-5">
+                        <div class="content-card h-100">
+                            <div class="mb-3">
+                                <label class="form-label">你的背景更接近哪类人设</label>
+                                <select id="ipAgentBackground" class="form-select">
+                                    {% for key, label in ip_background_options.items() %}
+                                    <option value="{{ key }}">{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">你现在更想做哪类方向</label>
+                                <select id="ipAgentDirection" class="form-select">
+                                    {% for key, label in ip_direction_options.items() %}
+                                    <option value="{{ key }}">{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">你当前最想达成什么</label>
+                                <select id="ipAgentGoal" class="form-select">
+                                    {% for key, label in ip_goal_options.items() %}
+                                    <option value="{{ key }}">{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">你打算多久更新一次</label>
+                                <input id="ipAgentCadence" class="form-control" value="每周 2 条" placeholder="例如：每周 2 条 / 每周 3 条">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">你想做什么样的肝健康IP</label>
+                                <textarea id="ipAgentNote" rows="5" class="form-control" placeholder="例如：我更想做中医调理养肝方向，想写肝气郁结、情绪压力、失眠熬夜、女性养肝这些内容，希望更像个人IP，不要太像教科书。"></textarea>
+                            </div>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button class="hero-action hero-action-primary" type="button" onclick="runIpAgentPlan()">生成IP规划</button>
+                                <button class="hero-action hero-action-secondary" type="button" onclick="applyIpAgentPreset('tcm')">中医养肝示例</button>
+                                <button class="hero-action hero-action-secondary" type="button" onclick="applyIpAgentPreset('fatty')">脂肪肝管理示例</button>
+                                <button class="hero-action hero-action-secondary" type="button" onclick="applyIpAgentPreset('family')">家属陪伴示例</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="content-card h-100">
+                            <div class="section-subtle mb-2">Agent 输出结果</div>
+                            <div id="ipAgentResult" class="body-copy">你可以先告诉 Agent 你是谁、想做哪类肝健康内容、希望账号更像哪种风格，它会先给你做定位，再推荐栏目和案例。</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="mb-5">
+                <div class="section-head">
+                    <h5>肝健康内容方向地图</h5>
+                    <div class="section-subtle">不只产品，也不只检查，整个肝健康内容池其实很大</div>
+                </div>
+                <div class="row g-3">
+                    {% for lane in ip_lanes %}
+                    <div class="col-lg-6">
+                        <div class="lane-card">
+                            <div class="section-head mb-2">
+                                <h5>{{ lane.title }}</h5>
+                            </div>
+                            <div class="body-copy">{{ lane.description }}</div>
+                            <div class="science-chip-row mt-3">
+                                {% for tag in lane.tags %}
+                                <span class="science-chip">{{ tag }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <section class="mb-5">
+                <div class="section-head">
+                    <h5>可长期养成的人设地图</h5>
+                    <div class="section-subtle">同一个肝健康赛道，不同人设会带来完全不同的账号气质</div>
+                </div>
+                <div class="row g-3">
+                    {% for lane in persona_lanes %}
+                    <div class="col-lg-4">
+                        <div class="lane-card">
+                            <div class="section-head mb-2">
+                                <h5>{{ lane.title }}</h5>
+                            </div>
+                            <div class="body-copy">{{ lane.description }}</div>
+                            <div class="science-chip-row mt-3">
+                                {% for item in lane.styles %}
+                                <span class="science-chip">{{ item }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <section class="mb-5">
+                <div class="section-head">
+                    <h5>当前热门方向分布</h5>
+                    <div class="section-subtle">把抓到的爆款案例和模板按方向归类，更容易判断最近该往哪条线发力</div>
+                </div>
+                <div class="row g-3">
+                    {% for lane in lane_overview_rows %}
+                    <div class="col-lg-6">
+                        <div class="lane-card">
+                            <div class="section-head mb-2">
+                                <h5>{{ lane.title }}</h5>
+                                <span class="science-chip">案例 {{ lane.trend_count }} / 模板 {{ lane.template_count }}</span>
+                            </div>
+                            <div class="body-copy">{{ lane.description }}</div>
+                            <div class="science-chip-row mt-3">
+                                {% for item in lane.tags %}
+                                <span class="science-chip">{{ item }}</span>
+                                {% endfor %}
+                            </div>
+                            <div class="mt-3">
+                                {% for item in lane['items'] %}
+                                <div class="meta-line">- {{ item.title }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% if not lane_overview_rows %}
+                    <div class="col-12">
+                        <div class="content-card">
+                            <div class="empty-state">当前还没有足够的爆款案例做方向分布，等真实 crawler 抓到更多内容后会更清楚。</div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </section>
+
+            <section class="mb-5">
+                <div class="section-head">
+                    <h5>最近自动回流的模板</h5>
+                    <div class="section-subtle">热点抓取后自动沉淀进来的模板会优先出现在这里，也会直接影响方向热度和栏目规划</div>
+                </div>
+                {% if recent_auto_templates %}
+                <div class="row g-3">
+                    {% for item in recent_auto_templates %}
+                    <div class="col-lg-6 liver-lane-item" data-lane-key="{{ item.lane_key }}" data-persona-key="{{ item.persona_key }}">
+                        <div class="content-card">
+                            <div class="section-head mb-2">
+                                <h5>{{ item.title }}</h5>
+                                <span class="science-chip">自动回流模板</span>
+                            </div>
+                            <div class="meta-line">
+                                {% if item.lane_title %}方向：{{ item.lane_title }}{% endif %}
+                                {% if item.persona_title %} ｜ 人设：{{ item.persona_title }}{% endif %}
+                            </div>
+                            <div class="body-copy">{{ item.content }}</div>
+                            <div class="science-chip-row mt-3">
+                                {% for tag in item.tags %}
+                                <span class="science-chip">{{ tag }}</span>
+                                {% endfor %}
+                            </div>
+                            {% if item.reference_url %}
+                            <div class="science-chip-row mt-3">
+                                <a class="ref-link-btn" href="{{ item.reference_url }}" target="_blank" rel="noreferrer">
+                                    <i class="bi bi-box-arrow-up-right"></i>
+                                    查看参考链接
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="content-card">
+                    <div class="empty-state">当前还没有自动回流模板。等热点抓取任务开启自动转模板后，这里会持续更新。</div>
+                </div>
+                {% endif %}
+            </section>
+
+            <section class="mb-5">
+                <div class="section-head">
+                    <h5>方向筛选</h5>
+                    <div class="section-subtle">先聚焦一个方向看案例和模板，更容易沉淀成稳定栏目</div>
+                </div>
+                <div class="science-chip-row" id="laneFilterWrap">
+                    <button type="button" class="science-chip" data-lane-filter="all" onclick="setLaneFilter('all')">全部方向</button>
+                    {% for lane in ip_lanes %}
+                    <button type="button" class="science-chip" data-lane-filter="{{ lane.key }}" onclick="setLaneFilter('{{ lane.key }}')">{{ lane.title }}</button>
+                    {% endfor %}
+                </div>
+                <div class="science-chip-row mt-3" id="personaFilterWrap">
+                    <button type="button" class="science-chip" data-persona-filter="all" onclick="setPersonaFilter('all')">全部人设</button>
+                    {% for lane in persona_lanes %}
+                    <button type="button" class="science-chip" data-persona-filter="{{ lane.key }}" onclick="setPersonaFilter('{{ lane.key }}')">{{ lane.title }}</button>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <section class="mb-5">
+                <div class="section-head">
+                    <h5>推荐IP栏目规划</h5>
+                    <div class="section-subtle">不是让用户什么都写，而是帮她先定 3 到 5 条更适合长期更新的栏目线</div>
+                </div>
+                <div class="row g-3">
+                    {% for item in column_plans %}
+                    <div class="col-lg-6">
+                        <div class="lane-card">
+                            <div class="section-head mb-2">
+                                <h5>{{ item.title }}</h5>
+                                <span class="science-chip">热度 {{ item.hotness }}</span>
+                            </div>
+                            <div class="body-copy">{{ item.description }}</div>
+                            <div class="meta-line mt-3">适合人群：{{ item.audience }}</div>
+                            <div class="meta-line">更新频率建议：{{ item.cadence }}</div>
+                            <div class="science-chip-row mt-3">
+                                {% for persona in item.personas %}
+                                <span class="science-chip">{{ persona }}</span>
+                                {% endfor %}
+                            </div>
+                            <div class="science-chip-row mt-3">
+                                {% for tag in item.tags %}
+                                <span class="science-chip">{{ tag }}</span>
+                                {% endfor %}
+                            </div>
+                            {% if item.sample_titles %}
+                            <div class="mt-3">
+                                <div class="section-subtle mb-2">最近案例标题</div>
+                                {% for title in item.sample_titles %}
+                                <div class="meta-line">- {{ title }}</div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            {% if item.keyword_hint %}
+                            <div class="mt-3">
+                                <div class="section-subtle mb-2">可顺带关注的关键词</div>
+                                <div class="science-chip-row">
+                                    {% for keyword in item.keyword_hint %}
+                                    <span class="science-chip">{{ keyword }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <section class="mb-5">
+                <div class="section-head">
+                    <h5>适合养IP的爆款科普内容</h5>
+                    <div class="section-subtle">重点看选题方向、标题打法、解释方式和互动收口</div>
+                </div>
+                {% if trend_items %}
+                <div class="row g-3">
+                    {% for item in trend_items %}
+                    <div class="col-lg-6 liver-lane-item" data-lane-key="{{ item.lane_key }}" data-persona-key="{{ item.persona_key }}">
+                        <div class="content-card">
+                            <div class="section-head mb-2">
+                                <h5>{{ item.title }}</h5>
+                                <span class="science-chip">{{ item.angle }}</span>
+                            </div>
+                            <div class="meta-line">
+                                {% if item.keyword %}关键词：{{ item.keyword }} ｜ {% endif %}
+                                阅读 {{ item.views }} ｜ 点赞 {{ item.likes }} ｜ 收藏 {{ item.favorites }} ｜ 评论 {{ item.comments }}
+                            </div>
+                            {% if item.summary %}
+                            <div class="body-copy">{{ item.summary }}</div>
+                            {% endif %}
+                            <div class="science-chip-row mt-3">
+                                {% if item.author %}<span class="science-chip">作者：{{ item.author }}</span>{% endif %}
+                                {% if item.source_channel %}<span class="science-chip">渠道：{{ item.source_channel }}</span>{% endif %}
+                                {% if item.persona_title %}<span class="science-chip">人设：{{ item.persona_title }}</span>{% endif %}
+                                {% if item.created_at %}<span class="science-chip">入库：{{ item.created_at }}</span>{% endif %}
+                            </div>
+                            {% if item.link %}
+                            <div class="science-chip-row mt-3">
+                                <a class="ref-link-btn" href="{{ item.link }}" target="_blank" rel="noreferrer">
+                                    <i class="bi bi-box-arrow-up-right"></i>
+                                    查看原始链接
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="content-card">
+                    <div class="empty-state">当前还没有抓到可展示的肝健康爆款内容。等 crawler 切到真实抓取后，这里会更有价值。</div>
+                </div>
+                {% endif %}
+            </section>
+
+            <section class="mb-5">
+                <div class="section-head">
+                    <h5>可复用IP表达模板</h5>
+                    <div class="section-subtle">适合拿去喂一键生成文案，学习的是结构、节奏和人设表达</div>
+                </div>
+                {% if template_items %}
+                <div class="row g-3">
+                    {% for item in template_items %}
+                    <div class="col-lg-6 liver-lane-item" data-lane-key="{{ item.lane_key }}" data-persona-key="{{ item.persona_key }}">
+                        <div class="content-card">
+                            <div class="section-head mb-2">
+                                <h5>{{ item.title }}</h5>
+                                <span class="science-chip">{{ item.template_type_label or item.template_type_key or item.category }}</span>
+                            </div>
+                            <div class="meta-line">
+                                {% if item.source %}来源：{{ item.source }}{% endif %}
+                                {% if item.source_title %} ｜ 参考标题：{{ item.source_title }}{% endif %}
+                            </div>
+                            <div class="body-copy">{{ item.content }}</div>
+                            <div class="science-chip-row mt-3">
+                                {% for tag in item.tags %}
+                                <span class="science-chip">{{ tag }}</span>
+                                {% endfor %}
+                                {% if item.persona_title %}<span class="science-chip">人设：{{ item.persona_title }}</span>{% endif %}
+                            </div>
+                            {% if item.reference_url %}
+                            <div class="science-chip-row mt-3">
+                                <a class="ref-link-btn" href="{{ item.reference_url }}" target="_blank" rel="noreferrer">
+                                    <i class="bi bi-box-arrow-up-right"></i>
+                                    查看参考链接
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="content-card">
+                    <div class="empty-state">当前还没有可复用模板。可以先从话题参考链接或热点池里沉淀模板语料。</div>
+                </div>
+                {% endif %}
+            </section>
+
+            <section class="mb-5">
+                <div class="section-head">
+                    <h5>长期稳定输出知识库</h5>
+                    <div class="section-subtle">适合做账号的基础内容池，帮助用户持续更新而不只追单条爆款</div>
+                </div>
+                {% if science_items %}
+                <div class="row g-3">
+                    {% for item in science_items %}
+                    <div class="col-lg-6">
+                        <div class="content-card">
+                            <div class="section-head mb-2">
+                                <h5>{{ item.title }}</h5>
+                                <span class="science-chip">{{ item.category or '医学科普' }}</span>
+                            </div>
+                            <div class="meta-line">
+                                {% if item.source %}来源：{{ item.source }}{% endif %}
+                                {% if item.created_at %}{% if item.source %} ｜ {% endif %}整理时间：{{ item.created_at }}{% endif %}
+                            </div>
+                            <div class="body-copy">{{ item.content }}</div>
+                            {% if item.tags %}
+                            <div class="science-chip-row mt-3">
+                                {% for tag in item.tags %}
+                                <span class="science-chip">{{ tag }}</span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="content-card">
+                    <div class="empty-state">当前还没有可展示的标准科普内容。</div>
+                </div>
+                {% endif %}
+            </section>
+        </div>
+
+        <footer class="public-footer text-center">
+            <div>{{ site_config.footer_text or site_theme.footer_text or '福瑞医科小红书任务管理系统' }}</div>
+        </footer>
+    </div>
+    <script>
+        let currentLaneFilter = 'all';
+        let currentPersonaFilter = 'all';
+
+        function getOrCreateIpProfileKey() {
+            let key = '';
+            try {
+                key = localStorage.getItem('xhs_v4_ip_profile_key') || '';
+                if (!key) {
+                    key = `ip_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+                    localStorage.setItem('xhs_v4_ip_profile_key', key);
+                }
+            } catch (error) {
+                key = `ip_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+            }
+            return key;
+        }
+
+        function escapeHtml(text) {
+            return String(text || '').replace(/[&<>"']/g, (char) => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;',
+            }[char]));
+        }
+
+        function applyIpAgentPreset(type) {
+            const background = document.getElementById('ipAgentBackground');
+            const direction = document.getElementById('ipAgentDirection');
+            const goal = document.getElementById('ipAgentGoal');
+            const cadence = document.getElementById('ipAgentCadence');
+            const note = document.getElementById('ipAgentNote');
+            if (type === 'tcm') {
+                if (background) background.value = 'tcm';
+                if (direction) direction.value = 'tcm_conditioning';
+                if (goal) goal.value = 'trust';
+                if (cadence) cadence.value = '每周 2 条';
+                if (note) note.value = '我想做更像中医调理养肝的个人IP，内容想围绕肝气郁结、情绪压力、失眠熬夜、女性养肝这些方向展开，不想太像产品内容。';
+                return;
+            }
+            if (type === 'fatty') {
+                if (background) background.value = 'nutrition';
+                if (direction) direction.value = 'fatty_liver_management';
+                if (goal) goal.value = 'growth';
+                if (cadence) cadence.value = '每周 3 条';
+                if (note) note.value = '我想做脂肪肝管理和减脂方向的个人IP，内容更偏饮食、运动、习惯改变，适合做收藏型和陪伴型内容。';
+                return;
+            }
+            if (type === 'family') {
+                if (background) background.value = 'family';
+                if (direction) direction.value = 'family_care';
+                if (goal) goal.value = 'consistency';
+                if (cadence) cadence.value = '每周 1-2 条';
+                if (note) note.value = '我更适合从家属和陪诊视角做肝健康IP，想写带父母体检、家庭沟通、陪诊观察和日常照护。';
+            }
+        }
+
+        function renderIpAgentPlan(data) {
+            const wrap = document.getElementById('ipAgentResult');
+            if (!wrap) return;
+            if (!data || !data.success) {
+                wrap.innerHTML = '<div class="text-muted">当前还没生成规划，请稍后重试。</div>';
+                return;
+            }
+
+            const generatorSeed = data.generator_seed || {};
+            wrap.innerHTML = `
+                <div class="mb-3"><strong>推荐定位</strong><div class="mt-2">${escapeHtml(data.positioning || '')}</div></div>
+                <div class="mb-3"><strong>推荐方向</strong><div class="mt-2">${escapeHtml(data.recommended_lane?.title || '-')} ｜ ${escapeHtml(data.goal_label || '-')} ｜ 更新节奏 ${escapeHtml(data.cadence || '-')}</div></div>
+                <div class="mb-3"><strong>建议优先做的栏目</strong><div class="mt-2">${(data.recommended_columns || []).map((item) => `<div class="mb-2"><strong>${escapeHtml(item.title || '')}</strong>：${escapeHtml(item.audience || '')} ｜ ${escapeHtml(item.cadence || '')}</div>`).join('') || '<span class="text-muted">暂无栏目建议</span>'}</div></div>
+                <div class="mb-3"><strong>可先写的题目</strong><div class="mt-2">${(data.starter_titles || []).map((item) => `<div class="mb-2">- ${escapeHtml(item)}</div>`).join('') || '<span class="text-muted">暂无题目建议</span>'}</div></div>
+                <div class="mb-3"><strong>可参考的爆款案例</strong><div class="mt-2">${(data.case_refs || []).map((item) => `<div class="mb-2">${item.link ? `<a href="${escapeHtml(item.link)}" target="_blank" rel="noreferrer">${escapeHtml(item.title || '')}</a>` : escapeHtml(item.title || '')}</div>`).join('') || '<span class="text-muted">暂无案例建议</span>'}</div></div>
+                <div class="mb-3"><strong>可复用模板</strong><div class="mt-2">${(data.template_refs || []).map((item) => `<div class="mb-2">${escapeHtml(item.title || '')}</div>`).join('') || '<span class="text-muted">暂无模板建议</span>'}</div></div>
+                <div class="mb-3"><strong>起步动作</strong><div class="mt-2">${(data.next_steps || []).map((item) => `<div class="mb-2">- ${escapeHtml(item)}</div>`).join('') || '<span class="text-muted">暂无行动建议</span>'}</div></div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button type="button" class="hero-action hero-action-primary" onclick='saveAgentSeed(${JSON.stringify(generatorSeed)})'>保存为生成预设</button>
+                    <button type="button" class="hero-action hero-action-primary" onclick='saveAgentSeedAndGo(${JSON.stringify(generatorSeed)})'>保存并去生成文案</button>
+                    <button type="button" class="hero-action hero-action-secondary" onclick='copyAgentPrompt(${JSON.stringify(generatorSeed.user_prompt_seed || '')})'>复制IP提示词</button>
+                </div>
+            `;
+        }
+
+        async function runIpAgentPlan() {
+            const wrap = document.getElementById('ipAgentResult');
+            if (wrap) {
+                wrap.innerHTML = '<div class="text-muted">Agent 正在整理你的IP定位和栏目规划...</div>';
+            }
+            const profileKey = getOrCreateIpProfileKey();
+            const res = await fetch('/api/liver-ip/plan', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    profile_key: profileKey,
+                    background_key: document.getElementById('ipAgentBackground')?.value || 'patient',
+                    preferred_lane_key: document.getElementById('ipAgentDirection')?.value || 'auto',
+                    goal_key: document.getElementById('ipAgentGoal')?.value || 'trust',
+                    weekly_cadence: document.getElementById('ipAgentCadence')?.value || '每周 2 条',
+                    profile_note: document.getElementById('ipAgentNote')?.value || '',
+                })
+            });
+            const data = await res.json();
+            if (data?.profile_key) {
+                try {
+                    localStorage.setItem('xhs_v4_ip_profile_key', data.profile_key);
+                } catch (error) {
+                    // ignore
+                }
+            }
+            if (data?.generator_seed) {
+                saveAgentSeed(data.generator_seed);
+            }
+            renderIpAgentPlan(data);
+        }
+
+        function copyAgentPrompt(text) {
+            navigator.clipboard?.writeText(String(text || '').trim());
+        }
+
+        function saveAgentSeed(seed) {
+            if (!seed || typeof seed !== 'object') return;
+            localStorage.setItem('xhs_v4_ip_agent_seed', JSON.stringify(seed));
+            const wrap = document.getElementById('ipAgentResult');
+            if (wrap) {
+                wrap.insertAdjacentHTML('beforeend', '<div class="mt-3 text-success">已保存到本地预设。下次进入“一键生成文案”页时会自动带入。</div>');
+            }
+        }
+
+        function saveAgentSeedAndGo(seed) {
+            saveAgentSeed(seed);
+            const lastRegId = localStorage.getItem('xhs_v4_last_registration_id');
+            if (lastRegId) {
+                window.location.href = `/register_success/${encodeURIComponent(lastRegId)}`;
+                return;
+            }
+            window.location.href = '/my_registration';
+        }
+
+        function setLaneFilter(laneKey) {
+            currentLaneFilter = laneKey || 'all';
+            document.querySelectorAll('[data-lane-filter]').forEach((node) => {
+                const isActive = (node.getAttribute('data-lane-filter') || '') === currentLaneFilter;
+                node.style.background = isActive ? 'var(--primary)' : 'var(--primary-soft)';
+                node.style.color = isActive ? '#fff' : 'var(--primary)';
+            });
+            applyCombinedFilters();
+        }
+
+        function setPersonaFilter(personaKey) {
+            currentPersonaFilter = personaKey || 'all';
+            document.querySelectorAll('[data-persona-filter]').forEach((node) => {
+                const isActive = (node.getAttribute('data-persona-filter') || '') === currentPersonaFilter;
+                node.style.background = isActive ? 'var(--primary)' : 'var(--primary-soft)';
+                node.style.color = isActive ? '#fff' : 'var(--primary)';
+            });
+            applyCombinedFilters();
+        }
+
+        function applyCombinedFilters() {
+            document.querySelectorAll('.liver-lane-item').forEach((node) => {
+                const itemLaneKey = node.getAttribute('data-lane-key') || '';
+                const itemPersonaKey = node.getAttribute('data-persona-key') || '';
+                const laneVisible = currentLaneFilter === 'all' || itemLaneKey === currentLaneFilter;
+                const personaVisible = currentPersonaFilter === 'all' || itemPersonaKey === currentPersonaFilter;
+                const visible = laneVisible && personaVisible;
+                node.style.display = visible ? '' : 'none';
+            });
+        }
+
+        async function loadSavedIpAgentPlan() {
+            let profileKey = '';
+            try {
+                profileKey = localStorage.getItem('xhs_v4_ip_profile_key') || '';
+            } catch (error) {
+                profileKey = '';
+            }
+            if (!profileKey) return;
+            try {
+                const res = await fetch(`/api/liver-ip/profile?profile_key=${encodeURIComponent(profileKey)}`);
+                const data = await res.json();
+                if (!data?.success || !data.profile) return;
+                const profile = data.profile;
+                if (profile.background_key) {
+                    const el = document.getElementById('ipAgentBackground');
+                    if (el) el.value = profile.background_key;
+                }
+                if (profile.preferred_lane_key) {
+                    const el = document.getElementById('ipAgentDirection');
+                    if (el) el.value = profile.preferred_lane_key;
+                }
+                if (profile.goal_key) {
+                    const el = document.getElementById('ipAgentGoal');
+                    if (el) el.value = profile.goal_key;
+                }
+                if (profile.weekly_cadence) {
+                    const el = document.getElementById('ipAgentCadence');
+                    if (el) el.value = profile.weekly_cadence;
+                }
+                if (profile.profile_note) {
+                    const el = document.getElementById('ipAgentNote');
+                    if (el) el.value = profile.profile_note;
+                }
+                if (profile.generator_seed && Object.keys(profile.generator_seed).length) {
+                    localStorage.setItem('xhs_v4_ip_agent_seed', JSON.stringify(profile.generator_seed));
+                }
+                if (profile.plan_payload && Object.keys(profile.plan_payload).length) {
+                    renderIpAgentPlan(profile.plan_payload);
+                }
+            } catch (error) {
+                return;
+            }
+        }
+
+        setLaneFilter('all');
+        setPersonaFilter('all');
+        loadSavedIpAgentPlan();
+    </script>
+</body>
+</html>
