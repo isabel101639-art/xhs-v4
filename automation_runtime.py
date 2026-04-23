@@ -46,6 +46,10 @@ AUTOMATION_RUNTIME_CONFIG_DEFAULTS = {
     'creator_sync_max_posts_per_account': 60,
     'copywriter_api_url': '',
     'copywriter_model': '',
+    'copywriter_backup_api_url': '',
+    'copywriter_backup_model': '',
+    'copywriter_third_api_url': '',
+    'copywriter_third_model': '',
     'image_provider': 'svg_fallback',
     'image_api_url': '',
     'image_api_base': '',
@@ -101,6 +105,18 @@ IMAGE_PROVIDER_PRESETS = [
             'image_api_base': 'https://operator.las.cn-beijing.volces.com/api/v1',
             'image_api_url': '',
             'image_model': 'doubao-seedream-5-0-lite-260128',
+            'image_size': '1024x1536',
+        },
+    },
+    {
+        'key': 'openai_default',
+        'label': 'OpenAI 官方默认',
+        'description': '适合直接调用 OpenAI 官方图片接口，默认带上官方 API Base 和通用模型占位。',
+        'config': {
+            'image_provider': 'openai',
+            'image_api_base': 'https://api.openai.com/v1',
+            'image_api_url': '',
+            'image_model': 'gpt-image-1',
             'image_size': '1024x1536',
         },
     },
@@ -489,6 +505,15 @@ VOLCENGINE_MODEL_OPTIONS = [
     {'key': 'doubao-seededit-3-0-i2i-250628', 'label': 'SeedEdit 3.0', 'provider': 'volcengine_ark'},
 ]
 
+OPENAI_IMAGE_MODEL_OPTIONS = [
+    {'key': 'gpt-image-1', 'label': 'GPT Image', 'provider': 'openai'},
+    {'key': 'openai-custom-image-model', 'label': '自定义 OpenAI 图片模型名', 'provider': 'openai'},
+]
+
+GENERIC_IMAGE_MODEL_OPTIONS = [
+    {'key': 'custom-image-model', 'label': '自定义模型名', 'provider': 'generic'},
+]
+
 MEDICAL_SCIENCE_LAYOUT_VARIANTS = {
     'impact_compare': '采用左右对照信息图版式：左侧是危险状态或错误行为，右侧是健康状态或正确做法，中间可用箭头或对照符号强化反差。',
     'symptom_warning': '采用警示科普版式：主标题强提醒，中部为人体或器官示意图，四周分布症状标签、风险信号和结论提示。',
@@ -739,7 +764,48 @@ def _image_model_options(provider=''):
     current_provider = (provider or '').strip()
     if current_provider in {'volcengine_ark', 'volcengine_las'}:
         return [dict(item) for item in VOLCENGINE_MODEL_OPTIONS]
-    return []
+    if current_provider in {'openai', 'openai_compatible'}:
+        return [dict(item) for item in OPENAI_IMAGE_MODEL_OPTIONS]
+    return [dict(item) for item in GENERIC_IMAGE_MODEL_OPTIONS]
+
+
+def _resolve_image_provider_api_key(provider=''):
+    safe_provider = (provider or '').strip() or 'svg_fallback'
+    if safe_provider == 'openai':
+        return (
+            os.environ.get('ASSET_IMAGE_API_KEY')
+            or os.environ.get('OPENAI_IMAGE_API_KEY')
+            or os.environ.get('OPENAI_API_KEY')
+            or ''
+        ).strip()
+    if safe_provider == 'openai_compatible':
+        return (
+            os.environ.get('ASSET_IMAGE_API_KEY')
+            or os.environ.get('OPENAI_IMAGE_API_KEY')
+            or os.environ.get('OPENAI_API_KEY')
+            or os.environ.get('ARK_API_KEY')
+            or os.environ.get('LAS_API_KEY')
+            or ''
+        ).strip()
+    if safe_provider == 'volcengine_ark':
+        return (
+            os.environ.get('ASSET_IMAGE_API_KEY')
+            or os.environ.get('ARK_API_KEY')
+            or ''
+        ).strip()
+    if safe_provider == 'volcengine_las':
+        return (
+            os.environ.get('ASSET_IMAGE_API_KEY')
+            or os.environ.get('LAS_API_KEY')
+            or ''
+        ).strip()
+    return (
+        os.environ.get('ASSET_IMAGE_API_KEY')
+        or os.environ.get('IMAGE_API_KEY')
+        or os.environ.get('OPENAI_IMAGE_API_KEY')
+        or os.environ.get('OPENAI_API_KEY')
+        or ''
+    ).strip()
 
 
 def _image_provider_capabilities():
@@ -750,18 +816,17 @@ def _image_provider_capabilities():
         api_base = 'https://ark.cn-beijing.volces.com/api/v3'
     if provider == 'volcengine_las' and not api_base:
         api_base = 'https://operator.las.cn-beijing.volces.com/api/v1'
+    if provider == 'openai' and not api_base:
+        api_base = 'https://api.openai.com/v1'
     api_url = (os.environ.get('ASSET_IMAGE_API_URL') or str(runtime_config.get('image_api_url') or '')).strip()
     if not api_url and api_base:
         api_url = api_base.rstrip('/') + '/images/generations'
-    api_key = (
-        os.environ.get('ASSET_IMAGE_API_KEY')
-        or os.environ.get('ARK_API_KEY')
-        or os.environ.get('LAS_API_KEY')
-        or ''
-    ).strip()
+    api_key = _resolve_image_provider_api_key(provider)
     model_name = (os.environ.get('ASSET_IMAGE_MODEL') or str(runtime_config.get('image_model') or '')).strip()
     if not model_name and provider in {'volcengine_ark', 'volcengine_las'}:
         model_name = 'doubao-seedream-5-0-lite-260128'
+    if not model_name and provider in {'openai', 'openai_compatible'}:
+        model_name = 'gpt-image-1'
     image_size = (os.environ.get('ASSET_IMAGE_SIZE') or str(runtime_config.get('image_size') or '1024x1536')).strip()
     timeout_seconds = min(max(_safe_int(runtime_config.get('image_timeout_seconds'), 90), 10), 300)
     configured = bool(api_url and api_key)

@@ -83,7 +83,7 @@ def register_automation_dashboard_routes(app, helpers):
             default_topic_quota=default_topic_quota(),
             asset_style_types=asset_style_type_options(),
             image_provider_options=image_provider_options(),
-            image_model_options=image_model_options('volcengine_las'),
+            image_model_options=image_model_options(image_provider_capabilities().get('image_provider_name') or 'svg_fallback'),
             product_category_options=product_category_options(),
             product_visual_role_options=product_visual_role_options(),
             product_profile_options=product_profile_options(),
@@ -626,6 +626,10 @@ def register_automation_dashboard_routes(app, helpers):
             ), 100)
             next_config['copywriter_api_url'] = (data.get('copywriter_api_url') or current.get('copywriter_api_url') or '').strip()[:500]
             next_config['copywriter_model'] = (data.get('copywriter_model') or current.get('copywriter_model') or '').strip()[:100]
+            next_config['copywriter_backup_api_url'] = (data.get('copywriter_backup_api_url') or current.get('copywriter_backup_api_url') or '').strip()[:500]
+            next_config['copywriter_backup_model'] = (data.get('copywriter_backup_model') or current.get('copywriter_backup_model') or '').strip()[:100]
+            next_config['copywriter_third_api_url'] = (data.get('copywriter_third_api_url') or current.get('copywriter_third_api_url') or '').strip()[:500]
+            next_config['copywriter_third_model'] = (data.get('copywriter_third_model') or current.get('copywriter_third_model') or '').strip()[:100]
             next_config['image_provider'] = (data.get('image_provider') or current['image_provider']).strip()[:50]
             next_config['image_api_base'] = (data.get('image_api_base') or current['image_api_base']).strip()[:500]
             next_config['image_api_url'] = (data.get('image_api_url') or current['image_api_url']).strip()[:500]
@@ -777,11 +781,17 @@ def register_automation_dashboard_routes(app, helpers):
             'configured': bool(copywriter.get('copywriter_configured')),
             'server_side_only': True,
             'end_user_needs_vpn': False,
+            'candidate_count': copywriter.get('candidate_count') or 0,
+            'candidate_chain': copywriter.get('candidate_chain') or [],
         }
         copywriter_request_preview = {
             'prompt': '请用更像真人的小红书口语风，写一句关于肝健康的开头。',
             'api_url': copywriter.get('copywriter_api_url') or '',
             'model': copywriter.get('copywriter_model') or '',
+            'backup_api_url': runtime_config.get('copywriter_backup_api_url') or '',
+            'backup_model': runtime_config.get('copywriter_backup_model') or '',
+            'third_api_url': runtime_config.get('copywriter_third_api_url') or '',
+            'third_model': runtime_config.get('copywriter_third_model') or '',
         }
         image_prompt_preview = asset_prompt_from_context(
             topic_name='脂肪肝管理',

@@ -191,6 +191,49 @@
             line-height: 1.9;
             white-space: pre-wrap;
             margin-bottom: 12px;
+            max-height: 340px;
+            overflow: auto;
+        }
+        .copy-body-preview {
+            color: #334155;
+            font-size: 14px;
+            line-height: 1.9;
+            white-space: pre-wrap;
+            margin-bottom: 10px;
+        }
+        .copy-fit-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 9px;
+            border-radius: 999px;
+            background: rgba(239,78,69,0.08);
+            color: var(--xhs-red);
+            font-size: 11px;
+            line-height: 1.4;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .copy-section-label {
+            font-size: 12px;
+            color: #64748b;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .copy-highlight-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .copy-highlight-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 9px;
+            border-radius: 999px;
+            background: rgba(15,23,42,0.06);
+            color: #475569;
+            font-size: 11px;
+            line-height: 1.4;
         }
         .copy-ending {
             border-top: 1px dashed rgba(22,33,43,0.10);
@@ -291,6 +334,283 @@
             white-space: pre-wrap;
             font-size: 13px;
             line-height: 1.85;
+        }
+        .agent-route-card {
+            border-radius: 18px;
+            border: 1px solid rgba(22,33,43,0.08);
+            background: rgba(255,255,255,0.95);
+            padding: 14px;
+            transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+        }
+        .agent-route-card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 14px 28px rgba(22,33,43,0.05);
+        }
+        .agent-route-card.active-copy {
+            border-color: rgba(239, 78, 69, 0.4);
+            box-shadow: 0 16px 30px rgba(239, 78, 69, 0.12);
+        }
+        .agent-route-card.active-image {
+            border-color: rgba(37, 99, 235, 0.35);
+            box-shadow: 0 16px 30px rgba(37, 99, 235, 0.10);
+        }
+        .agent-route-meta {
+            font-size: 12px;
+            color: #64748b;
+            line-height: 1.7;
+            margin-top: 8px;
+        }
+        .step-shell {
+            border-radius: 20px;
+            border: 1px solid rgba(22,33,43,0.08);
+            background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,249,246,0.94));
+            padding: 16px;
+            box-shadow: 0 12px 26px rgba(22,33,43,0.05);
+        }
+        .step-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(15,23,42,0.05);
+            color: #475569;
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .image-plan-bar {
+            border-radius: 16px;
+            background: rgba(37,99,235,0.06);
+            border: 1px solid rgba(37,99,235,0.10);
+            color: #334155;
+            padding: 12px 14px;
+            font-size: 13px;
+            line-height: 1.7;
+            margin-bottom: 12px;
+        }
+        .advanced-panel {
+            margin-top: 12px;
+            border-top: 1px dashed rgba(22,33,43,0.10);
+            padding-top: 12px;
+        }
+        .advanced-panel summary {
+            cursor: pointer;
+            font-weight: 700;
+            color: #334155;
+            list-style: none;
+        }
+        .advanced-panel summary::-webkit-details-marker {
+            display: none;
+        }
+        .advanced-panel summary::before {
+            content: "＋";
+            display: inline-block;
+            margin-right: 8px;
+            color: var(--xhs-red);
+            font-weight: 800;
+        }
+        .advanced-panel[open] summary::before {
+            content: "－";
+        }
+        .reference-card {
+            border-radius: 16px;
+            border: 1px solid rgba(22,33,43,0.08);
+            background: rgba(255,255,255,0.96);
+            padding: 10px;
+            cursor: pointer;
+            transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+            height: 100%;
+        }
+        .reference-card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 24px rgba(22,33,43,0.05);
+        }
+        .reference-card.active {
+            border-color: rgba(37,99,235,0.38);
+            box-shadow: 0 16px 28px rgba(37,99,235,0.10);
+        }
+        .reference-card img {
+            width: 100%;
+            height: 140px;
+            object-fit: cover;
+            border-radius: 12px;
+            border: 1px solid rgba(22,33,43,0.08);
+            background: #fff;
+        }
+        .reference-plan-bar {
+            border-radius: 14px;
+            background: rgba(15,118,110,0.06);
+            border: 1px solid rgba(15,118,110,0.10);
+            color: #334155;
+            padding: 12px 14px;
+            font-size: 13px;
+            line-height: 1.7;
+        }
+        .reference-thumb-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        .reference-thumb {
+            width: 78px;
+            flex: 0 0 78px;
+        }
+        .reference-thumb img {
+            width: 100%;
+            height: 78px;
+            object-fit: cover;
+            border-radius: 10px;
+            border: 1px solid rgba(22,33,43,0.08);
+            background: #fff;
+        }
+        .reference-thumb-label {
+            font-size: 11px;
+            color: #64748b;
+            line-height: 1.4;
+            margin-top: 4px;
+            word-break: break-word;
+        }
+        .reference-thumb-label strong {
+            display: block;
+            color: #334155;
+            font-size: 11px;
+            margin-bottom: 2px;
+        }
+        .title-score-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            margin-top: 6px;
+        }
+        .title-score-chip.high {
+            background: rgba(239,78,69,0.10);
+            color: var(--xhs-red);
+        }
+        .title-score-chip.mid {
+            background: rgba(245,158,11,0.12);
+            color: #b45309;
+        }
+        .title-score-chip.low {
+            background: rgba(100,116,139,0.10);
+            color: #475569;
+        }
+        .title-reason-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            margin-top: 6px;
+            background: rgba(15,23,42,0.06);
+            color: #475569;
+        }
+        .plan-point-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .plan-point-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 9px;
+            border-radius: 999px;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+        .plan-point-chip.good {
+            background: rgba(15,118,110,0.08);
+            color: #0f766e;
+        }
+        .plan-point-chip.bad {
+            background: rgba(239,78,69,0.08);
+            color: #b42318;
+        }
+        .overview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .overview-card {
+            border-radius: 18px;
+            border: 1px solid rgba(22,33,43,0.08);
+            background: rgba(255,255,255,0.96);
+            padding: 14px;
+            box-shadow: 0 12px 22px rgba(22,33,43,0.04);
+        }
+        .overview-card .label {
+            font-size: 11px;
+            color: #64748b;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            margin-bottom: 6px;
+        }
+        .overview-card .value {
+            color: #0f172a;
+            font-size: 15px;
+            line-height: 1.75;
+            font-weight: 700;
+        }
+        .overview-card.primary {
+            border-color: rgba(239,78,69,0.18);
+            background: linear-gradient(180deg, rgba(255,245,243,0.98), rgba(255,250,248,0.96));
+        }
+        .overview-card.primary .value {
+            font-size: 18px;
+            line-height: 1.6;
+        }
+        .title-option-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+        }
+        .title-option-card {
+            border-radius: 18px;
+            border: 1px solid rgba(22,33,43,0.10);
+            background: rgba(255,255,255,0.96);
+            padding: 14px;
+            cursor: pointer;
+            transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+            min-height: 126px;
+        }
+        .title-option-card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 14px 24px rgba(22,33,43,0.05);
+        }
+        .title-option-card.active {
+            border-color: rgba(239,78,69,0.42);
+            box-shadow: 0 18px 30px rgba(239,78,69,0.12);
+            background: linear-gradient(180deg, rgba(255,244,242,0.98), rgba(255,250,248,0.96));
+        }
+        .title-option-rank {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: rgba(15,23,42,0.06);
+            color: #475569;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .title-option-title {
+            font-size: 20px;
+            line-height: 1.45;
+            font-weight: 800;
+            color: #111827;
+            margin-top: 10px;
+        }
+        .title-option-meta {
+            font-size: 12px;
+            color: #64748b;
+            line-height: 1.7;
+            margin-top: 8px;
         }
     
         /* MOBILE_PATCH */
@@ -484,6 +804,9 @@
                     <input class="form-check-input mt-0" type="checkbox" id="fastMode">
                     极速生成（优先给出 3 个可选版本）
                 </label>
+                <button type="button" class="outline-pill-btn" onclick="runCopyAgentAnalysis()">
+                    <i class="bi bi-diagram-3"></i> Agent先分析
+                </button>
                 <button type="button" class="outline-pill-btn" onclick="applyBeginnerPreset('viral_title')">
                     <i class="bi bi-graph-up-arrow"></i> 新手冲点击
                 </button>
@@ -502,6 +825,31 @@
             </div>
             <div id="viralOperationTips" class="form-text mt-2">系统会根据当前话题推荐更适合的文案打法、标题打法和图片打法。</div>
             <div id="strategyRecommendationBar" class="form-text mt-2">系统正在准备近期实战推荐。</div>
+            <div id="agentDecisionBar" class="form-text mt-2">建议先让 Agent 分析，再选文案路线和图片路线。</div>
+
+            <div id="agentAnalysisArea" class="mt-4" style="display:none;">
+                <div class="row g-3">
+                    <div class="col-lg-6">
+                        <div class="border rounded-4 p-3" style="background:#fffaf8;">
+                            <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                                <h6 class="mb-0">1. Agent分析文案路线</h6>
+                                <span class="text-muted small">先选一条更像人的表达路线</span>
+                            </div>
+                            <div id="agentAnalysisSummary" class="text-muted small mb-3">Agent 会先拆 2-3 条写法路线，再让你确认。</div>
+                            <div id="agentCopyRouteWrap" class="d-grid gap-2"></div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="border rounded-4 p-3" style="background:#f7fbff;">
+                            <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                                <h6 class="mb-0">2. Agent分析图片路线</h6>
+                                <span class="text-muted small">先选视觉路线，再预览图片</span>
+                            </div>
+                            <div id="agentImageRouteWrap" class="d-grid gap-2"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <div id="loading" style="display:none;" class="mt-3">
                 <div class="spinner-border text-primary" role="status"></div>
@@ -524,11 +872,11 @@
                     <div class="col-lg-5">
                         <div class="border rounded-4 p-3" style="background:#f6fbff;">
                             <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
-                                <h6 class="mb-0">封面推荐池</h6>
-                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="refreshCoverRecommendations()">刷新推荐</button>
+                                <h6 class="mb-0">图片 Agent 方案分析</h6>
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="refreshImageAgentPlans()">重新分析</button>
                             </div>
-                            <div id="coverRecommendationTips" class="text-muted small mb-2">系统会结合当前标题和正文，推荐更适合的封面画法。</div>
-                            <div id="coverRecommendationWrap" class="d-grid gap-2"></div>
+                            <div id="imageAgentPlanSummary" class="text-muted small mb-2">系统会结合你当前选中的正文版本，先分析 2-4 条更适合的出图路线。</div>
+                            <div id="imageAgentPlanWrap" class="d-grid gap-2"></div>
                         </div>
                     </div>
                 </div>
@@ -550,79 +898,101 @@
 
                 <div id="generatorEngineBar" class="form-text mb-3"></div>
                 <div id="copySummaryBar" class="text-muted small mb-3"></div>
+                <div id="resultOverviewGrid" class="overview-grid"></div>
                 <div id="copyCardsWrap" class="row g-3"></div>
 
                 <!-- 合规检查结果 -->
                 <div id="complianceResult" class="mt-3"></div>
 
-                <div class="row g-3 mt-2">
-                    <div class="col-md-3">
-                        <label class="form-label">生成方式</label>
-                        <select class="form-select" id="assetWorkflowMode">
-                            <option value="smart_bundle">智能图文套组</option>
-                            <option value="cover_only">只做封面</option>
-                            <option value="inner_only">只做内页</option>
-                            <option value="custom_generate">自定义生成</option>
-                        </select>
-                        <div class="form-text" id="assetWorkflowModeHelp">默认会先按文案拆出封面和内页，再走真实图片 API 生成。</div>
+                <div class="step-shell mt-3">
+                    <div class="step-kicker"><i class="bi bi-image"></i> 3. 确认图片执行方案</div>
+                    <div id="imageExecutionBar" class="image-plan-bar">先在“图片 Agent 方案分析”里选一条路线，系统再按这条路线预览封面和内页。</div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button class="copy-btn" type="button" onclick="generateCreativePack()" style="background:#ff8b2b;">
+                            <i class="bi bi-image"></i> 预览封面素材方案
+                        </button>
+                        <button class="copy-btn" type="button" onclick="generateGraphicArticleBundle()" style="background:#0f766e;">
+                            <i class="bi bi-layout-text-window-reverse"></i> 预览图文套组方案
+                        </button>
+                        <button class="copy-btn" type="button" onclick="startAssetGenerationTask()" style="background:#2563eb;">
+                            <i class="bi bi-stars"></i> 用真实 API 生成图片
+                        </button>
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label">图片主类型</label>
-                        <select class="form-select" id="assetStyleFamily">
-                            <option value="medical_science">医学科普图</option>
-                            <option value="knowledge_card">知识卡片</option>
-                            <option value="poster">大字报</option>
-                            <option value="checklist">清单型</option>
-                            <option value="memo">备忘录型</option>
-                            <option value="custom">自定义</option>
-                        </select>
-                        <div class="form-text" id="assetStyleFamilyHelp">先选业务类型，再由系统映射到对应图片风格。</div>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">图片技能包</label>
-                        <select class="form-select" id="imageSkill">
-                            {% for skill_key, skill_label in image_skill_options.items() %}
-                            <option value="{{ skill_key }}">{{ skill_label }}</option>
-                            {% endfor %}
-                        </select>
-                        <div class="form-text" id="imageSkillHelp">系统会帮你自动偏向更适合点击、收藏或解读的画面打法。</div>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">图片数量</label>
-                        <input type="number" class="form-control" id="assetImageCount" min="1" max="4" value="3">
-                    </div>
-                    <div class="col-12">
-                        <div class="form-text" id="imageSkillPresetNote">图片技能包会联动封面样式、内页样式和图文工作流，减少大家自己试错。</div>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">封面/主图样式</label>
-                        <select class="form-select" id="assetCoverStyleType"></select>
-                    </div>
-                    <div class="col-md-3" id="assetInnerStyleWrap">
-                        <label class="form-label">内页样式</label>
-                        <select class="form-select" id="assetInnerStyleType"></select>
-                    </div>
-                    <div class="col-md-9">
-                        <label class="form-label">自定义图片提示词</label>
-                        <textarea class="form-control" id="assetCustomPrompt" rows="2" placeholder="可补充你希望的视觉要求，例如：封面更像黑体警示大字报、内页更像课堂笔记、器官结构图更明显、留出中文标题区域。"></textarea>
-                    </div>
-                    <div class="col-12">
-                        <div class="form-text" id="assetStyleTypeHelp">
-                            系统会先按你当前文案做拆分，再把封面和内页映射到对应样式。如果你选“自定义生成”，会优先参考你的自定义提示词。
-                        </div>
-                    </div>
-                </div>
+                    <div id="assetAttemptQuotaNote" class="form-text mt-2">真实图片生成最多 5 次。建议先走 Agent 分析、参考图分析和模板预览，确认后再调用真实图片 API。</div>
 
-                <div class="mt-3">
-                    <button class="copy-btn" type="button" onclick="generateCreativePack()" style="background:#ff8b2b;">
-                        <i class="bi bi-image"></i> 预览封面素材方案
-                    </button>
-                    <button class="copy-btn ms-2" type="button" onclick="generateGraphicArticleBundle()" style="background:#0f766e;">
-                        <i class="bi bi-layout-text-window-reverse"></i> 预览图文套组方案
-                    </button>
-                    <button class="copy-btn ms-2" type="button" onclick="startAssetGenerationTask()" style="background:#2563eb;">
-                        <i class="bi bi-stars"></i> 用真实 API 生成图片
-                    </button>
+                    <div class="mt-3 pt-3 border-top">
+                        <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                            <div>
+                                <div class="fw-semibold">参考图（可选）</div>
+                                <div class="text-muted small">先选 1-3 张参考图，Agent 会告诉你会继承什么，不会直接照抄原图。</div>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary" type="button" onclick="analyzeReferenceImages()">分析参考图</button>
+                        </div>
+                        <div id="referenceAssetWrap" class="row g-2"></div>
+                    <div id="referenceImageAnalysisBar" class="reference-plan-bar mt-3">如果你已经有喜欢的参考图，先选 1-3 张。Agent 会先告诉你会借它的什么，再让你确认后出图。</div>
+                        <div id="referenceImagePlanWrap" class="d-grid gap-2 mt-3"></div>
+                    </div>
+
+                    <details class="advanced-panel">
+                        <summary>微调图片细节（可选）</summary>
+                        <div class="row g-3 mt-2">
+                            <div class="col-md-3">
+                                <label class="form-label">生成方式</label>
+                                <select class="form-select" id="assetWorkflowMode">
+                                    <option value="smart_bundle">智能图文套组</option>
+                                    <option value="cover_only">只做封面</option>
+                                    <option value="inner_only">只做内页</option>
+                                    <option value="custom_generate">自定义生成</option>
+                                </select>
+                                <div class="form-text" id="assetWorkflowModeHelp">默认会先按文案拆出封面和内页，再走真实图片 API 生成。</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">图片主类型</label>
+                                <select class="form-select" id="assetStyleFamily">
+                                    <option value="medical_science">医学解释图</option>
+                                    <option value="knowledge_card">知识卡片</option>
+                                    <option value="poster">情绪封面</option>
+                                    <option value="checklist">清单卡</option>
+                                    <option value="memo">备忘录/课堂笔记</option>
+                                    <option value="custom">自定义</option>
+                                </select>
+                                <div class="form-text" id="assetStyleFamilyHelp">先选业务类型，再由系统映射到对应图片风格。</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">图片技能包</label>
+                                <select class="form-select" id="imageSkill">
+                                    {% for skill_key, skill_label in image_skill_options.items() %}
+                                    <option value="{{ skill_key }}">{{ skill_label }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text" id="imageSkillHelp">系统会帮你自动偏向更适合点击、收藏或解读的画面打法。</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">图片数量</label>
+                                <input type="number" class="form-control" id="assetImageCount" min="1" max="4" value="3">
+                            </div>
+                            <div class="col-12">
+                                <div class="form-text" id="imageSkillPresetNote">图片技能包会联动封面样式、内页样式和图文工作流，减少大家自己试错。</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">封面/主图样式</label>
+                                <select class="form-select" id="assetCoverStyleType"></select>
+                            </div>
+                            <div class="col-md-3" id="assetInnerStyleWrap">
+                                <label class="form-label">内页样式</label>
+                                <select class="form-select" id="assetInnerStyleType"></select>
+                            </div>
+                            <div class="col-md-9">
+                                <label class="form-label">自定义图片提示词</label>
+                                <textarea class="form-control" id="assetCustomPrompt" rows="2" placeholder="可补充你希望的视觉要求，例如：封面更像黑体警示大字报、内页更像课堂笔记、器官结构图更明显、留出中文标题区域。"></textarea>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-text" id="assetStyleTypeHelp">
+                                    系统会先按你当前文案做拆分，再把封面和内页映射到对应样式。如果你选“自定义生成”，会优先参考你的自定义提示词。
+                                </div>
+                            </div>
+                        </div>
+                    </details>
                 </div>
 
                 <div id="creativePackArea" class="mt-4" style="display:none;">
@@ -703,6 +1073,16 @@
         let copyCards = [];
         let coverRecommendations = [];
         let generatorContext = {};
+        let copyAgentAnalysis = null;
+        let selectedAgentCopyRouteId = '';
+        let selectedAgentImageRouteId = '';
+        let imageAgentAnalysis = null;
+        let selectedImageAgentPlanId = '';
+        let referenceAssetItems = [];
+        let selectedReferenceAssetIds = [];
+        let referenceImageAnalysis = null;
+        let selectedReferencePlanId = '';
+        let assetGenerationQuota = null;
         let strategyPersistTimer = null;
         let lastSavedStrategyHash = '';
         const initialSavedStrategy = {{ saved_strategy|tojson }};
@@ -738,7 +1118,7 @@
         };
         const assetStyleFamilyMap = {
             medical_science: {
-                label: '医学科普图',
+                label: '医学解释图',
                 description: '适合器官示意、症状总览、检查解读、误区对照这类视觉说明书。',
                 coverOptions: ['medical_science', 'myth_compare', 'flowchart'],
                 innerOptions: ['medical_science', 'knowledge_card', 'flowchart'],
@@ -754,7 +1134,7 @@
                 defaultInner: 'knowledge_card',
             },
             poster: {
-                label: '大字报',
+                label: '情绪封面',
                 description: '适合冲点击的封面、警示提醒、第一人称经验总结。',
                 coverOptions: ['poster', 'poster_bold', 'poster_handwritten'],
                 innerOptions: ['knowledge_card', 'memo_mobile', 'checklist'],
@@ -762,7 +1142,7 @@
                 defaultInner: 'knowledge_card',
             },
             checklist: {
-                label: '清单型',
+                label: '清单卡',
                 description: '适合步骤、对比、时间轴、报告解读和执行计划。',
                 coverOptions: ['checklist', 'checklist_table', 'checklist_timeline', 'checklist_report'],
                 innerOptions: ['checklist', 'checklist_table', 'checklist_timeline', 'checklist_report'],
@@ -770,7 +1150,7 @@
                 defaultInner: 'checklist_report',
             },
             memo: {
-                label: '备忘录型',
+                label: '备忘录/课堂笔记',
                 description: '适合生活提醒、课堂笔记、私人攻略和高收藏干货。',
                 coverOptions: ['memo', 'memo_mobile', 'memo_classroom'],
                 innerOptions: ['memo', 'memo_mobile', 'memo_classroom'],
@@ -1117,11 +1497,14 @@
         function normalizeTitleOptions(items) {
             return (items || []).map((item) => {
                 if (typeof item === 'string') {
-                    return { title: item, source: '系统推荐' };
+                    return { title: item, source: '系统推荐', tone: '', reason: '', score: 0 };
                 }
                 return {
                     title: String(item?.title || '').trim(),
                     source: String(item?.source || '系统推荐').trim(),
+                    tone: String(item?.tone || '').trim(),
+                    reason: String(item?.reason || '').trim(),
+                    score: parseInt(item?.score || '0', 10) || 0,
                 };
             }).filter((item) => item.title);
         }
@@ -1218,14 +1601,78 @@
                 return;
             }
             if (tips) {
-                tips.textContent = `当前共生成 ${titleOptions.length} 个标题候选。建议先挑一个最想点开的，再决定要不要换正文版本。`;
+                const best = titleOptions[0] || {};
+                tips.textContent = `当前共生成 ${titleOptions.length} 个标题候选。建议先挑一个最想点开的，再决定要不要换正文版本。当前首推：${best.title || '系统推荐'}${best.reason ? ` ｜ ${best.reason}` : ''}${best.tone ? ` ｜ ${best.tone}` : ''}`;
             }
-            wrap.innerHTML = titleOptions.map((item, index) => `
-                <button type="button" class="btn ${index === selectedTitle ? 'btn-danger' : 'btn-outline-secondary'} text-start" style="border-radius:16px; min-width:180px;" onclick="selectTitleOption(${index})">
-                    <div class="fw-semibold">${escapeHtml(item.title || '')}</div>
-                    <div class="small ${index === selectedTitle ? 'text-white-50' : 'text-muted'}">${escapeHtml(item.source || '系统推荐')}</div>
-                </button>
-            `).join('');
+            wrap.innerHTML = `<div class="title-option-grid">${
+                titleOptions.map((item, index) => `
+                    <div class="title-option-card ${index === selectedTitle ? 'active' : ''}" onclick="selectTitleOption(${index})">
+                        <div class="d-flex justify-content-between align-items-center gap-2">
+                            <span class="title-option-rank">${index === 0 ? '首推' : `候选 ${index + 1}`}</span>
+                            ${item.score ? `<span class="title-score-chip ${item.score >= 130 ? 'high' : (item.score >= 110 ? 'mid' : 'low')}">${item.score >= 130 ? '强点击' : (item.score >= 110 ? '可优先试' : '稳妥款')} ${escapeHtml(String(item.score))}</span>` : ''}
+                        </div>
+                        <div class="title-option-title">${escapeHtml(item.title || '')}</div>
+                    <div class="title-option-meta">
+                        ${escapeHtml(item.source || '系统推荐')}
+                        ${item.tone ? ` ｜ ${escapeHtml(item.tone)}` : ''}
+                        ${item.reason ? ` ｜ ${escapeHtml(item.reason)}` : ''}
+                    </div>
+                    ${item.reason ? `<span class="title-reason-chip">${escapeHtml(item.reason)}</span>` : ''}
+                </div>
+            `).join('')
+            }</div>`;
+        }
+
+        function getSelectedReferencePlanLabel() {
+            const plan = (referenceImageAnalysis?.plans || []).find((item) => item.id === selectedReferencePlanId);
+            return plan?.label || '';
+        }
+
+        function getSelectedReferencePlanLogic() {
+            const plan = (referenceImageAnalysis?.plans || []).find((item) => item.id === selectedReferencePlanId);
+            return plan?.reference_logic || '';
+        }
+
+        function summarizeCopyBody(text) {
+            const raw = String(text || '').trim();
+            if (!raw) return '';
+            const lines = raw.split('\n').map((item) => item.trim()).filter(Boolean);
+            const preview = lines.slice(0, 3).join('\n');
+            if (preview.length >= raw.length) {
+                return preview;
+            }
+            return `${preview}\n……`;
+        }
+
+        function extractCopyHighlights(text) {
+            const raw = String(text || '').trim();
+            if (!raw) return [];
+            const parts = raw
+                .split(/[\n。！？]/)
+                .map((item) => item.trim())
+                .filter(Boolean)
+                .filter((item) => item.length >= 6 && item.length <= 28);
+            return parts.slice(0, 3);
+        }
+
+        function describeCopyCardFit(card) {
+            const strategy = String(card?.strategy || '').trim();
+            const title = String(card?.title || '').trim();
+            const body = String(card?.body || '').trim();
+            const source = `${strategy} ${title} ${body}`;
+            if (/清单|步骤|别漏|确认这3件事|复查/.test(source)) {
+                return '更适合收藏备用';
+            }
+            if (/误区|想当然|看偏|搞反/.test(source)) {
+                return '更适合冲点击';
+            }
+            if (/你会|怎么选|怎么办|最先看/.test(source)) {
+                return '更适合带互动';
+            }
+            if (/经历|拖过|醒过来|第一反应|慌/.test(source)) {
+                return '更适合做共鸣';
+            }
+            return '更适合稳妥解释';
         }
 
         function selectTitleOption(index) {
@@ -1235,6 +1682,7 @@
             checkCompliance(getSelectedContent());
             refreshViralOperationTips();
             refreshCoverRecommendations();
+            refreshImageAgentPlans();
             scheduleStrategyPersistence('select_title');
         }
 
@@ -1246,6 +1694,263 @@
                 return optionKeys.includes(target);
             });
             return found ? found[0] : 'custom';
+        }
+
+        function renderAgentDecisionBar() {
+            const wrap = document.getElementById('agentDecisionBar');
+            if (!wrap) return;
+            if (!copyAgentAnalysis) {
+                wrap.textContent = '建议先让 Agent 分析，再选文案路线和图片路线。';
+                return;
+            }
+            const copyRoute = (copyAgentAnalysis.copy_routes || []).find((item) => item.id === selectedAgentCopyRouteId);
+            const imageRoute = (copyAgentAnalysis.image_routes || []).find((item) => item.id === selectedAgentImageRouteId);
+            wrap.textContent = [
+                copyAgentAnalysis.summary || '',
+                copyRoute ? `当前文案路线：${copyRoute.label}` : '',
+                imageRoute ? `当前图片路线：${imageRoute.label}` : '',
+            ].filter(Boolean).join(' ｜ ');
+        }
+
+        function selectAgentCopyRoute(routeId) {
+            selectedAgentCopyRouteId = routeId || '';
+            document.querySelectorAll('[data-agent-copy-route]').forEach((node) => {
+                const active = (node.getAttribute('data-agent-copy-route') || '') === selectedAgentCopyRouteId;
+                node.classList.toggle('active-copy', active);
+            });
+            renderAgentDecisionBar();
+        }
+
+        function applyAgentImageRoute(routeId) {
+            selectedAgentImageRouteId = routeId || '';
+            const route = (copyAgentAnalysis?.image_routes || []).find((item) => item.id === routeId);
+            if (!route) return;
+            const familySelect = document.getElementById('assetStyleFamily');
+            const modeSelect = document.getElementById('assetWorkflowMode');
+            const imageSkillSelect = document.getElementById('imageSkill');
+            const coverSelect = document.getElementById('assetCoverStyleType');
+            const innerSelect = document.getElementById('assetInnerStyleType');
+            if (familySelect && route.family_key) familySelect.value = route.family_key;
+            if (modeSelect && route.mode_key) modeSelect.value = route.mode_key;
+            if (imageSkillSelect && route.image_skill) imageSkillSelect.value = route.image_skill;
+            refreshAssetWorkflowControls();
+            if (coverSelect && route.cover_style_type) coverSelect.value = route.cover_style_type;
+            if (innerSelect && route.inner_style_type) innerSelect.value = route.inner_style_type;
+            refreshAssetStyleTypeHelp();
+            renderAgentDecisionBar();
+            renderImageExecutionBar();
+            document.querySelectorAll('[data-agent-image-route]').forEach((node) => {
+                const active = (node.getAttribute('data-agent-image-route') || '') === selectedAgentImageRouteId;
+                node.classList.toggle('active-image', active);
+            });
+            refreshImageAgentPlans();
+        }
+
+        function renderCopyAgentAnalysis() {
+            const area = document.getElementById('agentAnalysisArea');
+            const summaryWrap = document.getElementById('agentAnalysisSummary');
+            const copyWrap = document.getElementById('agentCopyRouteWrap');
+            const imageWrap = document.getElementById('agentImageRouteWrap');
+            if (!area || !copyWrap || !imageWrap) return;
+            if (!copyAgentAnalysis) {
+                area.style.display = 'none';
+                return;
+            }
+            area.style.display = 'block';
+            if (summaryWrap) {
+                summaryWrap.textContent = copyAgentAnalysis.summary || 'Agent 已分析当前话题。';
+            }
+            copyWrap.innerHTML = (copyAgentAnalysis.copy_routes || []).map((route) => `
+                <div class="agent-route-card" data-agent-copy-route="${route.id}">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div>
+                            <div class="fw-semibold">${escapeHtml(route.label || '')}</div>
+                            <div class="small text-muted mt-1">${escapeHtml(route.why || '')}</div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="selectAgentCopyRoute('${route.id}')">选这条</button>
+                    </div>
+                    <div class="agent-route-meta"><strong>标题方向：</strong>${escapeHtml((route.title_examples || []).join(' ｜ '))}</div>
+                    <div class="agent-route-meta"><strong>开头建议：</strong>${escapeHtml(route.hook_example || '')}</div>
+                    <div class="agent-route-meta"><strong>正文策略：</strong>${escapeHtml(route.body_strategy || '')}</div>
+                </div>
+            `).join('');
+            imageWrap.innerHTML = (copyAgentAnalysis.image_routes || []).map((route) => `
+                <div class="agent-route-card" data-agent-image-route="${route.id}">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div>
+                            <div class="fw-semibold">${escapeHtml(route.label || '')}</div>
+                            <div class="small text-muted mt-1">${escapeHtml(route.why || '')}</div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="applyAgentImageRoute('${route.id}')">用这套图</button>
+                    </div>
+                    <div class="agent-route-meta"><strong>预览重点：</strong>${escapeHtml(route.preview_focus || '')}</div>
+                    <div class="agent-route-meta"><strong>封面/内页：</strong>${escapeHtml(route.cover_style_type || '-')} ｜ ${escapeHtml(route.inner_style_type || '-')}</div>
+                </div>
+            `).join('');
+            if (!selectedAgentCopyRouteId) selectedAgentCopyRouteId = copyAgentAnalysis.recommended_copy_route_id || '';
+            if (!selectedAgentImageRouteId) selectedAgentImageRouteId = copyAgentAnalysis.recommended_image_route_id || '';
+            if (selectedAgentCopyRouteId) selectAgentCopyRoute(selectedAgentCopyRouteId);
+            if (selectedAgentImageRouteId) applyAgentImageRoute(selectedAgentImageRouteId);
+            renderAgentDecisionBar();
+        }
+
+        function applyImageAgentPlan(planId) {
+            selectedImageAgentPlanId = planId || '';
+            const plan = (imageAgentAnalysis?.plans || []).find((item) => item.id === planId);
+            if (!plan) return;
+            const familySelect = document.getElementById('assetStyleFamily');
+            const modeSelect = document.getElementById('assetWorkflowMode');
+            const imageSkillSelect = document.getElementById('imageSkill');
+            const coverSelect = document.getElementById('assetCoverStyleType');
+            const innerSelect = document.getElementById('assetInnerStyleType');
+            if (familySelect && plan.family_key) familySelect.value = plan.family_key;
+            if (modeSelect && plan.generation_mode) modeSelect.value = plan.generation_mode;
+            if (imageSkillSelect && plan.image_skill) imageSkillSelect.value = plan.image_skill;
+            refreshAssetWorkflowControls();
+            if (coverSelect && plan.cover_style_type) coverSelect.value = plan.cover_style_type;
+            if (innerSelect && plan.inner_style_type) innerSelect.value = plan.inner_style_type;
+            refreshAssetStyleTypeHelp();
+            const summary = document.getElementById('imageAgentPlanSummary');
+            if (summary) {
+                summary.textContent = `已选图片路线：${plan.label || '-'}。${plan.why || ''} 封面重点：${plan.cover_focus || ''}`;
+            }
+            renderImageExecutionBar(plan);
+            document.querySelectorAll('[data-image-agent-plan]').forEach((node) => {
+                const active = (node.getAttribute('data-image-agent-plan') || '') === selectedImageAgentPlanId;
+                node.classList.toggle('active-image', active);
+            });
+        }
+
+        function renderImageExecutionBar(planOverride = null) {
+            const wrap = document.getElementById('imageExecutionBar');
+            if (!wrap) return;
+            const plan = planOverride || (imageAgentAnalysis?.plans || []).find((item) => item.id === selectedImageAgentPlanId);
+            const referencePlan = (referenceImageAnalysis?.plans || []).find((item) => item.id === selectedReferencePlanId);
+            const referenceCount = selectedReferenceAssetIds.length;
+            if (!plan) {
+                wrap.textContent = '先在“图片 Agent 方案分析”里选一条路线，系统再按这条路线预览封面和内页。';
+                return;
+            }
+            wrap.textContent = `当前图片路线：${plan.label || '-'} ｜ 封面重点：${plan.cover_focus || ''} ｜ 内页重点：${plan.inner_focus || ''} ｜ 样式：${plan.cover_style_type || '-'} / ${plan.inner_style_type || '-'}${referencePlan ? ` ｜ 参考图策略：${referencePlan.label || '-'}` : ''}${referenceCount ? ` ｜ 已选参考图 ${referenceCount} 张` : ''}`;
+        }
+
+        function renderImageAgentPlans() {
+            const wrap = document.getElementById('imageAgentPlanWrap');
+            const summary = document.getElementById('imageAgentPlanSummary');
+            if (!wrap || !summary) return;
+            if (!imageAgentAnalysis || !(imageAgentAnalysis.plans || []).length) {
+                wrap.innerHTML = '<div class="text-muted small">先生成文案，或先做 Agent 分析后再让图片 Agent 给你方案。</div>';
+                renderImageExecutionBar();
+                return;
+            }
+            summary.textContent = imageAgentAnalysis.summary || '图片 Agent 已给出方案。';
+            wrap.innerHTML = (imageAgentAnalysis.plans || []).map((plan) => `
+                <div class="agent-route-card" data-image-agent-plan="${plan.id}">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div>
+                            <div class="fw-semibold">${escapeHtml(plan.label || '')}</div>
+                            <div class="small text-muted mt-1">${escapeHtml(plan.why || '')}</div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="applyImageAgentPlan('${plan.id}')">选这套</button>
+                    </div>
+                    <div class="agent-route-meta"><strong>封面重点：</strong>${escapeHtml(plan.cover_focus || '')}</div>
+                    <div class="agent-route-meta"><strong>内页重点：</strong>${escapeHtml(plan.inner_focus || '')}</div>
+                    <div class="agent-route-meta"><strong>样式：</strong>${escapeHtml(plan.cover_style_type || '-')} ｜ ${escapeHtml(plan.inner_style_type || '-')}</div>
+                </div>
+            `).join('');
+            if (!selectedImageAgentPlanId) {
+                selectedImageAgentPlanId = imageAgentAnalysis.recommended_plan_id || '';
+            }
+            if (selectedImageAgentPlanId) {
+                applyImageAgentPlan(selectedImageAgentPlanId);
+            } else {
+                renderImageExecutionBar();
+            }
+        }
+
+        async function refreshImageAgentPlans() {
+            const wrap = document.getElementById('imageAgentPlanWrap');
+            if (!wrap || !copyCards.length) return false;
+            wrap.innerHTML = '<div class="text-muted small">图片 Agent 正在根据当前正文版本分析更适合的出图路线...</div>';
+            const route = (copyAgentAnalysis?.image_routes || []).find((item) => item.id === selectedAgentImageRouteId) || {};
+            try {
+                const res = await fetch('/api/image_agent_analysis', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        registration_id: {{ registration.id }},
+                        selected_content: buildImageWorkflowSelectedContent(),
+                        title_hint: getSelectedTitleText(),
+                        image_route_id: route.id || '',
+                        image_route_label: route.label || '',
+                        image_route_why: route.why || '',
+                        image_skill: route.image_skill || '',
+                        mode_key: route.mode_key || '',
+                        cover_style_type: route.cover_style_type || '',
+                        inner_style_type: route.inner_style_type || '',
+                        preview_focus: route.preview_focus || '',
+                    }),
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    wrap.innerHTML = `<div class="text-muted small">${escapeHtml(data.message || '图片 Agent 分析失败')}</div>`;
+                    return false;
+                }
+                imageAgentAnalysis = data;
+                selectedImageAgentPlanId = data.recommended_plan_id || '';
+                renderImageAgentPlans();
+                return true;
+            } catch (error) {
+                wrap.innerHTML = '<div class="text-muted small">图片 Agent 分析失败，请稍后重试。</div>';
+                return false;
+            }
+        }
+
+        async function runCopyAgentAnalysis() {
+            const loading = document.getElementById('loading');
+            const generateBtn = document.getElementById('generateBtn');
+            if (loading) loading.style.display = 'block';
+            if (generateBtn) generateBtn.disabled = true;
+            try {
+                return await fetchCopyAgentAnalysis();
+            } finally {
+                if (loading) loading.style.display = 'none';
+                if (generateBtn) generateBtn.disabled = false;
+            }
+        }
+
+        async function fetchCopyAgentAnalysis() {
+            try {
+                const res = await fetch('/api/copy_agent_analysis', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        registration_id: {{ registration.id }},
+                        user_prompt: document.getElementById('userPrompt').value.trim(),
+                        persona_key: document.getElementById('copyPersona').value,
+                        custom_persona: document.getElementById('customPersona').value.trim(),
+                        scene_key: document.getElementById('copyScene').value,
+                        custom_scene: document.getElementById('customScene').value.trim(),
+                        direction_key: document.getElementById('copyDirection').value,
+                        custom_direction: document.getElementById('customDirection').value.trim(),
+                        product_key: document.getElementById('copyProduct').value,
+                        copy_goal: document.getElementById('copyGoal').value,
+                    }),
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    alert(data.message || 'Agent 分析失败');
+                    return false;
+                }
+                copyAgentAnalysis = data.analysis || null;
+                selectedAgentCopyRouteId = copyAgentAnalysis?.recommended_copy_route_id || '';
+                selectedAgentImageRouteId = copyAgentAnalysis?.recommended_image_route_id || '';
+                renderCopyAgentAnalysis();
+                return true;
+            } catch (error) {
+                alert('Agent 分析失败，请稍后重试');
+                return false;
+            }
         }
 
         function renderCoverRecommendations(items) {
@@ -1313,6 +2018,11 @@
                 coverSelect.value = current.style_key || coverSelect.value;
             }
             refreshAssetStyleTypeHelp();
+            const wrap = document.getElementById('assetStyleTypeHelp');
+            if (wrap) {
+                wrap.textContent = `已应用封面推荐：${current.style_label || current.style_key || '封面方案'}。下一步建议先点“预览图文套组方案”，确认封面和内页是不是你想要的方向。`;
+            }
+            document.getElementById('assetWorkflowMode')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             refreshViralOperationTips();
             scheduleStrategyPersistence('apply_cover_recommendation');
         }
@@ -1327,6 +2037,192 @@
             }[char]));
         }
 
+        function friendlyAssetTypeLabel(rawLabel) {
+            const label = String(rawLabel || '').trim();
+            if (!label) return '图片方案';
+            if (label === '医学科普图') return '医学解释图';
+            if (label === '大字报') return '情绪封面';
+            if (label === '检查流程图') return '检查流程卡';
+            if (label === '复查清单卡') return '复查清单';
+            return label;
+        }
+
+        function collectReferenceAssetIds() {
+            return selectedReferenceAssetIds.slice(0, 6);
+        }
+
+        function renderReferenceAssets() {
+            const wrap = document.getElementById('referenceAssetWrap');
+            if (!wrap) return;
+            if (!referenceAssetItems.length) {
+                wrap.innerHTML = '<div class="text-muted small">当前还没有可选参考图。你也可以先在图片库里补一些风格参考图，再回来这里选。</div>';
+                return;
+            }
+            wrap.innerHTML = referenceAssetItems.map((item) => {
+                const active = selectedReferenceAssetIds.includes(item.id);
+                return `
+                    <div class="col-md-4 col-lg-3">
+                        <div class="reference-card ${active ? 'active' : ''}" onclick="toggleReferenceAsset(${item.id})">
+                            <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                                <span class="title-option-rank">${active ? '已选' : '可参考'}</span>
+                                <span class="small text-muted">${escapeHtml(friendlyAssetTypeLabel(item.asset_type || item.style_type_key || item.library_type || '参考图'))}</span>
+                            </div>
+                            <img src="${item.preview_url}" alt="${escapeHtml(item.title || '')}">
+                            <div class="fw-semibold mt-2">${escapeHtml(item.title || '参考图')}</div>
+                            <div class="text-muted small mt-1">${active ? '这张图会进入参考图分析' : '点击后加入参考图分析'}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderReferenceThumbs(items) {
+            const refs = items || [];
+            if (!refs.length) return '';
+            return `
+                <div class="reference-thumb-row">
+                    ${refs.map((ref) => `
+                        <div class="reference-thumb">
+                            <img src="${ref.preview_url}" alt="${escapeHtml(ref.title || '参考图')}">
+                            <div class="reference-thumb-label">
+                                <strong>${escapeHtml(ref.title || '参考图')}</strong>
+                                ${escapeHtml(friendlyAssetTypeLabel(ref.asset_type || ref.style_type_key || ref.library_type || '参考图'))}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function toggleReferenceAsset(assetId) {
+            const value = parseInt(assetId, 10);
+            if (!value) return;
+            if (selectedReferenceAssetIds.includes(value)) {
+                selectedReferenceAssetIds = selectedReferenceAssetIds.filter((item) => item !== value);
+            } else if (selectedReferenceAssetIds.length >= 3) {
+                selectedReferenceAssetIds = [selectedReferenceAssetIds[1], selectedReferenceAssetIds[2], value].filter(Boolean);
+            } else {
+                selectedReferenceAssetIds = [...selectedReferenceAssetIds, value];
+            }
+            renderReferenceAssets();
+            renderResultOverview();
+        }
+
+        async function loadReferenceAssets() {
+            const keyword = encodeURIComponent('{{ registration.topic.keywords or registration.topic.topic_name or "" }}');
+            try {
+                const res = await fetch(`/api/public-assets?library_type=reference&limit=12&keyword=${keyword}`);
+                const data = await res.json();
+                if (data.success) {
+                    referenceAssetItems = data.items || [];
+                } else {
+                    referenceAssetItems = [];
+                }
+            } catch (error) {
+                referenceAssetItems = [];
+            }
+            renderReferenceAssets();
+        }
+
+        function applyReferenceImagePlan(planId) {
+            selectedReferencePlanId = planId || '';
+            const plan = (referenceImageAnalysis?.plans || []).find((item) => item.id === planId);
+            if (!plan) return;
+            const familySelect = document.getElementById('assetStyleFamily');
+            const modeSelect = document.getElementById('assetWorkflowMode');
+            const coverSelect = document.getElementById('assetCoverStyleType');
+            const innerSelect = document.getElementById('assetInnerStyleType');
+            if (familySelect) familySelect.value = plan.family_key || 'custom';
+            if (modeSelect) modeSelect.value = 'smart_bundle';
+            refreshAssetWorkflowControls();
+            if (coverSelect && plan.cover_style_type) coverSelect.value = plan.cover_style_type;
+            if (innerSelect && plan.inner_style_type) innerSelect.value = plan.inner_style_type;
+            refreshAssetStyleTypeHelp();
+            const wrap = document.getElementById('referenceImageAnalysisBar');
+            if (wrap) {
+                wrap.textContent = `已按参考图方案切换：${plan.label || '-'} ｜ ${plan.reference_logic || ''}`;
+            }
+            document.querySelectorAll('[data-reference-plan]').forEach((node) => {
+                const active = (node.getAttribute('data-reference-plan') || '') === selectedReferencePlanId;
+                node.classList.toggle('active-image', active);
+            });
+            renderResultOverview();
+        }
+
+        function renderReferenceImagePlans() {
+            const wrap = document.getElementById('referenceImagePlanWrap');
+            const summaryWrap = document.getElementById('referenceImageAnalysisBar');
+            if (!wrap || !summaryWrap) return;
+            if (!referenceImageAnalysis || !(referenceImageAnalysis.plans || []).length) {
+                wrap.innerHTML = '';
+                return;
+            }
+            summaryWrap.textContent = referenceImageAnalysis.summary || '参考图 Agent 已完成分析。';
+            const refs = referenceImageAnalysis.references || [];
+            wrap.innerHTML = `
+                ${renderReferenceThumbs(refs)}
+                ${(referenceImageAnalysis.plans || []).map((plan) => `
+                <div class="agent-route-card" data-reference-plan="${plan.id}">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div>
+                            <div class="fw-semibold">${escapeHtml(plan.label || '')}</div>
+                            <div class="small text-muted mt-1">${escapeHtml(plan.why || '')}</div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="applyReferenceImagePlan('${plan.id}')">按这套理解</button>
+                    </div>
+                    <div class="agent-route-meta"><strong>参考图理解：</strong>${escapeHtml(plan.reference_logic || '')}</div>
+                    <div class="agent-route-meta"><strong>封面重点：</strong>${escapeHtml(plan.cover_focus || '')}</div>
+                    <div class="agent-route-meta"><strong>内页重点：</strong>${escapeHtml(plan.inner_focus || '')}</div>
+                    ${(plan.inherit_points || []).length ? `<div class="plan-point-row">${(plan.inherit_points || []).map((item) => `<span class="plan-point-chip good">会继承：${escapeHtml(item)}</span>`).join('')}</div>` : ''}
+                    ${(plan.avoid_points || []).length ? `<div class="plan-point-row">${(plan.avoid_points || []).map((item) => `<span class="plan-point-chip bad">避免：${escapeHtml(item)}</span>`).join('')}</div>` : ''}
+                </div>
+                `).join('')}
+            `;
+            if (!selectedReferencePlanId) {
+                selectedReferencePlanId = referenceImageAnalysis.recommended_plan_id || '';
+            }
+            if (selectedReferencePlanId) {
+                applyReferenceImagePlan(selectedReferencePlanId);
+            }
+        }
+
+        async function analyzeReferenceImages() {
+            if (!selectedReferenceAssetIds.length) {
+                alert('请先选 1-3 张参考图，再让 Agent 分析。');
+                return false;
+            }
+            const wrap = document.getElementById('referenceImagePlanWrap');
+            const bar = document.getElementById('referenceImageAnalysisBar');
+            if (wrap) wrap.innerHTML = '<div class="text-muted small">参考图 Agent 正在分析这几张图会怎么被当前内容使用...</div>';
+            if (bar) bar.textContent = '参考图 Agent 正在分析构图、留白和风格气质...';
+            try {
+                const res = await fetch('/api/reference_image_analysis', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        registration_id: {{ registration.id }},
+                        selected_content: buildImageWorkflowSelectedContent(),
+                        title_hint: getSelectedTitleText(),
+                        reference_asset_ids: collectReferenceAssetIds(),
+                    }),
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    if (wrap) wrap.innerHTML = '';
+                    if (bar) bar.textContent = data.message || '参考图分析失败';
+                    return false;
+                }
+                referenceImageAnalysis = data;
+                selectedReferencePlanId = data.recommended_plan_id || '';
+                renderReferenceImagePlans();
+                return true;
+            } catch (error) {
+                if (wrap) wrap.innerHTML = '';
+                if (bar) bar.textContent = '参考图分析失败，请稍后重试。';
+                return false;
+            }
+        }
+
         function refreshAssetStyleTypeHelp() {
             const wrap = document.getElementById('assetStyleTypeHelp');
             if (!wrap) return;
@@ -1338,6 +2234,7 @@
             const coverMeta = (assetStyleTypeDefinitions || []).find((item) => item.key === coverKey) || {};
             const innerMeta = (assetStyleTypeDefinitions || []).find((item) => item.key === innerKey) || {};
             wrap.textContent = `${familyMeta.label}：${familyMeta.description} 当前模式：${assetWorkflowModeMap[modeKey] || ''} 封面样式：${coverMeta.label || '-'}${modeKey === 'smart_bundle' ? ` ｜ 内页样式：${innerMeta.label || '-'}` : ''}`;
+            renderImageExecutionBar();
         }
 
         function refreshTitleSkillHelp() {
@@ -1378,6 +2275,7 @@
                 note.textContent = preset.usage_tip || '系统会把图片工作流锁到更适合当前内容的爆款打法。';
             }
             refreshAssetStyleTypeHelp();
+            renderImageExecutionBar();
             if (copyCards.length > 0 || titleOptions.length > 0) {
                 scheduleStrategyPersistence('apply_image_skill');
             }
@@ -1456,37 +2354,20 @@
         }
 
         function buildImageWorkflowSelectedContent() {
-            const selectedContent = getSelectedContent();
+            const currentCard = buildSelectedCopyCard();
+            const selectedContent = currentCard
+                ? [
+                    currentCard.title ? `标题：${currentCard.title}` : '',
+                    currentCard.hook ? `开头：${currentCard.hook}` : '',
+                    currentCard.body ? `正文：${currentCard.body}` : '',
+                    currentCard.ending ? `结尾：${currentCard.ending}` : '',
+                ].filter(Boolean).join('\n')
+                : getSelectedContent();
             const config = resolveAssetWorkflowConfig();
-            const coverMeta = (assetStyleTypeDefinitions || []).find((item) => item.key === config.coverStyleType) || {};
-            const innerMeta = (assetStyleTypeDefinitions || []).find((item) => item.key === config.innerStyleType) || {};
-            const familyMeta = assetStyleFamilyMap[config.familyKey] || assetStyleFamilyMap.medical_science;
-            const imageSkillMeta = resolveImageSkillPreset(document.getElementById('imageSkill')?.value || 'auto');
-            const guideLines = [
-                `图片工作流模式：${config.modeKey}`,
-                `图片主类型：${familyMeta.label}`,
-                `封面样式：${coverMeta.label || config.coverStyleType || '-'}`,
-            ];
-            if (imageSkillMeta) {
-                guideLines.push(`图片技能包：${imageSkillMeta.label}`);
-                guideLines.push(`图片打法：${imageSkillMeta.description}`);
-                guideLines.push(`图片提示：${imageSkillMeta.usage_tip}`);
-            }
-            if (config.modeKey === 'smart_bundle') {
-                guideLines.push(`内页样式：${innerMeta.label || config.innerStyleType || '-'}`);
-                guideLines.push('请先拆出封面重点，再拆出内页信息块和讲解结构。');
-            } else if (config.modeKey === 'cover_only') {
-                guideLines.push('当前只做封面/主图，不需要扩展内页。');
-            } else if (config.modeKey === 'inner_only') {
-                guideLines.push(`内页样式：${innerMeta.label || config.innerStyleType || '-'}`);
-                guideLines.push('当前只做内页，重点放结构化信息，不要强做封面大字报。');
-            } else {
-                guideLines.push('当前按自定义图片提示词优先执行。');
-            }
             if (config.customPrompt) {
-                guideLines.push(`自定义图片提示词：${config.customPrompt}`);
+                return [selectedContent, `补充视觉要求：${config.customPrompt}`].filter(Boolean).join('\n\n');
             }
-            return [selectedContent, guideLines.join('\n')].filter(Boolean).join('\n\n');
+            return selectedContent;
         }
 
         function toggleCopyCustomInputs() {
@@ -1500,9 +2381,6 @@
 
         function buildCopyCardText(card) {
             const rows = [
-                ['人设', card?.persona],
-                ['场景', card?.scene],
-                ['软植入', card?.insertion],
                 ['标题', card?.title],
                 ['开头钩子', card?.hook],
                 ['正文', card?.body],
@@ -1532,13 +2410,12 @@
 
         function renderCopySummary() {
             const summary = [];
-            if (generatorContext.persona) summary.push(`人设：${generatorContext.persona}`);
-            if (generatorContext.scene) summary.push(`场景：${generatorContext.scene}`);
             if (generatorContext.direction) summary.push(`方向：${generatorContext.direction}`);
-            if (generatorContext.product) summary.push(`软植入：${generatorContext.product}`);
             if (generatorContext.goal) summary.push(`目标：${generatorContext.goal}`);
-            if (generatorContext.skill) summary.push(`技能包：${generatorContext.skill}`);
+            if (generatorContext.skill) summary.push(`写法：${generatorContext.skill}`);
             if (generatorContext.title_skill) summary.push(`标题：${generatorContext.title_skill}`);
+            if (generatorContext.selected_copy_route_label) summary.push(`文案路线：${generatorContext.selected_copy_route_label}`);
+            if (generatorContext.selected_image_route_label) summary.push(`图片路线：${generatorContext.selected_image_route_label}`);
             summary.push(`当前选题：${getSelectedTitleText()}`);
             document.getElementById('copySummaryBar').textContent = summary.join(' ｜ ');
             const engineWrap = document.getElementById('generatorEngineBar');
@@ -1549,6 +2426,33 @@
                 engineWrap.textContent = [engineLabel, agentMode, engineMessage].filter(Boolean).join(' ｜ ');
                 engineWrap.style.color = generatorContext.engine === 'local_fallback' ? '#b54708' : '#667085';
             }
+            renderResultOverview();
+        }
+
+        function renderResultOverview() {
+            const wrap = document.getElementById('resultOverviewGrid');
+            if (!wrap) return;
+            const copyRoute = generatorContext.selected_copy_route_label || '';
+            const imageRoute = generatorContext.selected_image_route_label || '';
+            const referenceRoute = getSelectedReferencePlanLabel();
+            const refs = referenceAssetItems.filter((item) => selectedReferenceAssetIds.includes(item.id)).slice(0, 2);
+            const quotaText = assetGenerationQuota
+                ? `${assetGenerationQuota.remaining_attempts}/${assetGenerationQuota.max_attempts} 次`
+                : '读取中';
+            const cards = [
+                { label: '当前标题', value: getSelectedTitleText() || '未选择', primary: true },
+                { label: '文案路线', value: copyRoute || '待选择' },
+                { label: '图片路线', value: imageRoute || '待选择' },
+                { label: '参考图策略', value: referenceRoute || (refs.length ? '已选参考图，待分析' : '未启用') },
+                { label: '参考图', value: refs.length ? refs.map((item) => item.title || '参考图').join(' / ') : '未选择' },
+                { label: '真实图片剩余', value: quotaText },
+            ];
+            wrap.innerHTML = cards.map((item) => `
+                <div class="overview-card ${item.primary ? 'primary' : ''}">
+                    <div class="label">${escapeHtml(item.label)}</div>
+                    <div class="value">${escapeHtml(item.value)}</div>
+                </div>
+            `).join('');
         }
 
         function renderCopyCards() {
@@ -1557,14 +2461,21 @@
             wrap.innerHTML = copyCards.map((card, index) => `
                 <div class="col-lg-4">
                     <div class="copy-card ${index === selectedVersion ? 'selected' : ''}" onclick="selectVersion(${index})">
-                        <div class="copy-chip-row">
-                            ${card.persona ? `<span class="copy-chip">${escapeHtml(card.persona)}</span>` : ''}
-                            ${card.scene ? `<span class="copy-chip">${escapeHtml(card.scene)}</span>` : ''}
-                            ${card.insertion ? `<span class="copy-chip">${escapeHtml(card.insertion)}</span>` : ''}
-                        </div>
+                        <div class="text-muted small mb-2">${escapeHtml([card.strategy, card.scene].filter(Boolean).join(' ｜ '))}</div>
                         <div class="copy-title">${escapeHtml(card.title)}</div>
                         <div class="copy-hook"><strong>开头钩子：</strong> ${escapeHtml(card.hook || '系统已自动生成钩子')}</div>
-                        <div class="copy-body">${escapeHtml(card.body)}</div>
+                        <div class="copy-fit-chip">${escapeHtml(describeCopyCardFit(card))}</div>
+                        ${(extractCopyHighlights(card.body).length
+                            ? `<div class="copy-section-label">重点摘要</div>`
+                            : '')}
+                        ${(extractCopyHighlights(card.body).length
+                            ? `<div class="copy-highlight-list">${extractCopyHighlights(card.body).map((item) => `<span class="copy-highlight-chip">${escapeHtml(item)}</span>`).join('')}</div>`
+                            : '')}
+                        <div class="copy-body-preview">${escapeHtml(summarizeCopyBody(card.body))}</div>
+                        <details class="mb-2">
+                            <summary class="small text-muted">展开全文</summary>
+                            <div class="copy-body mt-2">${escapeHtml(card.body)}</div>
+                        </details>
                         <div class="copy-ending"><strong>互动结尾：</strong> ${escapeHtml(card.ending || '')}</div>
                     </div>
                 </div>
@@ -1576,13 +2487,22 @@
             document.getElementById('generateBtn').disabled = true;
 
             try {
+                const fastMode = document.getElementById('fastMode') ? document.getElementById('fastMode').checked : false;
+                if (!fastMode && !copyAgentAnalysis) {
+                    const analyzed = await fetchCopyAgentAnalysis();
+                    if (!analyzed) {
+                        document.getElementById('loading').style.display = 'none';
+                        document.getElementById('generateBtn').disabled = false;
+                        return false;
+                    }
+                }
                 const res = await fetch('/api/generate_copy', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         registration_id: {{ registration.id }},
                         user_prompt: document.getElementById('userPrompt').value.trim(),
-                        fast_mode: document.getElementById('fastMode') ? document.getElementById('fastMode').checked : true,
+                        fast_mode: fastMode,
                         persona_key: document.getElementById('copyPersona').value,
                         custom_persona: document.getElementById('customPersona').value.trim(),
                         scene_key: document.getElementById('copyScene').value,
@@ -1593,6 +2513,8 @@
                         copy_goal: document.getElementById('copyGoal').value,
                         copy_skill: document.getElementById('copySkill').value,
                         title_skill: document.getElementById('titleSkill').value,
+                        agent_copy_route_id: selectedAgentCopyRouteId || '',
+                        agent_image_route_id: selectedAgentImageRouteId || '',
                     })
                 });
                 const data = await res.json();
@@ -1621,6 +2543,7 @@
                     if (copyCards.length > 0) {
                         await checkCompliance(getSelectedContent());
                         await refreshCoverRecommendations();
+                        await refreshImageAgentPlans();
                         await persistStrategySelection('generate_copy', true);
                     }
                     document.getElementById('loading').style.display = 'none';
@@ -1644,6 +2567,7 @@
             renderCopyCards();
             checkCompliance(getSelectedContent());
             refreshCoverRecommendations();
+            refreshImageAgentPlans();
             scheduleStrategyPersistence('select_version');
         }
         
@@ -1740,6 +2664,13 @@
         }
 
         async function generateCreativePack() {
+            if (!selectedImageAgentPlanId) {
+                const ok = await refreshImageAgentPlans();
+                if (!selectedImageAgentPlanId) {
+                    alert('请先在“图片 Agent 方案分析”里选一条路线，再预览封面素材。');
+                    return;
+                }
+            }
             const workflow = resolveAssetWorkflowConfig();
             const res = await fetch('/api/generate_creative_pack', {
                 method: 'POST',
@@ -1752,6 +2683,7 @@
                     inner_style_type: workflow.innerStyleType,
                     generation_mode: workflow.modeKey,
                     custom_prompt: workflow.customPrompt,
+                    reference_asset_ids: collectReferenceAssetIds(),
                 })
             });
             const data = await res.json();
@@ -1761,6 +2693,9 @@
             }
 
             window.latestCreativeAssets = data.assets || [];
+            const selectedRefs = referenceAssetItems.filter((item) => selectedReferenceAssetIds.includes(item.id)).slice(0, 3);
+            const referencePlanLabel = getSelectedReferencePlanLabel();
+            const referencePlanLogic = getSelectedReferencePlanLogic();
             document.getElementById('creativePackList').innerHTML = window.latestCreativeAssets.map((item, index) => `
                 <div class="asset-card">
                     <div class="row g-3">
@@ -1770,19 +2705,24 @@
                         <div class="col-md-7">
                             <div class="d-flex justify-content-between align-items-start mb-2">
                                 <div>
-                                    <strong>${item.type}</strong>
+                                    <strong>${friendlyAssetTypeLabel(item.type)}</strong>
                                     <div class="text-muted small">${item.title}</div>
                                 </div>
                                 <a class="btn btn-sm btn-outline-danger" href="${item.svg_data_uri}" download="${item.download_name}">下载SVG</a>
                             </div>
                             <div class="small text-muted mb-2">${item.subtitle || ''}</div>
+                            ${renderReferenceThumbs(selectedRefs)}
+                            ${selectedRefs.length ? `<div class="small text-muted mb-2">当前参考图：${escapeHtml(selectedRefs.map((ref) => ref.title || '参考图').join(' / '))}</div>` : ''}
+                            ${referencePlanLabel ? `<div class="small text-muted mb-2">参考图路线：${escapeHtml(referencePlanLabel)}${referencePlanLogic ? ` ｜ ${escapeHtml(referencePlanLogic)}` : ''}</div>` : ''}
                             <ul class="small mb-2">
                                 ${(item.bullets || []).map((bullet) => `<li>${bullet}</li>`).join('')}
                             </ul>
-                            <div class="border rounded p-2 mb-2" style="background:#fff;">
-                                <div class="small text-muted mb-1">图像生成提示词</div>
-                                <div class="small">${item.image_prompt || ''}</div>
-                            </div>
+                            <details class="mb-2">
+                                <summary class="small text-muted">查看图像提示词</summary>
+                                <div class="border rounded p-2 mt-2" style="background:#fff;">
+                                    <div class="small">${item.image_prompt || ''}</div>
+                                </div>
+                            </details>
                             <button class="btn btn-sm btn-outline-danger" type="button" onclick="copyAssetPrompt(${index})">复制提示词</button>
                         </div>
                     </div>
@@ -1795,6 +2735,13 @@
             if (!versions || versions.length === 0) {
                 const ok = await generateCopy();
                 if (!ok) return;
+            }
+            if (!selectedImageAgentPlanId) {
+                await refreshImageAgentPlans();
+                if (!selectedImageAgentPlanId) {
+                    alert('请先在“图片 Agent 方案分析”里选一条路线，再预览图文套组。');
+                    return;
+                }
             }
             const workflow = resolveAssetWorkflowConfig();
 
@@ -1809,6 +2756,7 @@
                     inner_style_type: workflow.innerStyleType,
                     generation_mode: workflow.modeKey,
                     custom_prompt: workflow.customPrompt,
+                    reference_asset_ids: collectReferenceAssetIds(),
                 })
             });
             const data = await res.json();
@@ -1818,6 +2766,9 @@
             }
 
             window.latestGraphicBundles = data.items || [];
+            const selectedRefs = referenceAssetItems.filter((item) => selectedReferenceAssetIds.includes(item.id)).slice(0, 3);
+            const referencePlanLabel = getSelectedReferencePlanLabel();
+            const referencePlanLogic = getSelectedReferencePlanLogic();
             document.getElementById('graphicBundleList').innerHTML = window.latestGraphicBundles.map((item, index) => `
                 <div class="bundle-card">
                     <div class="row g-3">
@@ -1827,13 +2778,19 @@
                         <div class="col-md-8">
                             <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
                                 <div>
-                                    <strong>${item.card_type || item.asset.type || '图文方案'}</strong>
+                                    <strong>${friendlyAssetTypeLabel(item.card_type || item.asset.type || '图文方案')}</strong>
                                     <div class="text-muted small">${item.cover_title || item.publish_title || ''}</div>
                                 </div>
                                 <a class="btn btn-sm btn-outline-danger" href="${item.asset.svg_data_uri}" download="${item.asset.download_name}">下载SVG</a>
                             </div>
                             <div class="small text-muted mb-2">${item.summary || item.asset.subtitle || ''}</div>
-                            <div class="bundle-copy-box mb-2">${item.full_copy || ''}</div>
+                            ${renderReferenceThumbs(selectedRefs)}
+                            ${selectedRefs.length ? `<div class="small text-muted mb-2">这版优先参考：${escapeHtml(selectedRefs.map((ref) => ref.title || '参考图').join(' / '))}</div>` : ''}
+                            ${referencePlanLabel ? `<div class="small text-muted mb-2">参考图路线：${escapeHtml(referencePlanLabel)}${referencePlanLogic ? ` ｜ ${escapeHtml(referencePlanLogic)}` : ''}</div>` : ''}
+                            <details class="mb-2">
+                                <summary class="small text-muted">查看图文套组文案</summary>
+                                <div class="bundle-copy-box mt-2">${item.full_copy || ''}</div>
+                            </details>
                             <div class="small text-muted mb-2">推荐标签：${item.tag_text || ''}</div>
                             <div class="d-flex gap-2 flex-wrap">
                                 <button class="btn btn-sm btn-outline-danger" type="button" onclick="copyGraphicBundle(${index})">复制整套文案</button>
@@ -1882,7 +2839,7 @@
                             <div class="col-md-7">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <div>
-                                        <strong>${item.title || item.type || 'AI图片'}</strong>
+                                        <strong>${friendlyAssetTypeLabel(item.title || item.type || 'AI图片')}</strong>
                                         <div class="text-muted small">${item.provider || '-'} / ${item.format || '-'}</div>
                                     </div>
                                     <a class="btn btn-sm btn-outline-danger" ${previewLinkAttrs}>下载/打开</a>
@@ -1906,6 +2863,13 @@
                 const ok = await generateCopy();
                 if (!ok) return;
             }
+            if (!selectedImageAgentPlanId) {
+                await refreshImageAgentPlans();
+                if (!selectedImageAgentPlanId) {
+                    alert('请先在“图片 Agent 方案分析”里选一条路线，再发起真实图片任务。');
+                    return;
+                }
+            }
             const workflow = resolveAssetWorkflowConfig();
             await persistStrategySelection('start_asset_generation', true);
 
@@ -1926,16 +2890,25 @@
                     inner_style_type: workflow.innerStyleType,
                     generation_mode: workflow.modeKey,
                     custom_prompt: workflow.customPrompt,
+                    reference_asset_ids: collectReferenceAssetIds(),
                     image_count: parseInt(document.getElementById('assetImageCount').value || '3', 10)
                 })
             });
             const data = await res.json();
             if (!data.success) {
                 document.getElementById('assetTaskMsg').textContent = data.message || '图片任务创建失败';
+                const quotaWrap = document.getElementById('assetAttemptQuotaNote');
+                if (quotaWrap && data.message) {
+                    quotaWrap.textContent = data.message;
+                }
                 return;
             }
             window.currentAssetTaskId = data.asset_task_id;
             document.getElementById('assetTaskMsg').textContent = `${data.message || '图片任务已创建'}，任务ID：${data.asset_task_id}`;
+            const quotaWrap = document.getElementById('assetAttemptQuotaNote');
+            if (quotaWrap) {
+                quotaWrap.textContent = `真实图片生成剩余 ${data.remaining_attempts}/${data.max_attempts} 次。建议先继续用模板预览确认方向，再决定是否继续调用真实图片 API。`;
+            }
             pollAssetGenerationTask(data.asset_task_id, 0);
         }
 
@@ -1969,7 +2942,24 @@
             if (!current) return;
             copyText(current.image_prompt || '');
         }
-        
+
+        async function loadAssetGenerationQuota() {
+            const wrap = document.getElementById('assetAttemptQuotaNote');
+            if (!wrap) return;
+            try {
+                const res = await fetch('/api/asset_generation_quota/{{ registration.id }}');
+                const data = await res.json();
+                if (!data.success) {
+                    return;
+                }
+                assetGenerationQuota = data;
+                wrap.textContent = `真实图片生成剩余 ${data.remaining_attempts}/${data.max_attempts} 次。建议先走 Agent 分析、参考图分析和模板预览，确认后再调用真实图片 API。`;
+                renderResultOverview();
+            } catch (error) {
+                return;
+            }
+        }
+
         async function humanizeSelected() {
             if (!versions || versions.length === 0) {
                 alert('请先生成文案');
@@ -2127,6 +3117,7 @@
         refreshAssetStyleTypeHelp();
         refreshTitleSkillHelp();
         applyImageSkillPreset();
+        renderAgentDecisionBar();
         if (initialSavedStrategy?.selected_cover_style_type) {
             const coverSelect = document.getElementById('assetCoverStyleType');
             if (coverSelect) coverSelect.value = initialSavedStrategy.selected_cover_style_type;
@@ -2138,6 +3129,8 @@
         refreshAssetStyleTypeHelp();
         renderStrategyRecommendationBar();
         refreshViralOperationTips();
+        loadAssetGenerationQuota();
+        loadReferenceAssets();
         loadPersistedIpAgentSeed();
         loadStrategyRecommendation();
     </script>

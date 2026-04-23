@@ -473,6 +473,7 @@ def sync_creator_accounts_job(data_source_task_id):
 def generate_asset_images_job(asset_task_id):
     from app import (
         _image_provider_capabilities,
+        _resolve_image_provider_api_key,
         _build_asset_provider_request_preview,
         _build_asset_generation_fallback_results,
         _log_operation,
@@ -510,13 +511,8 @@ def generate_asset_images_job(asset_task_id):
 
     capabilities = _image_provider_capabilities()
     api_url = (capabilities.get('image_provider_api_url') or '').strip()
-    api_key = (
-        os.environ.get('ASSET_IMAGE_API_KEY')
-        or os.environ.get('ARK_API_KEY')
-        or os.environ.get('LAS_API_KEY')
-        or ''
-    ).strip()
     provider = (capabilities.get('image_provider_name') or task.source_provider or 'svg_fallback').strip() or 'svg_fallback'
+    api_key = _resolve_image_provider_api_key(provider)
     model_name = (capabilities.get('image_provider_model') or task.model_name or '').strip()
     image_size = (capabilities.get('image_provider_size') or '1024x1536').strip()
     timeout_seconds = min(max(int(capabilities.get('image_timeout_seconds') or 90), 10), 300)

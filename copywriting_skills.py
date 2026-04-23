@@ -246,9 +246,9 @@ _TITLE_SKILL_PROFILES = {
         'title_rule': '标题先亮结果或提醒，例如“别再……”“先看这几点”“我后来才知道……”。',
         'avoid_rule': '避免标题太空、太像广告，尽量让人一眼看懂这篇解决什么问题。',
         'local_titles': [
-            '{lead_keyword}先看这几点',
+            '看到{lead_keyword}，先别慌',
+            '{lead_keyword}这件事，先看这几点',
             '关于{lead_keyword}，我后来先改了这一点',
-            '{topic_name}这件事，别再拖了',
         ],
     },
     'conflict_reverse': {
@@ -279,9 +279,9 @@ _TITLE_SKILL_PROFILES = {
         'title_rule': '标题像“先做这3步”“这几件事别漏”“按这个顺序来”，强调拿来就能用。',
         'avoid_rule': '不要把标题写成流水账，重点是精炼、好记、可截图。',
         'local_titles': [
-            '{lead_keyword}先做这3步',
+            '报告里有{lead_keyword}，先看这3点',
             '碰到{lead_keyword}，这几件事别漏',
-            '关于{lead_keyword}，我会先按这个顺序来',
+            '{lead_keyword}别只盯这一项',
         ],
     },
     'emotional_diary': {

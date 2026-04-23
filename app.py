@@ -905,6 +905,31 @@ def _serialize_asset_generation_task(task, detail=False):
         'created_at': _format_datetime(task.created_at),
         'updated_at': _format_datetime(task.updated_at),
         'selected_content_preview': _truncate_text(task.selected_content or '', 120) if not detail else task.selected_content or '',
+        **(_asset_generation_quota_payload(task.registration_id) if task.registration_id else {}),
+    }
+
+
+def _count_real_asset_generation_attempts(registration_id):
+    registration_id = _safe_int(registration_id, 0)
+    if registration_id <= 0:
+        return 0
+    return AssetGenerationTask.query.filter(
+        AssetGenerationTask.registration_id == registration_id,
+        or_(
+            AssetGenerationTask.source_provider != 'svg_fallback',
+            AssetGenerationTask.model_name.isnot(None) & (AssetGenerationTask.model_name != '')
+        )
+    ).count()
+
+
+def _asset_generation_quota_payload(registration_id):
+    max_attempts = 5
+    used_attempts = _count_real_asset_generation_attempts(registration_id)
+    remaining_attempts = max(max_attempts - used_attempts, 0)
+    return {
+        'used_attempts': used_attempts,
+        'remaining_attempts': remaining_attempts,
+        'max_attempts': max_attempts,
     }
 
 
@@ -3776,6 +3801,7 @@ def _copywriter_env_ready():
 
 def _resolve_copywriter_capabilities(payload=None):
     runtime = _copywriter_runtime_config(payload=payload)
+    candidates = _copywriter_runtime_candidates(payload=payload)
     return {
         'copywriter_configured': bool(runtime.get('configured')),
         'copywriter_provider': runtime.get('provider') or 'local_fallback',
@@ -3786,15 +3812,30 @@ def _resolve_copywriter_capabilities(payload=None):
         'server_side_only': True,
         'end_user_needs_vpn': False,
         'fallback_mode': not bool(runtime.get('configured')),
+        'candidate_count': len(candidates),
+        'candidate_chain': [{
+            'provider': item.get('provider') or '',
+            'model': item.get('model') or '',
+            'api_url': item.get('api_url') or '',
+            'label': item.get('label') or '',
+            'source': item.get('source') or '',
+        } for item in candidates[:5]],
     }
 
 
 def _copywriter_healthcheck(payload=None, timeout_seconds=20):
     runtime = _copywriter_runtime_config(payload=payload)
+    candidates = _copywriter_runtime_candidates(payload=payload)
     request_preview = {
         'api_url': runtime.get('api_url') or '',
         'model': runtime.get('model') or '',
         'provider': runtime.get('provider') or 'local_fallback',
+        'candidate_chain': [{
+            'provider': item.get('provider') or '',
+            'model': item.get('model') or '',
+            'api_url': item.get('api_url') or '',
+            'source': item.get('source') or '',
+        } for item in candidates[:5]],
         'prompt': (payload or {}).get('prompt_text') or '请用更像真人的小红书口语风，写一句关于肝健康的开头。',
     }
     if not runtime.get('configured'):
@@ -3818,9 +3859,14 @@ def _copywriter_healthcheck(payload=None, timeout_seconds=20):
             'enabled': True,
             'ok': bool(result.get('text')),
             'message': '文案模型接口可用' if result.get('text') else '文案模型返回为空',
-            'provider': runtime.get('provider') or '',
+            'provider': (result.get('runtime') or {}).get('provider') or runtime.get('provider') or '',
             'request_preview': request_preview,
-            'response_preview': {'text': (result.get('text') or '')[:800]},
+            'response_preview': {
+                'text': (result.get('text') or '')[:800],
+                'used_model': (result.get('runtime') or {}).get('model') or '',
+                'used_api_url': (result.get('runtime') or {}).get('api_url') or '',
+                'attempt_errors': result.get('attempt_errors') or [],
+            },
         }
     except Exception as exc:
         return {
@@ -3829,7 +3875,7 @@ def _copywriter_healthcheck(payload=None, timeout_seconds=20):
             'message': f'文案模型联调失败：{exc}',
             'provider': runtime.get('provider') or '',
             'request_preview': request_preview,
-            'response_preview': None,
+            'response_preview': {'attempted_candidates': request_preview['candidate_chain']},
         }
 
 
@@ -5162,6 +5208,38 @@ def _build_deployment_helper_payload():
             'purpose': '用于文案规划 Agent、文案生成、真人化改写。',
             'example': 'gpt-5.4',
         },
+        'DOUBAO_API_KEY': {
+            'label': '豆包 API Key',
+            'purpose': '如果文案第2或第3模型走豆包兼容接口，可在服务端保存豆包 Key。',
+            'example': '<doubao api key>',
+            'placeholder': '<optional api key>',
+        },
+        'DOUBAO_API_URL': {
+            'label': '豆包 API URL',
+            'purpose': '如果豆包提供 OpenAI 兼容地址，可作为文案第2或第3模型的 API URL。',
+            'example': 'https://ark.cn-beijing.volces.com/api/v3',
+        },
+        'DOUBAO_MODEL': {
+            'label': '豆包模型名',
+            'purpose': '用于文案第2或第3模型位，例如豆包文案模型名。',
+            'example': 'doubao-1.5-pro-32k',
+        },
+        'YUANBAO_API_KEY': {
+            'label': '元宝 API Key',
+            'purpose': '如果元宝提供标准/兼容 API，可作为文案第2或第3模型位的密钥。',
+            'example': '<yuanbao api key>',
+            'placeholder': '<optional api key>',
+        },
+        'YUANBAO_API_URL': {
+            'label': '元宝 API URL',
+            'purpose': '如果元宝提供 OpenAI 兼容地址，可配置到文案模型链中。',
+            'example': 'https://api.example.com/v1',
+        },
+        'YUANBAO_MODEL': {
+            'label': '元宝模型名',
+            'purpose': '用于文案第2或第3模型位。',
+            'example': 'yuanbao-chat',
+        },
         'DEEPSEEK_API_KEY': {
             'label': 'DeepSeek API Key（兼容旧配置）',
             'purpose': '保留向后兼容；未设置 COPYWRITER_API_KEY 时，系统仍可继续用 DeepSeek。',
@@ -5269,6 +5347,12 @@ def _build_deployment_helper_payload():
             'purpose': '把图片中心从 SVG fallback 切到真实图片服务。',
             'example': 'volcengine_ark',
         },
+        'OPENAI_IMAGE_API_KEY': {
+            'label': 'OpenAI 图片 API Key',
+            'purpose': '当图片 Provider 走 OpenAI 官方或兼容网关时可使用；也可直接复用 OPENAI_API_KEY。',
+            'example': '<openai image api key>',
+            'placeholder': '<optional api key>',
+        },
         'ASSET_IMAGE_API_BASE': {
             'label': '图片 API Base',
             'purpose': 'OpenAI 兼容类接口常用的基础地址。',
@@ -5324,7 +5408,10 @@ def _build_deployment_helper_payload():
         'SECRET_KEY',
         'ADMIN_PASSWORD',
         'COPYWRITER_API_KEY',
+        'DOUBAO_API_KEY',
+        'YUANBAO_API_KEY',
         'OPENAI_API_KEY',
+        'OPENAI_IMAGE_API_KEY',
         'DEEPSEEK_API_KEY',
         'ASSET_IMAGE_API_KEY',
         'ARK_API_KEY',
@@ -7352,6 +7439,119 @@ def _local_variant_middle(index, lead_keyword=''):
     return variants[index % len(variants)]
 
 
+def _build_local_copy_body_sections(
+    route_key='',
+    *,
+    lead_keyword='',
+    scene_text='',
+    persona_text='',
+    product_label='',
+    prompt_focus='',
+    route_body_strategy='',
+    reference_hint='',
+    index=0,
+):
+    keyword = lead_keyword or '这件事'
+    scene_line = _local_copy_scene_line(scene_text, keyword)
+    persona_line = _local_copy_persona_line(persona_text, keyword)
+    action_lines = _local_copy_action_lines(keyword, scene_text)
+    primary_action = action_lines[index % len(action_lines)]
+    secondary_action = action_lines[(index + 1) % len(action_lines)]
+    product_line = _local_copy_product_line(product_label)
+    focus_line = f'如果只想先抓一个重点，我会先把“{prompt_focus}”这一层讲明白。' if prompt_focus else ''
+    route_key = (route_key or '').strip()
+    sections = []
+    if route_key == 'report_emotion':
+        sections = [
+            scene_line,
+            '那一下最容易把人带偏的，不是报告本身，而是看到一个名词就先往严重了想。',
+            '我现在会先提醒自己：先看这次检查到底想回答什么，再看前后变化，最后才去查别的。',
+            primary_action,
+            secondary_action,
+        ]
+    elif route_key == 'report_decode':
+        sections = [
+            persona_line,
+            f'像“{keyword}”这种检查项，真正要先讲清楚的不是名字，而是它在帮我们确认哪件事。',
+            '我现在更习惯先拆“最容易看偏的点”，这样大家一眼就知道该从哪一步开始判断。',
+            primary_action,
+            '先把最容易看偏的地方说清楚，后面的复查和观察顺序才不容易乱。',
+        ]
+    elif route_key == 'report_checklist':
+        sections = [
+            '我后来给自己定的顺序很短：先看前后变化，再问清检查目的，最后定复查时间。',
+            '这样处理的好处是，人不会一直慌，和医生沟通时也更容易抓到重点。',
+            primary_action,
+            secondary_action,
+            '把顺序列清楚以后，至少不会看完一堆名词还是不知道下一步做什么。',
+        ]
+    elif route_key == 'myth_reverse':
+        sections = [
+            persona_line,
+            f'关于“{keyword}”，很多人第一反应都太快了，偏偏最容易偏在第一步判断。',
+            '我以前也信过那个最常见的说法，后来才发现，问题不在“懂不懂”，而在判断顺序错了。',
+            primary_action,
+            '先把最常见的误会拆开，后面的判断反而会简单很多。',
+        ]
+    elif route_key == 'myth_case':
+        sections = [
+            scene_line,
+            '那次我其实差一点就按自己以前那套理解走下去了，后来才发现真正危险的是“想当然”。',
+            primary_action,
+            secondary_action,
+            '把那次差点踩坑的瞬间讲清楚，比空讲大道理更容易让人记住。',
+        ]
+    elif route_key == 'myth_checklist':
+        sections = [
+            f'如果让我重来一次，我会先把关于“{keyword}”最容易搞反的 3 件事写下来。',
+            '因为这种内容最怕的不是看不懂，而是半懂不懂地自己下结论。',
+            primary_action,
+            '把误区和正解摆在一起看，心里会稳很多，也不容易自己吓自己。',
+        ]
+    elif route_key == 'story_first':
+        sections = [
+            scene_line,
+            '我以前最容易做的，就是觉得这事可以再等等，结果越拖越不敢面对。',
+            persona_line,
+            primary_action,
+            '真正有用的不是把情绪写满，而是把后来怎么改、怎么接住这件事说清楚。',
+        ]
+    elif route_key == 'qa_first':
+        sections = [
+            f'每次聊到“{keyword}”，大家最常问的其实就两件事：现在要不要紧，下一步先做什么。',
+            '我自己的习惯是先把顺序理清，再决定是复查、观察，还是先把生活管理接上。',
+            primary_action,
+            secondary_action,
+            '先把问题说成人话，后面的动作反而更容易接住。',
+        ]
+    else:
+        sections = [
+            persona_line,
+            f'把“{keyword}”讲清楚，关键不是堆术语，而是先告诉大家最容易看偏的点。',
+            scene_line,
+            primary_action,
+            '先把判断讲清楚，后面的动作才接得住，不会看完还是一头雾水。',
+        ]
+
+    if focus_line:
+        sections.append(focus_line)
+    if product_line and product_label and product_label not in {'自动匹配', '不植入产品'}:
+        sections.append(product_line)
+    sections.append('我现在更在意的，是把事情一步步说明白，而不是靠几个专业词把人说懵。')
+
+    compact = []
+    seen = set()
+    for row in sections:
+        text = (row or '').strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        compact.append(text)
+        if len(compact) >= 6:
+            break
+    return compact
+
+
 def _generate_topic_ideas(count=80, activity_id=None, quota=None):
     recent_notes = TrendNote.query.filter(TrendNote.pool_status != 'archived').order_by(TrendNote.created_at.desc()).limit(300).all()
     topic_quota = _normalize_quota(quota)
@@ -7492,15 +7692,6 @@ def _render_svg_card(card_type, title, subtitle, bullets, accent='#ff6b57', bg='
                 f'{html.escape(line)}</text>'
             )
 
-    badge_map = {
-        '医学科普图': '#FFE4DA',
-        '知识卡片': '#E8F4FF',
-        '检查流程图': '#FFF1CC',
-        '误区对照图': '#FDE7EC',
-        '复查清单卡': '#EAF7E7',
-    }
-    badge_bg = badge_map.get(card_type, '#FFE4DA')
-
     return f'''<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1440" viewBox="0 0 480 640">
 <defs>
 <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -7511,8 +7702,6 @@ def _render_svg_card(card_type, title, subtitle, bullets, accent='#ff6b57', bg='
 <rect width="480" height="640" rx="36" fill="url(#g)" />
 <circle cx="400" cy="70" r="88" fill="{accent}" opacity="0.15" />
 <circle cx="100" cy="600" r="72" fill="{accent}" opacity="0.10" />
-<rect x="42" y="42" width="138" height="42" rx="21" fill="{badge_bg}" />
-<text x="62" y="69" font-size="19" font-weight="700" fill="{accent}">{html.escape(card_type)}</text>
 {title_svg}
 {subtitle_svg}
 <rect x="42" y="302" rx="28" ry="28" width="396" height="286" fill="{accent}" opacity="0.12" />
@@ -7669,10 +7858,12 @@ def _render_svg_checklist_card(style_key, title, subtitle, bullets, accent='#f1c
 
 
 def _extract_content_points(content):
-    text = re.sub(r'(标题|钩子|正文|内文|结尾互动)\s*[：:]', ' ', content or '')
+    text = re.sub(r'(标题|钩子|正文|内文|结尾互动|人设|场景|软植入|图片工作流模式|图片主类型|封面样式|内页样式|图片技能包|图片打法|图片提示|自定义图片提示词)\s*[：:]', ' ', content or '')
     parts = [part.strip() for part in re.split(r'[。！？\n]+', text) if part and part.strip()]
     points = []
     for part in parts:
+        if any(token in part for token in ['患者本人', '医生助理', '健管师', '营养师', '系统会先拆封面', '当前模式', '封面主打']):
+            continue
         if 6 <= len(part) <= 32:
             points.append(part)
         if len(points) >= 3:
@@ -7976,13 +8167,19 @@ def _build_asset_generation_prompt_from_context(topic_name='', topic_keywords=''
     return prompt
 
 
-def _build_creative_pack(topic, selected_content='', preferred_style=''):
+def _build_creative_pack(topic, selected_content='', preferred_style='', reference_assets=None):
     topic_name = topic.topic_name or '肝病热点'
     keywords = _split_keywords(topic.keywords or topic_name)
     primary_keyword = keywords[0] if keywords else topic_name
     insertion = _detect_soft_insertion(f'{topic_name} {" ".join(keywords)}')
     content_points = _extract_content_points(selected_content)
     preferred_style = (preferred_style or '').strip()
+    reference_assets = reference_assets or []
+    reference_titles = [item.title or item.product_name or f'参考图{item.id}' for item in reference_assets[:3]]
+    reference_tags = []
+    for item in reference_assets[:3]:
+        reference_tags.extend([part.strip() for part in (item.tags or '').split(',') if part.strip()])
+    reference_tags = reference_tags[:4]
 
     if preferred_style:
         style_keys = [preferred_style]
@@ -7999,23 +8196,46 @@ def _build_creative_pack(topic, selected_content='', preferred_style=''):
             title = base_title if idx == 1 else f"{primary_keyword[:10]} {idx}"
             subtitle = meta.get('description') or meta.get('label') or '图片方案'
             bullets = content_points[:3] if content_points else list(meta.get('default_bullets') or [])
-            svg = _render_svg_card(
-                meta.get('asset_type') or meta.get('label') or '知识卡片',
-                title,
-                subtitle,
-                bullets,
-                accent=meta.get('accent') or '#ff7a59',
-                bg=meta.get('bg') or '#fff4ee',
-            )
+            if style_key == 'reference_based' and reference_titles:
+                subtitle = f"参考 {(' / '.join(reference_titles[:2]))} 的构图和留白"
+                bullets = [
+                    f"继承{reference_titles[0]}的版心和留白",
+                    f"保留“{primary_keyword}”当前内容重点",
+                    f"参考标签：{('、'.join(reference_tags[:2]) or '医学科普')}",
+                ]
+            accent = meta.get('accent') or '#ff7a59'
+            bg = meta.get('bg') or '#fff4ee'
+            if style_key in {'poster', 'poster_bold', 'poster_handwritten'}:
+                render_key = style_key if style_key != 'poster' else _infer_asset_layout_variant(style_key, title, selected_content, bullets)
+                svg = _render_svg_poster_card(render_key, title, subtitle, bullets, accent=accent, bg=bg)
+            elif style_key in {'memo', 'memo_mobile', 'memo_classroom'}:
+                render_key = style_key if style_key != 'memo' else _infer_asset_layout_variant(style_key, title, selected_content, bullets)
+                svg = _render_svg_memo_card(render_key, title, subtitle, bullets, accent=accent, bg=bg)
+            elif style_key in {'checklist', 'checklist_table', 'checklist_timeline', 'checklist_report'}:
+                render_key = style_key if style_key != 'checklist' else _infer_asset_layout_variant(style_key, title, selected_content, bullets)
+                svg = _render_svg_checklist_card(render_key, title, subtitle, bullets, accent=accent, bg=bg)
+            else:
+                svg = _render_svg_card(
+                    meta.get('asset_type') or meta.get('label') or '知识卡片',
+                    title,
+                    subtitle,
+                    bullets,
+                    accent=accent,
+                    bg=bg,
+                )
             pack.append({
                 'style_type': style_key,
                 'type': meta.get('asset_type') or meta.get('label') or '知识卡片',
                 'title': title,
                 'subtitle': subtitle,
                 'bullets': bullets,
-                'image_prompt': _build_asset_generation_prompt(topic, selected_content, style_preset=style_key, title_hint=title),
+                'image_prompt': (
+                    _build_asset_generation_prompt(topic, selected_content, style_preset=style_key, title_hint=title)
+                    + (f" 参考图方向：{' / '.join(reference_titles[:3])}。" if reference_titles else '')
+                ),
                 'download_name': f'creative_{topic.id}_{style_key}_{idx}.svg',
                 'svg_data_uri': _svg_data_uri(svg),
+                'reference_titles': reference_titles[:3],
             })
         return pack
 
@@ -8056,20 +8276,21 @@ def _build_creative_pack(topic, selected_content='', preferred_style=''):
     return pack
 
 
-def _build_graphic_article_bundle(topic, selected_content='', cover_style_type='', inner_style_type='', generation_mode='smart_bundle'):
+def _build_graphic_article_bundle(topic, selected_content='', cover_style_type='', inner_style_type='', generation_mode='smart_bundle', reference_assets=None):
     cover_style_type = (cover_style_type or '').strip()
     inner_style_type = (inner_style_type or '').strip()
     generation_mode = (generation_mode or 'smart_bundle').strip() or 'smart_bundle'
+    reference_assets = reference_assets or []
     if generation_mode == 'cover_only':
-        creative_pack = _build_creative_pack(topic, selected_content, preferred_style=cover_style_type or inner_style_type)[:1]
+        creative_pack = _build_creative_pack(topic, selected_content, preferred_style=cover_style_type or inner_style_type, reference_assets=reference_assets)[:1]
     elif generation_mode == 'inner_only':
-        creative_pack = _build_creative_pack(topic, selected_content, preferred_style=inner_style_type or cover_style_type)
+        creative_pack = _build_creative_pack(topic, selected_content, preferred_style=inner_style_type or cover_style_type, reference_assets=reference_assets)
     elif cover_style_type and inner_style_type and cover_style_type != inner_style_type:
-        cover_assets = _build_creative_pack(topic, selected_content, preferred_style=cover_style_type)[:1]
-        inner_assets = _build_creative_pack(topic, selected_content, preferred_style=inner_style_type)
+        cover_assets = _build_creative_pack(topic, selected_content, preferred_style=cover_style_type, reference_assets=reference_assets)[:1]
+        inner_assets = _build_creative_pack(topic, selected_content, preferred_style=inner_style_type, reference_assets=reference_assets)
         creative_pack = cover_assets + inner_assets[:2]
     else:
-        creative_pack = _build_creative_pack(topic, selected_content, preferred_style=cover_style_type or inner_style_type)
+        creative_pack = _build_creative_pack(topic, selected_content, preferred_style=cover_style_type or inner_style_type, reference_assets=reference_assets)
     topic_name = topic.topic_name or '肝病管理'
     keywords = _split_keywords(topic.keywords or topic_name)
     content_title = _extract_title_from_version(selected_content) if selected_content else topic_name
@@ -8093,6 +8314,8 @@ def _build_graphic_article_bundle(topic, selected_content='', cover_style_type='
         if support_text:
             publish_body = f'{publish_body}\n\n这版我想重点放在：{support_text}。'
         publish_body = f"{publish_body}\n\n封面我会用“{asset.get('type') or '知识卡片'}”这个版式，方便一眼看懂重点。"
+        if asset.get('reference_titles'):
+            publish_body = f"{publish_body}\n\n这版封面会优先借参考图的构图和留白，但内容还是按我们现在这篇重新组织。"
         publish_body = f"{publish_body}\n\n你们更想看哪一类延展内容？"
 
         full_copy = f"标题：{publish_title}\n内文：{publish_body}\n\n推荐标签：{tag_text or '#肝病管理'}"
@@ -8263,12 +8486,6 @@ def _build_asset_provider_request_preview(
             'size': safe_size,
             'response_format': 'b64_json',
         }
-        if product_urls:
-            payload['product_images'] = product_urls[:3]
-        if reference_urls:
-            payload['reference_images'] = reference_urls[:3]
-        if product_context:
-            payload['product_context'] = product_context
         return payload
     if safe_provider in {'generic_json', 'custom_json'}:
         return {
@@ -8292,6 +8509,45 @@ def _build_asset_provider_request_preview(
         'reference_images': reference_urls[:5],
         'product_context': product_context,
     }
+
+
+def _resolve_image_provider_api_key(provider=''):
+    safe_provider = (provider or '').strip() or 'svg_fallback'
+    if safe_provider == 'openai':
+        return (
+            os.environ.get('ASSET_IMAGE_API_KEY')
+            or os.environ.get('OPENAI_IMAGE_API_KEY')
+            or os.environ.get('OPENAI_API_KEY')
+            or ''
+        ).strip()
+    if safe_provider == 'openai_compatible':
+        return (
+            os.environ.get('ASSET_IMAGE_API_KEY')
+            or os.environ.get('OPENAI_IMAGE_API_KEY')
+            or os.environ.get('OPENAI_API_KEY')
+            or os.environ.get('ARK_API_KEY')
+            or os.environ.get('LAS_API_KEY')
+            or ''
+        ).strip()
+    if safe_provider == 'volcengine_ark':
+        return (
+            os.environ.get('ASSET_IMAGE_API_KEY')
+            or os.environ.get('ARK_API_KEY')
+            or ''
+        ).strip()
+    if safe_provider == 'volcengine_las':
+        return (
+            os.environ.get('ASSET_IMAGE_API_KEY')
+            or os.environ.get('LAS_API_KEY')
+            or ''
+        ).strip()
+    return (
+        os.environ.get('ASSET_IMAGE_API_KEY')
+        or os.environ.get('IMAGE_API_KEY')
+        or os.environ.get('OPENAI_IMAGE_API_KEY')
+        or os.environ.get('OPENAI_API_KEY')
+        or ''
+    ).strip()
 
 
 def _resolve_image_provider_capabilities(payload=None):
@@ -8320,18 +8576,17 @@ def _resolve_image_provider_capabilities(payload=None):
         api_base = 'https://ark.cn-beijing.volces.com/api/v3'
     if provider == 'volcengine_las' and not api_base:
         api_base = 'https://operator.las.cn-beijing.volces.com/api/v1'
+    if provider == 'openai' and not api_base:
+        api_base = 'https://api.openai.com/v1'
     api_url = (os.environ.get('ASSET_IMAGE_API_URL') or str(merged.get('image_api_url') or '')).strip()
     if not api_url and api_base:
         api_url = api_base.rstrip('/') + '/images/generations'
-    api_key = (
-        os.environ.get('ASSET_IMAGE_API_KEY')
-        or os.environ.get('ARK_API_KEY')
-        or os.environ.get('LAS_API_KEY')
-        or ''
-    ).strip()
+    api_key = _resolve_image_provider_api_key(provider)
     model_name = (os.environ.get('ASSET_IMAGE_MODEL') or str(merged.get('image_model') or '')).strip()
     if not model_name and provider in {'volcengine_ark', 'volcengine_las'}:
         model_name = 'doubao-seedream-5-0-lite-260128'
+    if not model_name and provider in {'openai', 'openai_compatible'}:
+        model_name = 'gpt-image-1'
     image_size = (os.environ.get('ASSET_IMAGE_SIZE') or str(merged.get('image_size') or '1024x1536')).strip()
     timeout_seconds = min(max(_safe_int(merged.get('image_timeout_seconds'), 90), 10), 300)
     configured = bool(api_url and api_key)
@@ -8433,12 +8688,7 @@ def _image_provider_healthcheck(payload=None, timeout_seconds=15):
         }
 
     api_url = (capabilities.get('image_provider_api_url') or '').strip()
-    api_key = (
-        os.environ.get('ASSET_IMAGE_API_KEY')
-        or os.environ.get('ARK_API_KEY')
-        or os.environ.get('LAS_API_KEY')
-        or ''
-    ).strip()
+    api_key = _resolve_image_provider_api_key(provider)
     if not api_url:
         return {
             'enabled': True,
@@ -9096,6 +9346,15 @@ COPYWRITER_MODEL = os.environ.get('COPYWRITER_MODEL', '').strip()
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '').strip()
 OPENAI_API_URL = os.environ.get('OPENAI_API_URL', '').strip()
 OPENAI_MODEL = os.environ.get('OPENAI_MODEL', '').strip()
+DOUBAO_API_KEY = os.environ.get('DOUBAO_API_KEY', '').strip()
+DOUBAO_API_URL = os.environ.get('DOUBAO_API_URL', '').strip()
+DOUBAO_MODEL = os.environ.get('DOUBAO_MODEL', '').strip()
+YUANBAO_API_KEY = os.environ.get('YUANBAO_API_KEY', '').strip()
+YUANBAO_API_URL = os.environ.get('YUANBAO_API_URL', '').strip()
+YUANBAO_MODEL = os.environ.get('YUANBAO_MODEL', '').strip()
+HUNYUAN_API_KEY = os.environ.get('HUNYUAN_API_KEY', '').strip()
+HUNYUAN_API_URL = os.environ.get('HUNYUAN_API_URL', '').strip()
+HUNYUAN_MODEL = os.environ.get('HUNYUAN_MODEL', '').strip()
 
 
 def _normalize_copywriter_api_url(raw_url=''):
@@ -9112,38 +9371,102 @@ def _normalize_copywriter_api_url(raw_url=''):
     return f'{url}/v1/chat/completions'
 
 
+def _infer_copywriter_provider(api_url='', model=''):
+    lowered = ' '.join([(api_url or '').strip().lower(), (model or '').strip().lower()])
+    if 'deepseek' in lowered:
+        return 'deepseek'
+    if any(token in lowered for token in ['doubao', 'volces', 'ark.cn-beijing']):
+        return 'doubao'
+    if any(token in lowered for token in ['hunyuan', 'yuanbao', 'tencent']):
+        return 'tencent_hunyuan'
+    if 'openai.com' in lowered or any(token in lowered for token in ['gpt-', 'o1', 'o3', 'o4']):
+        return 'openai_compatible'
+    return 'custom_openai_compatible'
+
+
+def _resolve_copywriter_api_key(api_url='', model=''):
+    provider = _infer_copywriter_provider(api_url, model)
+    if provider == 'deepseek':
+        return (DEEPSEEK_API_KEY or COPYWRITER_API_KEY or '').strip()
+    if provider == 'doubao':
+        return (DOUBAO_API_KEY or COPYWRITER_API_KEY or '').strip()
+    if provider == 'tencent_hunyuan':
+        return (YUANBAO_API_KEY or HUNYUAN_API_KEY or COPYWRITER_API_KEY or '').strip()
+    if provider == 'openai_compatible':
+        return (OPENAI_API_KEY or COPYWRITER_API_KEY or '').strip()
+    return (COPYWRITER_API_KEY or OPENAI_API_KEY or DEEPSEEK_API_KEY or DOUBAO_API_KEY or YUANBAO_API_KEY or HUNYUAN_API_KEY or '').strip()
+
+
+def _build_copywriter_runtime_entry(api_url='', model='', *, source='runtime_config'):
+    normalized_url = _normalize_copywriter_api_url(api_url)
+    normalized_model = (model or '').strip()
+    api_key = _resolve_copywriter_api_key(normalized_url, normalized_model)
+    provider = _infer_copywriter_provider(normalized_url, normalized_model)
+    if not normalized_url or not normalized_model or not api_key:
+        return {}
+    provider_label = {
+        'deepseek': f'DeepSeek：{normalized_model}',
+        'doubao': f'豆包：{normalized_model}',
+        'tencent_hunyuan': f'腾讯混元：{normalized_model}',
+        'openai_compatible': f'OpenAI兼容模型：{normalized_model}',
+        'custom_openai_compatible': f'可切换模型：{normalized_model}',
+    }.get(provider, normalized_model)
+    return {
+        'configured': True,
+        'provider': provider,
+        'api_key': api_key,
+        'api_url': normalized_url,
+        'model': normalized_model,
+        'label': provider_label,
+        'source': source,
+    }
+
+
+def _copywriter_runtime_candidates(payload=None):
+    runtime_config = _automation_runtime_config()
+    payload = payload or {}
+    primary_url = (payload.get('copywriter_api_url') or runtime_config.get('copywriter_api_url') or '').strip()
+    primary_model = (payload.get('copywriter_model') or runtime_config.get('copywriter_model') or '').strip()
+    backup_url = (payload.get('copywriter_backup_api_url') or runtime_config.get('copywriter_backup_api_url') or '').strip()
+    backup_model = (payload.get('copywriter_backup_model') or runtime_config.get('copywriter_backup_model') or '').strip()
+    third_url = (payload.get('copywriter_third_api_url') or runtime_config.get('copywriter_third_api_url') or '').strip()
+    third_model = (payload.get('copywriter_third_model') or runtime_config.get('copywriter_third_model') or '').strip()
+
+    candidates = []
+    seen = set()
+
+    def append_candidate(api_url, model, source):
+        entry = _build_copywriter_runtime_entry(api_url, model, source=source)
+        if not entry:
+            return
+        dedupe_key = (entry['api_url'], entry['model'])
+        if dedupe_key in seen:
+            return
+        seen.add(dedupe_key)
+        candidates.append(entry)
+
+    append_candidate(primary_url, primary_model, 'primary')
+    append_candidate(backup_url, backup_model, 'backup')
+    append_candidate(third_url, third_model, 'third')
+    append_candidate(COPYWRITER_API_URL, COPYWRITER_MODEL or primary_model or 'deepseek-chat', 'env_copywriter')
+    append_candidate(OPENAI_API_URL or 'https://api.openai.com/v1', OPENAI_MODEL or 'gpt-5.4', 'env_openai')
+    append_candidate(DOUBAO_API_URL, DOUBAO_MODEL, 'env_doubao')
+    append_candidate(YUANBAO_API_URL or HUNYUAN_API_URL, YUANBAO_MODEL or HUNYUAN_MODEL, 'env_tencent')
+    append_candidate(DEEPSEEK_API_URL or 'https://api.deepseek.com/v1', 'deepseek-chat', 'env_deepseek')
+    return candidates[:3]
+
+
 def _copywriter_runtime_config(payload=None):
+    candidates = _copywriter_runtime_candidates(payload=payload)
+    if candidates:
+        current = dict(candidates[0])
+        current['candidate_count'] = len(candidates)
+        current['fallback_mode'] = False
+        return current
     runtime_config = _automation_runtime_config()
     payload = payload or {}
     api_url_override = (payload.get('copywriter_api_url') or runtime_config.get('copywriter_api_url') or '').strip()
     model_override = (payload.get('copywriter_model') or runtime_config.get('copywriter_model') or '').strip()
-    if COPYWRITER_API_KEY:
-        return {
-            'configured': True,
-            'provider': 'custom_openai_compatible',
-            'api_key': COPYWRITER_API_KEY,
-            'api_url': _normalize_copywriter_api_url(COPYWRITER_API_URL or api_url_override or DEEPSEEK_API_URL),
-            'model': COPYWRITER_MODEL or model_override or 'deepseek-chat',
-            'label': f'可切换模型：{COPYWRITER_MODEL or model_override or "deepseek-chat"}',
-        }
-    if OPENAI_API_KEY:
-        return {
-            'configured': True,
-            'provider': 'openai_compatible',
-            'api_key': OPENAI_API_KEY,
-            'api_url': _normalize_copywriter_api_url(OPENAI_API_URL or api_url_override or 'https://api.openai.com/v1'),
-            'model': OPENAI_MODEL or model_override or 'gpt-5.4',
-            'label': f'OpenAI兼容模型：{OPENAI_MODEL or model_override or "gpt-5.4"}',
-        }
-    if DEEPSEEK_API_KEY:
-        return {
-            'configured': True,
-            'provider': 'deepseek',
-            'api_key': DEEPSEEK_API_KEY,
-            'api_url': _normalize_copywriter_api_url(DEEPSEEK_API_URL or api_url_override or 'https://api.deepseek.com/v1/chat/completions'),
-            'model': model_override or 'deepseek-chat',
-            'label': f'DeepSeek：{model_override or "deepseek-chat"}',
-        }
     return {
         'configured': False,
         'provider': 'local_fallback',
@@ -9151,6 +9474,8 @@ def _copywriter_runtime_config(payload=None):
         'api_url': _normalize_copywriter_api_url(api_url_override),
         'model': model_override,
         'label': '本地兜底生成',
+        'candidate_count': 0,
+        'fallback_mode': True,
     }
 
 
@@ -9203,27 +9528,43 @@ def _extract_json_object(text):
 
 
 def _call_copywriter(messages, *, temperature=1.0, top_p=0.9, timeout=40, extra_payload=None, runtime_override=None):
-    runtime = runtime_override or _copywriter_runtime_config()
-    if not runtime.get('configured'):
+    if runtime_override:
+        runtime_candidates = runtime_override if isinstance(runtime_override, list) else [runtime_override]
+    else:
+        runtime_candidates = _copywriter_runtime_candidates()
+    if not runtime_candidates:
         raise RuntimeError('copywriter_not_configured')
-    headers = {
-        'Authorization': f'Bearer {runtime["api_key"]}',
-        'Content-Type': 'application/json',
-    }
-    payload = {
-        'model': runtime['model'],
-        'messages': messages,
-        'temperature': temperature,
-        'top_p': top_p,
-    }
-    if isinstance(extra_payload, dict):
-        payload.update(extra_payload)
-    resp = requests.post(runtime['api_url'], json=payload, headers=headers, timeout=timeout)
-    resp.raise_for_status()
-    return {
-        'text': _extract_copywriter_text(resp.json()),
-        'runtime': runtime,
-    }
+    attempt_errors = []
+    for runtime in runtime_candidates:
+        headers = {
+            'Authorization': f'Bearer {runtime["api_key"]}',
+            'Content-Type': 'application/json',
+        }
+        payload = {
+            'model': runtime['model'],
+            'messages': messages,
+            'temperature': temperature,
+            'top_p': top_p,
+        }
+        if isinstance(extra_payload, dict):
+            payload.update(extra_payload)
+        try:
+            resp = requests.post(runtime['api_url'], json=payload, headers=headers, timeout=timeout)
+            resp.raise_for_status()
+            return {
+                'text': _extract_copywriter_text(resp.json()),
+                'runtime': runtime,
+                'attempt_errors': attempt_errors,
+            }
+        except Exception as exc:
+            attempt_errors.append({
+                'provider': runtime.get('provider') or '',
+                'model': runtime.get('model') or '',
+                'api_url': runtime.get('api_url') or '',
+                'error': str(exc)[:300],
+            })
+            continue
+    raise RuntimeError(f'copywriter_all_candidates_failed: {json.dumps(attempt_errors, ensure_ascii=False)}')
 
 def auto_humanize_text(content):
     """自动去AI化重写（保留原意）"""
@@ -10053,7 +10394,47 @@ def _normalize_title_candidate(title):
     return text[:24]
 
 
-def _build_title_option_pool(cards, title_skill_profile, topic, keywords='', copy_goal='balanced'):
+def _score_title_clickability(title='', route_key='', copy_goal='balanced'):
+    text = (title or '').strip()
+    if not text:
+        return 0
+    score = 50
+    length = len(text)
+    if 10 <= length <= 18:
+        score += 8
+    elif 7 <= length <= 22:
+        score += 4
+    else:
+        score -= 4
+
+    bonus_tokens = ['先', '别', '很多人', '为什么', '我', '你', '报告', '体检', 'FibroScan', '这3', '三件事', '第一反应']
+    score += sum(3 for token in bonus_tokens if token in text)
+    if any(token in text for token in ['？', '会怎么', '怎么办', '你会']):
+        score += 5
+    if any(token in text for token in ['先别', '别再', '别只', '别急']):
+        score += 5
+    if any(token in text for token in ['清单', '收好', '先存', '只看这3步', '确认这3件事']):
+        score += 4
+    if text.startswith('关于'):
+        score -= 8
+    if '这件事' in text:
+        score -= 5
+    if '我后来' in text and route_key not in {'story_first', 'report_emotion'}:
+        score -= 3
+
+    if copy_goal == 'viral_title':
+        if any(token in text for token in ['别', '很多人', '第一反应', '看偏了']):
+            score += 6
+    elif copy_goal == 'save_value':
+        if any(token in text for token in ['清单', '收好', '先存', '确认这3件事']):
+            score += 6
+    elif copy_goal == 'comment_engagement':
+        if any(token in text for token in ['你会', '怎么办', '怎么选', '？']):
+            score += 6
+    return score
+
+
+def _build_title_option_pool(cards, title_skill_profile, topic, keywords='', copy_goal='balanced', selected_copy_route=None):
     import re
 
     keyword_source = re.sub(r'带话题|#', ' ', keywords or '')
@@ -10070,6 +10451,10 @@ def _build_title_option_pool(cards, title_skill_profile, topic, keywords='', cop
     guidance_titles = title_guidance.get('titles') or []
 
     goal_title_templates = []
+    topic_text = ' '.join([(topic.topic_name or '').strip(), (keywords or '').strip()])
+    report_like = bool(re.search(r'体检|检查|报告|指标|FibroScan|福波看|肝弹|转氨酶', topic_text, re.I))
+    fibroscan_like = bool(re.search(r'FibroScan|福波看|肝弹', topic_text, re.I))
+    route_key = (selected_copy_route or {}).get('id', '') if isinstance(selected_copy_route, dict) else ''
     if copy_goal == 'viral_title':
         goal_title_templates = [
             f'{lead_keyword}别再拖了',
@@ -10095,6 +10480,51 @@ def _build_title_option_pool(cards, title_skill_profile, topic, keywords='', cop
             f'{lead_keyword}先看这几点',
             f'关于{lead_keyword}，我后来才想明白',
         ]
+    if report_like:
+        goal_title_templates = [
+            f'体检单里有{lead_keyword}，先别慌',
+            f'{lead_keyword}别只盯这一项',
+            f'看到{lead_keyword}，我先确认这3件事',
+        ] + goal_title_templates
+    if fibroscan_like:
+        goal_title_templates = [
+            '报告里有FibroScan，先别自己吓自己',
+            'FibroScan这项检查，很多人第一眼就看偏了',
+            '看到FibroScan，我现在会先看这几点',
+            '体检单上这项，我以前也总看不懂',
+            '看到FibroScan先别百度，我现在只看这3步',
+            '报告里写了FibroScan，我后来先问了这3句',
+        ] + goal_title_templates
+    if route_key == 'report_emotion':
+        goal_title_templates = [
+            f'拿到{lead_keyword}这项时，我第一反应真是慌',
+            f'{lead_keyword}写在报告上时，我后来先做了这件事',
+            f'体检单出现{lead_keyword}，先别一个人吓自己',
+        ] + goal_title_templates
+    elif route_key == 'report_decode':
+        goal_title_templates = [
+            f'{lead_keyword}不是看见就严重，先看这几点',
+            f'报告里这项很多人第一眼就看偏了',
+            f'{lead_keyword}结果怎么读，我后来先改了这个习惯',
+        ] + goal_title_templates
+    elif route_key == 'report_checklist':
+        goal_title_templates = [
+            f'看到{lead_keyword}，我现在会先确认这3件事',
+            f'体检单里出现{lead_keyword}，这份清单先收好',
+            f'{lead_keyword}复查前后，我只盯这3个变化',
+        ] + goal_title_templates
+    elif route_key == 'story_first':
+        goal_title_templates = [
+            f'{lead_keyword}这件事，我是真的拖过',
+            f'关于{lead_keyword}，我是后来才醒过来的',
+            f'{lead_keyword}别再一个人硬扛了',
+        ] + goal_title_templates
+    elif route_key == 'qa_first':
+        goal_title_templates = [
+            f'碰到{lead_keyword}，你第一步会做什么',
+            f'如果换成你，{lead_keyword}会怎么处理',
+            f'{lead_keyword}这种情况，你会先怎么选',
+        ] + goal_title_templates
 
     candidate_rows = []
     for index, card in enumerate(cards or []):
@@ -10120,6 +10550,20 @@ def _build_title_option_pool(cards, title_skill_profile, topic, keywords='', cop
 
     options = []
     seen = set()
+    tone_label = {
+        'report_emotion': '情绪共鸣',
+        'report_decode': '解读拆解',
+        'report_checklist': '收藏清单',
+        'story_first': '经历分享',
+        'qa_first': '问题互动',
+    }.get(route_key, '')
+    goal_reason = {
+        'viral_title': '更偏点击',
+        'save_value': '更偏收藏',
+        'comment_engagement': '更偏互动',
+        'trust_building': '更偏信任',
+        'balanced': '更偏均衡',
+    }.get(copy_goal, '更偏均衡')
     for row in candidate_rows:
         normalized_title = _normalize_title_candidate(row.get('title') or '')
         if not normalized_title:
@@ -10127,9 +10571,30 @@ def _build_title_option_pool(cards, title_skill_profile, topic, keywords='', cop
         if normalized_title in seen:
             continue
         seen.add(normalized_title)
+        source_label = row.get('source') or '系统推荐'
+        reason = ''
+        if source_label == '目标扩展':
+            reason = f'当前{goal_reason}'
+        elif '正文版本' in source_label:
+            reason = '和当前正文更贴'
+        elif '标题技能包' in source_label or title_skill_profile.get('label') == source_label:
+            reason = '更贴当前标题打法'
+        elif source_label == '原始话题':
+            reason = '保留原话题表达'
+        score = 78
+        if source_label == '目标扩展':
+            score = 90 if copy_goal == 'viral_title' else 86
+        elif '正文版本' in source_label:
+            score = 88
+        elif '标题技能包' in source_label:
+            score = 84
+        score += _score_title_clickability(normalized_title, route_key=route_key, copy_goal=copy_goal)
         options.append({
             'title': normalized_title,
-            'source': row.get('source') or '系统推荐',
+            'source': source_label,
+            'tone': tone_label,
+            'reason': reason,
+            'score': score,
         })
         if len(options) >= 6:
             break
@@ -10138,8 +10603,474 @@ def _build_title_option_pool(cards, title_skill_profile, topic, keywords='', cop
         options.append({
             'title': '分享笔记',
             'source': '系统兜底',
+            'tone': '',
+            'reason': '兜底标题',
+            'score': 60,
         })
-    return options
+    options.sort(key=lambda item: (item.get('score') or 0, item.get('source') == '正文版本 1'), reverse=True)
+    return options[:6]
+
+
+def _fallback_copy_agent_routes(topic, topic_text='', keywords='', persona_label='', scene_label='', direction_label='', product_label='', copy_goal='balanced'):
+    traits = _detect_topic_strategy_traits(topic.topic_name or topic_text, keywords, direction_label)
+    lead_keyword = _split_keywords(keywords or topic_text or topic.topic_name or '')
+    lead_keyword = (lead_keyword[0] if lead_keyword else (topic.topic_name or '这件事'))[:12]
+    persona = persona_label or '患者本人'
+    scene = scene_label or '体检异常提醒'
+
+    def route_item(key, label, why, title_examples, hook_example, body_strategy, ending_direction, image_hint):
+        return {
+            'id': key,
+            'label': label,
+            'why': why,
+            'title_examples': title_examples[:3],
+            'hook_example': hook_example,
+            'body_strategy': body_strategy,
+            'ending_direction': ending_direction,
+            'image_hint': image_hint,
+            'persona_hint': persona,
+            'scene_hint': scene,
+        }
+
+    if traits['report_like']:
+        return [
+            route_item(
+                'report_emotion',
+                '先接住“看到报告那一下慌”',
+                '检查/报告类内容，如果先讲结论，容易像说教；先把那一刻的情绪写出来，更像真人分享。',
+                ['报告里写了FibroScan，我第一反应是慌', '看到FibroScan，我后来先问了这3句', 'FibroScan这项检查，先别自己吓自己'],
+                '拿到报告那一刻，我真正慌的不是这几个字，而是一时不知道先看什么。',
+                '先写拿到报告的停顿和误判，再拆“不能只盯一个词/一项数字”的原因，最后给下一步动作。',
+                '结尾更适合问“你们复查时最先看哪一项？”',
+                '图片更适合报告解读卡或知识卡，不适合硬做大字报。',
+            ),
+            route_item(
+                'report_decode',
+                '先拆最容易看偏的点',
+                '这条路线更适合做收藏和转发，重点不是情绪，而是把判断顺序讲清楚。',
+                ['FibroScan不是看见就严重，先看这几点', '报告里有FibroScan，很多人第一眼就看偏了', 'FibroScan结果怎么读，我后来先改了这个习惯'],
+                '我后来才发现，很多人一看到报告里有这项检查，第一反应就已经跑偏了。',
+                '正文像“解释给朋友听”：先说最常见误解，再说真正该确认的点，最后落到复查动作。',
+                '结尾更适合问“如果是你，会先问医生什么？”',
+                '图片适合报告解读卡、检查流程卡、知识卡片。',
+            ),
+            route_item(
+                'report_checklist',
+                '直接给下一步清单',
+                '适合冲收藏，重点是让人看完知道下一步该干什么，而不是只记住名词。',
+                ['看到FibroScan，我现在会先确认这3件事', '体检单里出现FibroScan，这份清单先收好', 'FibroScan复查前后，我只盯这3个变化'],
+                '我后来给自己定的第一件事，不是继续搜，而是先把下一步要确认的问题列出来。',
+                '正文按步骤推进：先看前后变化，再问清检查目的，再定复查时间，最后再补个人经验。',
+                '结尾更适合问“你们一般是先复查，还是先继续观察？”',
+                '图片适合清单卡、时间轴清单、报告解读卡。',
+            ),
+        ]
+
+    if traits['myth_like']:
+        return [
+            route_item(
+                'myth_reverse',
+                '先纠正常见误解',
+                '适合冲点击，但要像真人提醒，不像标题党。',
+                [f'很多人把{lead_keyword}看偏了', f'{lead_keyword}这件事，别再想当然了', f'关于{lead_keyword}，最容易误会的其实是前面这一步'],
+                f'我后来才发现，大家对“{lead_keyword}”最常见的误解，恰好就是我自己以前也信过的。',
+                '先讲自己以前怎么误会，再拆为什么错，最后给正确动作。',
+                '结尾更适合问“你以前是不是也这么想？”',
+                '图片适合大字封面 + 知识卡片，不适合太多复杂结构。',
+            ),
+            route_item(
+                'myth_case',
+                '先讲一个差点踩坑的瞬间',
+                '这条更有代入感，适合让用户先停下来。',
+                [f'{lead_keyword}这件事，我差点也理解错了', f'那次看到{lead_keyword}，我一下警惕了', f'关于{lead_keyword}，我是差点踩坑才懂'],
+                '那次我其实差一点就按自己以前那套理解走下去了，后来才发现问题不在表面。',
+                '先讲踩坑瞬间，再讲真正应该怎么看，最后给用户一个更稳的判断方法。',
+                '结尾更适合问“如果是你，当时会怎么理解？”',
+                '图片适合备忘录/陪伴卡或大字封面。',
+            ),
+            route_item(
+                'myth_checklist',
+                '先给“别再这样理解”的清单',
+                '更适合收藏型误区内容，不用情绪太满。',
+                [f'{lead_keyword}这几种理解最容易出错', f'碰到{lead_keyword}，先别这么想', f'关于{lead_keyword}，这几件事最容易搞反'],
+                '如果重新来一次，我会先把最容易搞反的几件事写下来，不然真的很容易越看越乱。',
+                '用 3 个误区 + 3 个正解来组织，信息感更强。',
+                '结尾更适合问“你最容易卡在哪个误区？”',
+                '图片适合误区对照卡、知识卡片。',
+            ),
+        ]
+
+    return [
+        route_item(
+            'story_first',
+            '先讲真实经历和感受',
+            '更像真人说话，适合先建立代入感。',
+            [f'{lead_keyword}这件事，我是真的拖过', f'关于{lead_keyword}，我是后来才醒过来的', f'{lead_keyword}别再一个人硬扛了'],
+            f'我以前对“{lead_keyword}”的理解其实挺模糊的，真碰到的时候才知道这事不能硬拖。',
+            '先讲自己当时怎么想、怎么拖、后来怎么改，正文重点放具体动作。',
+            '结尾更适合问“如果是你，会先从哪一步开始？”',
+            '图片适合备忘录/陪伴卡或课堂笔记卡。',
+        ),
+        route_item(
+            'decode_first',
+            '先把关键点拆清楚',
+            '适合做信任和收藏，不容易显得像硬广。',
+            [f'{lead_keyword}先别急，先看这几点', f'关于{lead_keyword}，我现在会先改这一点', f'{lead_keyword}这几步真的别漏'],
+            f'后来我才知道，“{lead_keyword}”最怕的不是复杂，而是自己脑补太多。',
+            '正文先解释关键点，再给行动顺序，最后轻轻带出产品或服务。',
+            '结尾更适合问“你更想先解决哪一步？”',
+            '图片适合知识卡片或清单卡。',
+        ),
+        route_item(
+            'qa_first',
+            '先从用户最常问的问题切入',
+            '更适合把互动打开，也更容易贴近搜索场景。',
+            [f'碰到{lead_keyword}，你第一步会做什么', f'{lead_keyword}这种情况，你会先怎么选', f'如果换成你，{lead_keyword}会怎么处理'],
+            f'每次聊到“{lead_keyword}”，我都发现大家最纠结的其实不是答案，而是先后顺序。',
+            '正文先写问题，再给两个判断口径，最后落到你自己的做法。',
+            '结尾更适合问“换成你，你会怎么选？”',
+            '图片适合课堂笔记卡、清单卡。',
+        ),
+    ]
+
+
+def _fallback_image_agent_routes(topic_text='', copy_routes=None):
+    traits = _detect_topic_strategy_traits(topic_text, topic_text, topic_text)
+    routes = []
+
+    def add_route(key, label, why, family_key, image_skill, cover_style_type, inner_style_type, preview_focus):
+        routes.append({
+            'id': key,
+            'label': label,
+            'why': why,
+            'family_key': family_key,
+            'image_skill': image_skill,
+            'mode_key': 'smart_bundle',
+            'cover_style_type': cover_style_type,
+            'inner_style_type': inner_style_type,
+            'preview_focus': preview_focus,
+        })
+
+    if traits['report_like']:
+        add_route('report_decode', '报告解读卡', '适合看懂报告、指标和复查顺序，收藏和转发都会更稳。', 'medical_science', 'report_decode', 'medical_science', 'checklist_report', '封面突出“先别慌/先看哪项”，内页拆指标、趋势和下一步动作。')
+        add_route('knowledge_decode', '知识卡片', '适合把最容易看偏的点讲清楚，比大字报更有信息密度。', 'knowledge_card', 'classroom_focus', 'knowledge_card', 'knowledge_card', '封面放一个核心判断，内页拆 3 个关键点。')
+        add_route('checklist_action', '清单卡', '适合直接给“接下来怎么做”的执行清单。', 'checklist', 'save_worthy_cards', 'checklist', 'checklist_report', '封面做问题句，内页做步骤或报告解读表。')
+        return routes
+    if traits['story_like'] or traits['emotion_like']:
+        add_route('memo_story', '备忘录/陪伴卡', '适合第一人称经历和情绪转折，更像真人分享。', 'memo', 'story_atmosphere', 'memo_mobile', 'memo_classroom', '封面像手机备忘录，内页像课堂笔记或复盘。')
+        add_route('poster_story', '大字封面', '适合把那一下情绪和提醒先打出来，但内页仍要讲清楚。', 'poster', 'high_click_cover', 'poster_handwritten', 'knowledge_card', '封面抓情绪，内页拆原因和动作。')
+        add_route('knowledge_story', '课堂笔记卡', '适合边讲经历边讲判断逻辑，信息更稳。', 'knowledge_card', 'classroom_focus', 'knowledge_card', 'memo_classroom', '封面不要太满，内页更像老师划重点。')
+        return routes
+    add_route('poster_click', '大字封面', '适合冲点击，但只适合做封面，不适合整套都走大字报。', 'poster', 'high_click_cover', 'poster_bold', 'knowledge_card', '封面只打一条强结论，内页必须换成知识卡。')
+    add_route('knowledge_card', '知识卡片', '适合大多数解释型内容，稳定、不容易翻车。', 'knowledge_card', 'classroom_focus', 'knowledge_card', 'knowledge_card', '封面一句话，内页拆结构。')
+    add_route('checklist_cards', '清单卡', '适合“3点/步骤/不要漏”的收藏型内容。', 'checklist', 'save_worthy_cards', 'checklist', 'checklist_table', '封面做问题句，内页做清单/对照表。')
+    return routes
+
+
+def _build_copy_agent_analysis(topic, *, user_prompt='', persona_label='', scene_label='', direction_label='', product_label='', copy_goal='balanced'):
+    topic_text = ' '.join(filter(None, [topic.topic_name or '', topic.keywords or '', direction_label or '']))
+    routes = _fallback_copy_agent_routes(
+        topic,
+        topic_text=topic_text,
+        keywords=topic.keywords or '',
+        persona_label=persona_label,
+        scene_label=scene_label,
+        direction_label=direction_label,
+        product_label=product_label,
+        copy_goal=copy_goal,
+    )
+    image_routes = _fallback_image_agent_routes(topic_text=topic_text, copy_routes=routes)
+    return {
+        'summary': 'Agent 已先把内容写法和图片路线拆开，你先选路线，再生成文案和图片，会比直接一键乱出更稳。',
+        'recommended_copy_route_id': routes[0]['id'] if routes else '',
+        'recommended_image_route_id': image_routes[0]['id'] if image_routes else '',
+        'copy_routes': routes,
+        'image_routes': image_routes,
+    }
+
+
+def _image_agent_template_label(style_key=''):
+    key = (style_key or '').strip()
+    if key in {'medical_science', 'flowchart'}:
+        return '医学解释图'
+    if key in {'knowledge_card', 'myth_compare'}:
+        return '知识卡片'
+    if key in {'poster', 'poster_bold', 'poster_handwritten'}:
+        return '大字封面'
+    if key in {'checklist', 'checklist_table', 'checklist_timeline', 'checklist_report'}:
+        return '清单卡'
+    if key in {'memo', 'memo_mobile', 'memo_classroom'}:
+        return '备忘录/课堂笔记'
+    return '图文方案'
+
+
+def _build_image_agent_analysis_payload(topic, *, selected_content='', title_hint='', preferred_route=None):
+    recommendation_payload = _build_asset_style_recommendation_payload({
+        'title_hint': title_hint,
+        'selected_content': selected_content,
+    })
+    recommendation_items = recommendation_payload.get('items') or []
+    preferred_route = preferred_route or {}
+    plan_rows = []
+    seen = set()
+
+    def append_plan(style_key, reason='', image_skill='', route_label='', preview_focus=''):
+        style_meta = _asset_style_meta(style_key)
+        family_key = style_meta.get('family') or 'knowledge_card'
+        family_meta = {
+            'medical_science': '更适合检查解读、器官说明和“先看哪项”这类视觉说明书',
+            'knowledge_card': '更适合机制拆解、误区纠偏和重点卡片',
+            'poster': '更适合封面先抓眼球，但只建议封面强冲击，内页还是要讲清楚',
+            'checklist': '更适合步骤、对照、报告解读和收藏型清单',
+            'memo': '更适合经历分享、陪伴感和课堂笔记',
+        }.get(family_key, '更适合做成小红书图文卡片')
+        cover_style_type = style_key
+        inner_style_type = preferred_route.get('inner_style_type') if preferred_route.get('cover_style_type') == style_key else ''
+        if not inner_style_type:
+            if family_key == 'checklist':
+                inner_style_type = 'checklist_report'
+            elif family_key == 'poster':
+                inner_style_type = 'knowledge_card'
+            elif family_key == 'memo':
+                inner_style_type = 'memo_classroom'
+            elif family_key == 'medical_science':
+                inner_style_type = 'knowledge_card'
+            else:
+                inner_style_type = style_key
+        dedupe_key = (cover_style_type, inner_style_type)
+        if dedupe_key in seen:
+            return
+        seen.add(dedupe_key)
+        cover_focus = {
+            'medical_science': '封面重点是“先看什么/为什么重要”，不要做成广告牌。',
+            'knowledge_card': '封面一句话讲清主题，不要堆太多字。',
+            'poster': '封面只打一条强提醒，大字抓眼球，别把整篇内容都塞上去。',
+            'checklist': '封面先抛问题，内页再用步骤/对照表接住。',
+            'memo': '封面更像真实备忘录或课堂笔记，不要太像海报。',
+        }.get(family_key, '封面先抓住一个核心问题。')
+        inner_focus = {
+            'medical_science': '内页适合拆器官示意、误区对照、检查解释。',
+            'knowledge_card': '内页适合拆 3 个判断点或 3 个误区。',
+            'poster': '内页一定要切成知识卡，不要整套都走大字报。',
+            'checklist': '内页适合清单、对照、时间轴、报告逐项解读。',
+            'memo': '内页适合笔记感、复盘感、陪伴式解释。',
+        }.get(family_key, '内页要接住信息，不要只做装饰。')
+        plan_rows.append({
+            'id': f'{cover_style_type}__{inner_style_type}',
+            'label': _image_agent_template_label(cover_style_type),
+            'style_label': style_meta.get('label') or cover_style_type,
+            'family_key': family_key,
+            'why': reason or family_meta,
+            'image_skill': image_skill or (preferred_route.get('image_skill') or ''),
+            'generation_mode': preferred_route.get('mode_key') or 'smart_bundle',
+            'cover_style_type': cover_style_type,
+            'inner_style_type': inner_style_type,
+            'preview_focus': preview_focus or family_meta,
+            'cover_focus': cover_focus,
+            'inner_focus': inner_focus,
+            'route_label': route_label or '',
+        })
+
+    if preferred_route.get('cover_style_type'):
+        append_plan(
+            preferred_route.get('cover_style_type'),
+            reason=preferred_route.get('why') or preferred_route.get('preview_focus') or '',
+            image_skill=preferred_route.get('image_skill') or '',
+            route_label=preferred_route.get('label') or '',
+            preview_focus=preferred_route.get('preview_focus') or '',
+        )
+
+    for item in recommendation_items[:4]:
+        append_plan(
+            item.get('style_key') or '',
+            reason=item.get('reason') or '',
+            image_skill=preferred_route.get('image_skill') or '',
+            route_label=preferred_route.get('label') or '',
+        )
+
+    return {
+        'success': True,
+        'summary': '图片 Agent 已先根据当前正文和标题，拆出几条可执行的出图路线。先选路线，再预览素材或图文套组，会比直接乱出更稳。',
+        'plans': plan_rows[:4],
+        'recommended_plan_id': (plan_rows[0]['id'] if plan_rows else ''),
+    }
+
+
+def _build_reference_image_analysis_payload(topic, *, selected_content='', title_hint='', reference_asset_ids=None):
+    reference_rows = _resolve_reference_asset_rows(reference_asset_ids or '', limit=6)
+    if not reference_rows:
+        return {
+            'success': False,
+            'message': '请先选 1-3 张参考图，再让 Agent 分析。',
+            'plans': [],
+            'references': [],
+        }
+
+    merged = ' '.join(filter(None, [topic.topic_name or '', topic.keywords or '', selected_content or '', title_hint or '']))
+    traits = _detect_topic_strategy_traits(merged, merged, merged)
+    references = []
+    reference_titles = []
+    families = []
+    for item in reference_rows:
+        style_meta = _asset_style_meta(item.style_type_key or '')
+        reference_titles.append(item.title or style_meta.get('label') or '参考图')
+        families.append(style_meta.get('family') or 'reference_based')
+        references.append({
+            'id': item.id,
+            'title': item.title or '未命名参考图',
+            'subtitle': item.subtitle or '',
+            'preview_url': item.preview_url or '',
+            'style_type_key': item.style_type_key or '',
+            'style_type_label': style_meta.get('label') or item.style_type_key or '',
+            'library_type': item.library_type or '',
+            'tags': [part.strip() for part in (item.tags or '').split(',') if part.strip()][:6],
+        })
+
+    dominant_family = families[0] if families else 'reference_based'
+    if traits.get('report_like'):
+        inner_style = 'checklist_report'
+        summary_hint = '这批参考图会更适合走“参考图气质 + 报告解读结构”'
+    elif traits.get('story_like') or traits.get('emotion_like'):
+        inner_style = 'memo_classroom'
+        summary_hint = '这批参考图会更适合走“参考图气质 + 课堂笔记/陪伴感内页”'
+    else:
+        inner_style = 'knowledge_card'
+        summary_hint = '这批参考图会更适合走“参考图气质 + 知识卡片内页”'
+
+    plan_rows = [
+        {
+            'id': 'reference_follow',
+            'label': '贴近参考图气质',
+            'why': '优先继承你选中参考图的构图、留白和色彩气质，但不会直接照抄原图。',
+            'family_key': 'custom',
+            'cover_style_type': 'reference_based',
+            'inner_style_type': inner_style,
+            'cover_focus': '封面优先保留参考图的版心结构、视觉节奏和留白位置。',
+            'inner_focus': '内页按当前内容改写成更适合阅读的知识/报告结构，不会生搬硬套原图。',
+            'reference_logic': summary_hint,
+            'inherit_points': ['构图和留白', '色彩气质', '信息块节奏'],
+            'avoid_points': ['不要照抄原图文案', '不要保留原图水印/品牌', '不要把原图直接拼贴上去'],
+        },
+        {
+            'id': 'reference_plus_science',
+            'label': '参考图 + 医学解释卡',
+            'why': '保留参考图气质，同时把信息结构做得更适合医学科普和检查解读。',
+            'family_key': 'custom',
+            'cover_style_type': 'reference_based',
+            'inner_style_type': 'medical_science' if dominant_family == 'medical_science' else inner_style,
+            'cover_focus': '封面继续贴近参考图，但中部主体更强调解释关系和结构层级。',
+            'inner_focus': '内页更像说明书/拆解卡，适合把“是什么、怎么看、下一步做什么”讲清楚。',
+            'reference_logic': '适合你给的是医学科普封面、知识图解、器官示意这类参考图。',
+            'inherit_points': ['主体构图', '医学信息图语气', '局部放大/箭头关系'],
+            'avoid_points': ['不要做成纯商业海报', '不要只剩插画没有信息层级', '不要把标签堆太满'],
+        },
+        {
+            'id': 'reference_plus_collect',
+            'label': '参考图 + 收藏型清单',
+            'why': '如果你更想要小红书收藏感，这条会保留参考图气质，同时把信息收成步骤/清单。',
+            'family_key': 'custom',
+            'cover_style_type': 'reference_based',
+            'inner_style_type': 'checklist_report' if traits.get('report_like') else 'checklist_table',
+            'cover_focus': '封面继续借参考图的感觉，但标题和问题句会更直接。',
+            'inner_focus': '内页会更偏清单、对照或步骤，适合用户截图保存。',
+            'reference_logic': '适合你给的是风格参考，但最终仍希望内容更像可收藏的知识卡或报告解读卡。',
+            'inherit_points': ['留白和版心', '配色和质感', '封面氛围'],
+            'avoid_points': ['不要把封面做得太满', '不要把清单做成大段文字', '不要把参考图原样照搬'],
+        },
+    ]
+
+    return {
+        'success': True,
+        'summary': f'已分析 {len(references)} 张参考图：{(" / ".join(reference_titles[:3]))}。系统会先学它们的构图、留白和色彩气质，再按当前内容改写成更适合的小红书图文。',
+        'references': references,
+        'plans': plan_rows,
+        'recommended_plan_id': 'reference_follow',
+    }
+
+
+@app.route('/api/copy_agent_analysis', methods=['POST'])
+def copy_agent_analysis():
+    data = request.json or {}
+    registration_id = data.get('registration_id')
+    reg = Registration.query.get(registration_id)
+    if not reg:
+        return jsonify({'success': False, 'message': '报名信息不存在'})
+
+    topic = reg.topic
+    persona_key = (data.get('persona_key') or 'auto').strip()
+    custom_persona = (data.get('custom_persona') or '').strip()
+    scene_key = (data.get('scene_key') or 'auto').strip()
+    custom_scene = (data.get('custom_scene') or '').strip()
+    direction_key = (data.get('direction_key') or 'auto').strip()
+    custom_direction = (data.get('custom_direction') or '').strip()
+    product_key = (data.get('product_key') or 'auto').strip()
+    copy_goal = (data.get('copy_goal') or 'balanced').strip()
+    user_prompt = (data.get('user_prompt') or '').strip()
+
+    selected_persona_label = _resolve_copy_selection(COPY_PERSONA_OPTIONS, persona_key, custom_value=custom_persona)
+    selected_scene_label = _resolve_copy_selection(COPY_SCENE_OPTIONS, scene_key, custom_value=custom_scene)
+    selected_direction_label = _resolve_copy_direction_selection(direction_key, topic_text=(topic.topic_name or ''), user_prompt=user_prompt, custom_value=custom_direction)
+    selected_product_label, _ = _resolve_copy_product_selection(product_key, topic.topic_name or '')
+
+    analysis = _build_copy_agent_analysis(
+        topic,
+        user_prompt=user_prompt,
+        persona_label=selected_persona_label,
+        scene_label=selected_scene_label,
+        direction_label=selected_direction_label,
+        product_label=selected_product_label,
+        copy_goal=copy_goal,
+    )
+    return jsonify({
+        'success': True,
+        'analysis': analysis,
+    })
+
+
+@app.route('/api/image_agent_analysis', methods=['POST'])
+def image_agent_analysis():
+    data = request.json or {}
+    registration_id = data.get('registration_id')
+    reg = Registration.query.get(registration_id)
+    if not reg:
+        return jsonify({'success': False, 'message': '报名信息不存在'})
+
+    topic = reg.topic
+    preferred_route = {
+        'id': (data.get('image_route_id') or '').strip(),
+        'label': (data.get('image_route_label') or '').strip(),
+        'why': (data.get('image_route_why') or '').strip(),
+        'image_skill': (data.get('image_skill') or '').strip(),
+        'mode_key': (data.get('mode_key') or '').strip(),
+        'cover_style_type': (data.get('cover_style_type') or '').strip(),
+        'inner_style_type': (data.get('inner_style_type') or '').strip(),
+        'preview_focus': (data.get('preview_focus') or '').strip(),
+    }
+    payload = _build_image_agent_analysis_payload(
+        topic,
+        selected_content=(data.get('selected_content') or '').strip(),
+        title_hint=(data.get('title_hint') or '').strip(),
+        preferred_route=preferred_route,
+    )
+    return jsonify(payload)
+
+
+@app.route('/api/reference_image_analysis', methods=['POST'])
+def reference_image_analysis():
+    data = request.json or {}
+    registration_id = data.get('registration_id')
+    reg = Registration.query.get(registration_id)
+    if not reg:
+        return jsonify({'success': False, 'message': '报名信息不存在'})
+
+    topic = reg.topic
+    payload = _build_reference_image_analysis_payload(
+        topic,
+        selected_content=(data.get('selected_content') or '').strip(),
+        title_hint=(data.get('title_hint') or '').strip(),
+        reference_asset_ids=data.get('reference_asset_ids') or '',
+    )
+    return jsonify(payload)
 
 @app.route('/api/generate_copy', methods=['POST'])
 def generate_copy():
@@ -10157,6 +11088,8 @@ def generate_copy():
     copy_goal = (data.get('copy_goal') or 'balanced').strip()
     copy_skill = (data.get('copy_skill') or 'auto').strip()
     title_skill = (data.get('title_skill') or 'auto').strip()
+    agent_copy_route_id = (data.get('agent_copy_route_id') or '').strip()
+    agent_image_route_id = (data.get('agent_image_route_id') or '').strip()
 
     reg = Registration.query.get(registration_id)
     if not reg:
@@ -10215,6 +11148,17 @@ def generate_copy():
     skill_prompt_block = build_copy_skill_prompt_block(skill_profile)
     title_skill_profile = resolve_title_skill(title_skill, topic_text=topic_text, copy_goal=copy_goal, copy_skill_key=skill_profile.get('key') or '')
     title_skill_prompt_block = build_title_skill_prompt_block(title_skill_profile)
+    agent_analysis = _build_copy_agent_analysis(
+        topic,
+        user_prompt=user_prompt,
+        persona_label=selected_persona_label,
+        scene_label=selected_scene_label,
+        direction_label=selected_direction_label,
+        product_label=selected_product_label,
+        copy_goal=copy_goal,
+    )
+    selected_copy_route = next((item for item in (agent_analysis.get('copy_routes') or []) if item.get('id') == agent_copy_route_id), None)
+    selected_image_route = next((item for item in (agent_analysis.get('image_routes') or []) if item.get('id') == agent_image_route_id), None)
     reference_corpus_entries = _matching_corpus_snippets(','.join([topic_text, keywords]), limit=4)
     reference_corpus_block = _build_generate_copy_corpus_block(reference_corpus_entries, product_hint=product_hint)
 
@@ -10280,6 +11224,9 @@ def generate_copy():
 【每个版本的人设/场景/风格】
 {role_scene_block}
 
+【Agent已选写作路线】
+{json.dumps(selected_copy_route, ensure_ascii=False) if selected_copy_route else '未显式选择，按默认推荐路线生成'}
+
 【参考语料】（学习结构和语气，不得照抄）
 {knowledge_hint or '无'}
 
@@ -10334,6 +11281,7 @@ def generate_copy():
 
     cards = []
     generation_engine = 'local_fallback'
+    generation_runtime = None
     agent_mode = 'rule_based'
     model_attempted = False
     model_error_message = ''
@@ -10356,6 +11304,8 @@ def generate_copy():
                         'frequency_penalty': 0.25,
                     }
                 )
+                generation_runtime = single_pass_result.get('runtime') or generation_runtime
+                generation_engine = (generation_runtime or {}).get('provider') or generation_engine
                 agent_mode = 'single_pass'
                 content = single_pass_result.get('text') or ''
                 parts = re.split(r'===版本\s*\d+\s*===', content)
@@ -10413,6 +11363,8 @@ def generate_copy():
                     top_p=0.82,
                     timeout=35,
                 )
+                generation_runtime = planning_result.get('runtime') or generation_runtime
+                generation_engine = (generation_runtime or {}).get('provider') or generation_engine
                 plan_json = _extract_json_object(planning_result.get('text') or '')
                 plan_versions = (plan_json.get('versions') or []) if isinstance(plan_json, dict) else []
                 normalized_plans = []
@@ -10467,6 +11419,8 @@ def generate_copy():
                         'frequency_penalty': 0.3,
                     }
                 )
+                generation_runtime = writing_result.get('runtime') or generation_runtime
+                generation_engine = (generation_runtime or {}).get('provider') or generation_engine
                 agent_mode = 'planning_agent'
                 content = writing_result.get('text') or ''
                 parts = re.split(r'===版本\s*\d+\s*===', content)
@@ -10499,6 +11453,8 @@ def generate_copy():
                         top_p=0.9,
                         timeout=35,
                     )
+                    generation_runtime = rewrite_result.get('runtime') or generation_runtime
+                    generation_engine = (generation_runtime or {}).get('provider') or generation_engine
                     rewritten = rewrite_result.get('text') or ''
                     rewrite_parts = re.split(r'===版本\s*\d+\s*===', rewritten)
                     rewritten_cards = []
@@ -10533,6 +11489,7 @@ def generate_copy():
             skill_profile=skill_profile,
             title_skill_profile=title_skill_profile,
             reference_corpus_entries=reference_corpus_entries,
+            route_plan=selected_copy_route,
         )
         cards = fallback_result['cards']
 
@@ -10587,6 +11544,7 @@ def generate_copy():
             skill_profile=skill_profile,
             title_skill_profile=title_skill_profile,
             reference_corpus_entries=reference_corpus_entries,
+            route_plan=selected_copy_route,
         )
         cards = fallback_result['cards']
     versions = [card['copy_text'] for card in cards]
@@ -10597,6 +11555,7 @@ def generate_copy():
         topic,
         keywords=keywords,
         copy_goal=copy_goal,
+        selected_copy_route=selected_copy_route,
     )
 
     try:
@@ -10626,7 +11585,7 @@ def generate_copy():
             'generation_id': generation_id,
             'engine': generation_engine,
             'engine_label': (
-                f"当前使用：{_copywriter_runtime_config().get('label')}"
+                f"当前使用：{(generation_runtime or {}).get('label') or _copywriter_runtime_config().get('label')}"
                 if generation_engine != 'local_fallback' else
                 '当前使用：本地兜底生成'
             ),
@@ -10660,6 +11619,8 @@ def generate_copy():
             'goal': goal_profile['label'],
             'skill': skill_profile['label'],
             'title_skill': title_skill_profile['label'],
+            'selected_copy_route_label': selected_copy_route.get('label') if selected_copy_route else '',
+            'selected_image_route_label': selected_image_route.get('label') if selected_image_route else '',
         },
     })
 
@@ -10679,6 +11640,7 @@ def generate_local_copy(
     skill_profile=None,
     title_skill_profile=None,
     reference_corpus_entries=None,
+    route_plan=None,
 ):
     """本地生成文案（无 API 时使用）- 保留人设、场景、软植入和互动结构。"""
     output_count = 3
@@ -10717,50 +11679,37 @@ def generate_local_copy(
             lead_keyword=lead_keyword,
             topic_name=(topic.topic_name or lead_keyword),
         )
+        route_hook_example = (route_plan.get('hook_example') or '').strip() if isinstance(route_plan, dict) else ''
+        route_body_strategy = (route_plan.get('body_strategy') or '').strip() if isinstance(route_plan, dict) else ''
+        route_ending_direction = (route_plan.get('ending_direction') or '').strip() if isinstance(route_plan, dict) else ''
+
         hooks = skill_guidance.get('hooks') or [
             f'我以前一直以为“{lead_keyword}”没那么要紧，直到这次真的被提醒。',
             f'要不是最近碰到“{lead_keyword}”这个情况，我可能还会继续拖着。',
             f'关于“{lead_keyword}”，我后来才发现大家最容易忽略的不是治疗，而是前面那一步。',
         ]
+        if route_hook_example:
+            hooks = [route_hook_example] + [item for item in hooks if item != route_hook_example]
         title_templates = title_guidance.get('titles') or skill_guidance.get('titles') or [
             f'{lead_keyword}这件事我真拖过',
             f'关于{lead_keyword}，我终于想明白了',
             f'{lead_keyword}别再只会硬扛了',
         ]
-        skill_body_lines = skill_guidance.get('body_lines') or []
+        if isinstance(route_plan, dict) and route_plan.get('title_examples'):
+            title_templates = list(route_plan.get('title_examples') or []) + [item for item in title_templates if item not in (route_plan.get('title_examples') or [])]
         hook_text = hooks[index % len(hooks)]
         title_text = title_templates[index % len(title_templates)]
-        focus_text = f'我这次会重点讲“{prompt_focus}”这个点。' if prompt_focus else ''
-        scene_line = _local_copy_scene_line(scene_text, lead_keyword)
-        persona_line = _local_copy_persona_line(persona_text, lead_keyword)
-        action_lines = _local_copy_action_lines(lead_keyword, scene_text)
-        action_line = action_lines[index % len(action_lines)]
-        supporting_line = action_lines[(index + 1) % len(action_lines)]
-        product_line = _local_copy_product_line(product_label)
-        middle_line = _local_variant_middle(index, lead_keyword)
-
-        body_sections = [
-            scene_line,
-            persona_line,
-            middle_line,
-            hook_text,
-            skill_body_lines[index % len(skill_body_lines)] if skill_body_lines else '',
-            action_line,
-            supporting_line,
-            focus_text,
-        ]
-        body_sections.append(product_line)
-        if reference_hint:
-            body_sections.append(reference_hint)
-        body_sections.append('我现在更在意的，是把这件事一步步讲清楚，而不是靠几个专业词把人说懵。')
-        deduped_sections = []
-        seen_sections = set()
-        for row in body_sections:
-            text = (row or '').strip()
-            if not text or text in seen_sections:
-                continue
-            seen_sections.add(text)
-            deduped_sections.append(text)
+        body_sections = _build_local_copy_body_sections(
+            (route_plan or {}).get('id') if isinstance(route_plan, dict) else '',
+            lead_keyword=lead_keyword,
+            scene_text=scene_text,
+            persona_text=persona_text,
+            product_label=product_label,
+            prompt_focus=prompt_focus,
+            route_body_strategy=route_body_strategy,
+            reference_hint=reference_hint,
+            index=index,
+        )
 
         card = {
             'persona': persona_text,
@@ -10768,8 +11717,8 @@ def generate_local_copy(
             'insertion': product_label or '自动匹配',
             'title': title_text,
             'hook': hook_text,
-            'body': '\n'.join(deduped_sections).strip(),
-            'ending': endings[index % len(endings)],
+            'body': '\n'.join(body_sections).strip(),
+            'ending': route_ending_direction or endings[index % len(endings)],
             'strategy': strategies[index % len(strategies)],
         }
         card['copy_text'] = _render_generated_copy_card(card)
@@ -10847,12 +11796,14 @@ def generate_creative_pack():
     registration_id = data.get('registration_id')
     selected_content = (data.get('selected_content') or '').strip()
     preferred_style = (data.get('cover_style_type') or data.get('style_type') or '').strip()
+    reference_asset_ids = _parse_int_list(data.get('reference_asset_ids') or '', limit=20)
 
     reg = Registration.query.get(registration_id)
     if not reg:
         return jsonify({'success': False, 'message': '报名信息不存在'})
 
-    creative_pack = _build_creative_pack(reg.topic, selected_content, preferred_style=preferred_style)
+    reference_assets = _resolve_reference_asset_rows(reference_asset_ids, limit=20)
+    creative_pack = _build_creative_pack(reg.topic, selected_content, preferred_style=preferred_style, reference_assets=reference_assets)
     return jsonify({
         'success': True,
         'topic': reg.topic.topic_name,
@@ -10868,6 +11819,7 @@ def generate_graphic_article_bundle():
     cover_style_type = (data.get('cover_style_type') or data.get('style_type') or '').strip()
     inner_style_type = (data.get('inner_style_type') or '').strip()
     generation_mode = (data.get('generation_mode') or 'smart_bundle').strip() or 'smart_bundle'
+    reference_asset_ids = _parse_int_list(data.get('reference_asset_ids') or '', limit=20)
 
     reg = Registration.query.get(registration_id)
     if not reg:
@@ -10879,6 +11831,7 @@ def generate_graphic_article_bundle():
         cover_style_type=cover_style_type,
         inner_style_type=inner_style_type,
         generation_mode=generation_mode,
+        reference_assets=_resolve_reference_asset_rows(reference_asset_ids, limit=20),
     )
     return jsonify({
         'success': True,
@@ -12282,11 +13235,28 @@ def _dispatch_topic_idea_generation(payload, actor='system'):
 
 
 def _dispatch_asset_generation(payload, actor='system'):
+    max_remote_generation_attempts = 5
     runtime_config = _automation_runtime_config()
     registration_id = _safe_int(payload.get('registration_id'), 0)
     reg = Registration.query.get(registration_id) if registration_id else None
     if not reg:
         raise ValueError('报名信息不存在')
+
+    configured_provider = (os.environ.get('ASSET_IMAGE_PROVIDER') or str(runtime_config.get('image_provider') or 'svg_fallback')).strip() or 'svg_fallback'
+    if configured_provider != 'svg_fallback':
+        used_attempts = AssetGenerationTask.query.filter(
+            AssetGenerationTask.registration_id == reg.id,
+            or_(
+                AssetGenerationTask.source_provider != 'svg_fallback',
+                AssetGenerationTask.model_name.isnot(None) & (AssetGenerationTask.model_name != '')
+            )
+        ).count()
+        remaining_attempts = max(max_remote_generation_attempts - used_attempts, 0)
+        if remaining_attempts <= 0:
+            raise ValueError(f'该报名记录的真实图片生成次数已用完（最多 {max_remote_generation_attempts} 次），请先复用现有图片或改用模板预览。')
+    else:
+        used_attempts = 0
+        remaining_attempts = max_remote_generation_attempts
 
     selected_content = (payload.get('selected_content') or '').strip()
     product_meta = _product_profile_meta(payload.get('product_profile') or '')
@@ -12345,7 +13315,7 @@ def _dispatch_asset_generation(payload, actor='system'):
     task = AssetGenerationTask(
         registration_id=reg.id,
         topic_id=reg.topic_id,
-        source_provider=(os.environ.get('ASSET_IMAGE_PROVIDER') or str(runtime_config.get('image_provider') or 'svg_fallback')).strip() or 'svg_fallback',
+        source_provider=configured_provider,
         model_name=(os.environ.get('ASSET_IMAGE_MODEL') or str(runtime_config.get('image_model') or '')).strip()[:100],
         style_preset=style_preset,
         generation_mode=generation_mode,
@@ -12396,6 +13366,9 @@ def _dispatch_asset_generation(payload, actor='system'):
         'task_record': task,
         'task_id': async_task.id,
         'image_count': image_count,
+        'used_attempts': used_attempts + (1 if configured_provider != 'svg_fallback' else 0),
+        'remaining_attempts': max(remaining_attempts - (1 if configured_provider != 'svg_fallback' else 0), 0),
+        'max_attempts': max_remote_generation_attempts,
     }
 
 
@@ -14715,10 +15688,23 @@ def trigger_asset_generation_job():
         return jsonify({'success': False, 'message': str(exc)})
     return jsonify({
         'success': True,
-        'message': f'已创建图片生成任务，预计输出 {dispatched["image_count"]} 张',
+        'message': f'已创建图片生成任务，预计输出 {dispatched["image_count"]} 张。真实图片次数剩余 {dispatched["remaining_attempts"]}/{dispatched["max_attempts"]}',
         'task_id': dispatched['task_id'],
         'asset_task_id': dispatched['task_record'].id,
+        'remaining_attempts': dispatched['remaining_attempts'],
+        'used_attempts': dispatched['used_attempts'],
+        'max_attempts': dispatched['max_attempts'],
         'job': 'jobs.assets.generate',
+    })
+
+
+@app.route('/api/asset_generation_quota/<int:registration_id>')
+def asset_generation_quota(registration_id):
+    reg = Registration.query.get_or_404(registration_id)
+    return jsonify({
+        'success': True,
+        'registration_id': reg.id,
+        **_asset_generation_quota_payload(reg.id),
     })
 
 

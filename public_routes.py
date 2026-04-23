@@ -1237,6 +1237,34 @@ def register_public_routes(app, helpers):
             **context,
         )
 
+    @app.route('/api/public-assets')
+    def public_assets_api():
+        library_type = (request.args.get('library_type') or '').strip()
+        keyword = (request.args.get('keyword') or '').strip()
+        limit = min(max(int(request.args.get('limit') or 12), 1), 60)
+
+        query = AssetLibrary.query.filter_by(status='active').filter(
+            AssetLibrary.preview_url.isnot(None),
+            AssetLibrary.preview_url != '',
+            AssetLibrary.pool_status != 'archived',
+        )
+        if library_type:
+            query = query.filter_by(library_type=library_type)
+        if keyword:
+            for token in [item.strip() for item in keyword.replace('，', ',').replace('、', ',').split(',') if item.strip()][:5]:
+                query = query.filter(
+                    (AssetLibrary.title.contains(token)) |
+                    (AssetLibrary.subtitle.contains(token)) |
+                    (AssetLibrary.tags.contains(token)) |
+                    (AssetLibrary.product_name.contains(token)) |
+                    (AssetLibrary.product_indication.contains(token))
+                )
+        items = query.order_by(AssetLibrary.created_at.desc(), AssetLibrary.id.desc()).limit(limit).all()
+        return jsonify({
+            'success': True,
+            'items': [serialize_public_asset(item) for item in items],
+        })
+
     @app.route('/topic/<int:topic_id>')
     def topic_detail(topic_id):
         topic = Topic.query.get_or_404(topic_id)

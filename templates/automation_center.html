@@ -499,6 +499,23 @@
                 <div class="col-lg-3 d-flex align-items-end">
                     <button class="btn btn-outline-primary w-100" onclick="pingCopywriter()">测试文案模型</button>
                 </div>
+                <div class="col-lg-6">
+                    <label class="form-label subtle">备用文案模型 API URL</label>
+                    <input id="configCopywriterBackupApiUrl" class="form-control" placeholder="第2个模型不通时自动切到这里，如 https://api.openai.com/v1">
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label subtle">第2文案模型名</label>
+                    <input id="configCopywriterBackupModel" class="form-control" placeholder="如 gpt-5.4 / deepseek-chat">
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label subtle">第3文案模型名</label>
+                    <input id="configCopywriterThirdModel" class="form-control" placeholder="如 deepseek-chat / gpt-5.4">
+                </div>
+                <div class="col-lg-6">
+                    <label class="form-label subtle">第3文案模型 API URL</label>
+                    <input id="configCopywriterThirdApiUrl" class="form-control" placeholder="第1、第2个模型都不通时自动切到这里">
+                    <div class="subtle mt-1">系统会按顺序尝试 3 个 AI 模型，3 个都失败才回退本地 fallback。</div>
+                </div>
                 <div class="col-12"><hr class="my-1"></div>
                 <div class="col-lg-3">
                     <label class="form-label subtle">图片提供方</label>
@@ -507,6 +524,7 @@
                         <option value="{{ item.key }}">{{ item.key }}</option>
                         {% endfor %}
                     </select>
+                    <div class="subtle mt-1">如果要切到 OpenAI 图片模型或兼容网关，就在这里切 provider；官方 OpenAI 可复用 `OPENAI_API_KEY`。</div>
                 </div>
                 <div class="col-lg-5">
                     <label class="form-label subtle">图片接口预设</label>
@@ -531,6 +549,7 @@
                         <option value="{{ item.key }}">{{ item.label }}</option>
                         {% endfor %}
                     </datalist>
+                    <div class="subtle mt-1">支持自由填写模型名，不锁死在某一个供应商或版本。</div>
                 </div>
                 <div class="col-lg-2">
                     <label class="form-label subtle">图片尺寸</label>
@@ -2070,6 +2089,10 @@
             return {
                 copywriter_api_url: document.getElementById('configCopywriterApiUrl').value.trim(),
                 copywriter_model: document.getElementById('configCopywriterModel').value.trim(),
+                copywriter_backup_api_url: document.getElementById('configCopywriterBackupApiUrl').value.trim(),
+                copywriter_backup_model: document.getElementById('configCopywriterBackupModel').value.trim(),
+                copywriter_third_api_url: document.getElementById('configCopywriterThirdApiUrl').value.trim(),
+                copywriter_third_model: document.getElementById('configCopywriterThirdModel').value.trim(),
             };
         }
 
@@ -2373,6 +2396,10 @@
             document.getElementById('configCreatorSyncBodyJson').value = config.creator_sync_api_body_json || '';
             document.getElementById('configCopywriterApiUrl').value = config.copywriter_api_url || '';
             document.getElementById('configCopywriterModel').value = config.copywriter_model || '';
+            document.getElementById('configCopywriterBackupApiUrl').value = config.copywriter_backup_api_url || '';
+            document.getElementById('configCopywriterBackupModel').value = config.copywriter_backup_model || '';
+            document.getElementById('configCopywriterThirdApiUrl').value = config.copywriter_third_api_url || '';
+            document.getElementById('configCopywriterThirdModel').value = config.copywriter_third_model || '';
             document.getElementById('configImageProvider').value = config.image_provider || 'svg_fallback';
             document.getElementById('configImageApiBase').value = config.image_api_base || '';
             document.getElementById('configImageApiUrl').value = config.image_api_url || '';
