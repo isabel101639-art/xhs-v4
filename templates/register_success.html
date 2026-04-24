@@ -566,6 +566,10 @@
             font-size: 18px;
             line-height: 1.6;
         }
+        .overview-card.compact .value {
+            font-size: 13px;
+            line-height: 1.7;
+        }
         .title-option-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -2441,14 +2445,14 @@
                 : '读取中';
             const cards = [
                 { label: '当前标题', value: getSelectedTitleText() || '未选择', primary: true },
-                { label: '文案路线', value: copyRoute || '待选择' },
-                { label: '图片路线', value: imageRoute || '待选择' },
-                { label: '参考图策略', value: referenceRoute || (refs.length ? '已选参考图，待分析' : '未启用') },
-                { label: '参考图', value: refs.length ? refs.map((item) => item.title || '参考图').join(' / ') : '未选择' },
-                { label: '真实图片剩余', value: quotaText },
+                { label: '文案路线', value: copyRoute || '待选择', compact: true },
+                { label: '图片路线', value: imageRoute || '待选择', compact: true },
+                { label: '参考图策略', value: referenceRoute || (refs.length ? '已选参考图，待分析' : '未启用'), compact: true },
+                { label: '参考图', value: refs.length ? refs.map((item) => item.title || '参考图').join(' / ') : '未选择', compact: true },
+                { label: '真实图片剩余', value: quotaText, compact: true },
             ];
             wrap.innerHTML = cards.map((item) => `
-                <div class="overview-card ${item.primary ? 'primary' : ''}">
+                <div class="overview-card ${item.primary ? 'primary' : ''} ${item.compact ? 'compact' : ''}">
                     <div class="label">${escapeHtml(item.label)}</div>
                     <div class="value">${escapeHtml(item.value)}</div>
                 </div>

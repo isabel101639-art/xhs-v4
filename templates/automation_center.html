@@ -2002,6 +2002,23 @@
             `).join('');
         }
 
+        function syncImageProviderPresetSelection(config = {}) {
+            const select = document.getElementById('configImageProviderPreset');
+            if (!select) return;
+            const provider = String(config.image_provider || document.getElementById('configImageProvider')?.value || '').trim();
+            const apiBase = String(config.image_api_base || document.getElementById('configImageApiBase')?.value || '').trim();
+            const model = String(config.image_model || document.getElementById('configImageModel')?.value || '').trim();
+            const matched = (imageProviderPresets || []).find((item) => {
+                const preset = item.config || {};
+                return (
+                    String(preset.image_provider || '').trim() === provider &&
+                    String(preset.image_api_base || '').trim() === apiBase &&
+                    (!String(preset.image_model || '').trim() || String(preset.image_model || '').trim() === model)
+                );
+            });
+            select.value = matched?.key || '';
+        }
+
         function applyImageProviderPreset() {
             const select = document.getElementById('configImageProviderPreset');
             const current = (imageProviderPresets || []).find((item) => item.key === select?.value);
@@ -2410,6 +2427,7 @@
             renderStyleTypeOptions('configImageDefaultStyleType', styleTypes || [], config.image_default_style_type || 'medical_science');
             document.getElementById('configImageOptimizePromptMode').value = config.image_optimize_prompt_mode || 'standard';
             document.getElementById('configImagePromptSuffix').value = config.image_prompt_suffix || '';
+            syncImageProviderPresetSelection(config);
 
             const noteWrap = document.getElementById('automationConfigNote');
             if (noteWrap) {

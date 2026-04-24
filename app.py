@@ -3796,6 +3796,9 @@ def _copywriter_env_ready():
         (os.environ.get('COPYWRITER_API_KEY') or '').strip()
         or (os.environ.get('OPENAI_API_KEY') or '').strip()
         or (os.environ.get('DEEPSEEK_API_KEY') or '').strip()
+        or (os.environ.get('DOUBAO_API_KEY') or '').strip()
+        or (os.environ.get('YUANBAO_API_KEY') or '').strip()
+        or (os.environ.get('HUNYUAN_API_KEY') or '').strip()
     )
 
 
@@ -9357,13 +9360,20 @@ HUNYUAN_API_URL = os.environ.get('HUNYUAN_API_URL', '').strip()
 HUNYUAN_MODEL = os.environ.get('HUNYUAN_MODEL', '').strip()
 
 
-def _normalize_copywriter_api_url(raw_url=''):
+def _normalize_copywriter_api_url(raw_url='', provider='', model=''):
     url = (raw_url or '').strip()
     if not url:
         return ''
+    inferred_provider = provider or _infer_copywriter_provider(url, model)
+    if '/responses' in url or '/chat/completions' in url:
+        return url
     if '/chat/completions' in url:
         return url
     url = url.rstrip('/')
+    if inferred_provider in {'doubao', 'tencent_hunyuan'}:
+        if url.endswith('/api/v3'):
+            return f'{url}/responses'
+        return f'{url}/responses'
     if url.endswith('/v1'):
         return f'{url}/chat/completions'
     if url.endswith('/v1/chat'):
@@ -9398,10 +9408,10 @@ def _resolve_copywriter_api_key(api_url='', model=''):
 
 
 def _build_copywriter_runtime_entry(api_url='', model='', *, source='runtime_config'):
-    normalized_url = _normalize_copywriter_api_url(api_url)
+    provider = _infer_copywriter_provider(api_url, model)
+    normalized_url = _normalize_copywriter_api_url(api_url, provider=provider, model=model)
     normalized_model = (model or '').strip()
     api_key = _resolve_copywriter_api_key(normalized_url, normalized_model)
-    provider = _infer_copywriter_provider(normalized_url, normalized_model)
     if not normalized_url or not normalized_model or not api_key:
         return {}
     provider_label = {
@@ -9471,7 +9481,7 @@ def _copywriter_runtime_config(payload=None):
         'configured': False,
         'provider': 'local_fallback',
         'api_key': '',
-        'api_url': _normalize_copywriter_api_url(api_url_override),
+        'api_url': _normalize_copywriter_api_url(api_url_override, model=model_override),
         'model': model_override,
         'label': '本地兜底生成',
         'candidate_count': 0,
@@ -9504,6 +9514,56 @@ def _extract_copywriter_text(response_json):
                         parts.append(str(content.get('text') or ''))
         return '\n'.join(parts).strip()
     return ''
+
+
+def _messages_to_response_input(messages):
+    rows = []
+    for message in messages or []:
+        if not isinstance(message, dict):
+            continue
+        role = (message.get('role') or 'user').strip() or 'user'
+        content = message.get('content')
+        if isinstance(content, str):
+            text = content.strip()
+            if not text:
+                continue
+            rows.append({
+                'role': role,
+                'content': [{'type': 'input_text', 'text': text}],
+            })
+        elif isinstance(content, list):
+            parts = []
+            for item in content:
+                if isinstance(item, str) and item.strip():
+                    parts.append({'type': 'input_text', 'text': item.strip()})
+                elif isinstance(item, dict) and item.get('type') == 'text':
+                    text = str(item.get('text') or '').strip()
+                    if text:
+                        parts.append({'type': 'input_text', 'text': text})
+            if parts:
+                rows.append({'role': role, 'content': parts})
+    return rows
+
+
+def _build_copywriter_request_payload(runtime, messages, *, temperature=1.0, top_p=0.9, extra_payload=None):
+    api_url = (runtime.get('api_url') or '').strip()
+    if api_url.endswith('/responses'):
+        payload = {
+            'model': runtime['model'],
+            'input': _messages_to_response_input(messages),
+            'temperature': temperature,
+            'top_p': top_p,
+        }
+    else:
+        payload = {
+            'model': runtime['model'],
+            'messages': messages,
+            'temperature': temperature,
+            'top_p': top_p,
+        }
+    if isinstance(extra_payload, dict):
+        payload.update(extra_payload)
+    return payload
 
 
 def _extract_json_object(text):
@@ -9540,14 +9600,13 @@ def _call_copywriter(messages, *, temperature=1.0, top_p=0.9, timeout=40, extra_
             'Authorization': f'Bearer {runtime["api_key"]}',
             'Content-Type': 'application/json',
         }
-        payload = {
-            'model': runtime['model'],
-            'messages': messages,
-            'temperature': temperature,
-            'top_p': top_p,
-        }
-        if isinstance(extra_payload, dict):
-            payload.update(extra_payload)
+        payload = _build_copywriter_request_payload(
+            runtime,
+            messages,
+            temperature=temperature,
+            top_p=top_p,
+            extra_payload=extra_payload,
+        )
         try:
             resp = requests.post(runtime['api_url'], json=payload, headers=headers, timeout=timeout)
             resp.raise_for_status()
@@ -16151,6 +16210,7 @@ def init_db():
                 'product_category': 'VARCHAR(30)',
                 'product_name': 'VARCHAR(200)',
                 'product_indication': 'VARCHAR(200)',
+                'product_asset_ids': 'VARCHAR(500)',
                 'reference_asset_ids': 'VARCHAR(500)',
             },
             'asset_plan_draft': {
