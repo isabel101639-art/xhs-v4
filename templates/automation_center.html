@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>自动化中心 - 福瑞医科小红书任务</title>
+    <meta name="xhs-release-version" content="{{ (release_manifest or {}).get('release_version', '') }}">
+    <meta name="xhs-release-fingerprint" content="{{ (release_manifest or {}).get('release_fingerprint', '') }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <style>
         :root {
             --accent: #ef4e45;
@@ -79,6 +82,67 @@
             border: 1px dashed rgba(239, 78, 69, 0.18);
             background: #fffaf8;
             padding: 14px 16px;
+        }
+
+        .release-banner {
+            border-radius: 18px;
+            border: 1px solid rgba(239, 78, 69, 0.16);
+            background: linear-gradient(135deg, rgba(255, 247, 243, 0.96), rgba(255, 255, 255, 0.94));
+            box-shadow: 0 16px 34px rgba(209, 92, 69, 0.08);
+        }
+
+        .release-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border-radius: 999px;
+            background: rgba(239, 78, 69, 0.10);
+            color: var(--accent);
+            padding: 8px 14px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+
+        .release-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+        }
+
+        .release-kv {
+            border-radius: 14px;
+            border: 1px solid rgba(239, 78, 69, 0.10);
+            background: rgba(255, 255, 255, 0.92);
+            padding: 14px;
+        }
+
+        .release-kv .label {
+            color: #717784;
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .release-kv .value {
+            color: #1f2937;
+            font-size: 15px;
+            font-weight: 700;
+            word-break: break-word;
+        }
+
+        .release-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 12px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.94);
+            border: 1px solid rgba(239, 78, 69, 0.12);
+            font-size: 12px;
+            font-weight: 700;
+            color: #374151;
+            margin: 0 8px 8px 0;
         }
 
         .detail-card {
@@ -173,7 +237,7 @@
         }
     </style>
 </head>
-<body>
+<body data-release-manifest="release-manifest" data-release-version="{{ (release_manifest or {}).get('release_version', '') }}">
     <nav class="navbar navbar-dark mb-4">
         <div class="container">
             <a class="navbar-brand" href="/">← 返回首页</a>
@@ -198,6 +262,47 @@
                 </div>
             </div>
         </div>
+
+        <div id="releaseManifestWrap" class="panel release-banner p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                <div>
+                    <div class="release-badge mb-3">当前发版版本</div>
+                    <div class="section-title mb-1">{{ (release_manifest or {}).get('release_version', '-') }}</div>
+                    <div class="subtle">这块用来确认当前后台页面是否已经切到本次发版版本，避免“后端已更新、页面还是旧模板”或“页面更新了、接口还是旧版本”。</div>
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-outline-dark btn-sm" type="button" onclick="copyReleaseManifest()">复制版本 JSON</button>
+                </div>
+            </div>
+            <div class="release-grid mt-3">
+                <div class="release-kv">
+                    <div class="label">当前阶段</div>
+                    <div class="value">{{ (release_manifest or {}).get('release_stage_label', '-') }}</div>
+                </div>
+                <div class="release-kv">
+                    <div class="label">发版日期</div>
+                    <div class="value">{{ (release_manifest or {}).get('release_date', '-') }}</div>
+                </div>
+                <div class="release-kv">
+                    <div class="label">目标上线日</div>
+                    <div class="value">{{ (release_manifest or {}).get('release_target_date', '-') }}</div>
+                </div>
+                <div class="release-kv">
+                    <div class="label">版本指纹</div>
+                    <div class="value">{{ (release_manifest or {}).get('release_fingerprint', '-') }}</div>
+                </div>
+            </div>
+            <div class="mt-3">
+                {% for item in (release_manifest or {}).get('release_feature_items', []) %}
+                <span class="release-chip">
+                    <i class="bi {% if item.enabled %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>
+                    {{ item.label }}
+                </span>
+                {% endfor %}
+            </div>
+            <div id="releaseManifestMsg" class="subtle mt-2">页面版本标记和后端 release manifest 已经绑定，发版后可以直接用脚本或肉眼确认是否已切到当前版本。</div>
+        </div>
+        <script id="releaseManifestPayload" type="application/json">{{ (release_manifest or {})|tojson }}</script>
 
         <div id="systemAlertWrap" class="status-alert mb-4">
             <strong>系统提示</strong>
@@ -489,12 +594,12 @@
                 </div>
                 <div class="col-lg-6">
                     <label class="form-label subtle">文案模型 API URL</label>
-                    <input id="configCopywriterApiUrl" class="form-control" placeholder="如 https://api.deepseek.com/v1 或 https://api.openai.com/v1">
-                    <div class="subtle mt-1">支持 OpenAI 兼容地址。用户端不需要翻墙，只要你的服务端能调用即可。</div>
+                    <input id="configCopywriterApiUrl" class="form-control" placeholder="如 https://api.deepseek.com 或 https://api.openai.com/v1">
+                    <div class="subtle mt-1">支持 OpenAI 兼容地址。DeepSeek 新模型推荐直接配 `deepseek-v4-pro`，它默认就是思考模式。</div>
                 </div>
                 <div class="col-lg-3">
                     <label class="form-label subtle">文案模型名</label>
-                    <input id="configCopywriterModel" class="form-control" placeholder="如 deepseek-chat / gpt-5.4">
+                    <input id="configCopywriterModel" class="form-control" placeholder="如 deepseek-v4-pro / gpt-5.4">
                 </div>
                 <div class="col-lg-3 d-flex align-items-end">
                     <button class="btn btn-outline-primary w-100" onclick="pingCopywriter()">测试文案模型</button>
@@ -505,11 +610,11 @@
                 </div>
                 <div class="col-lg-3">
                     <label class="form-label subtle">第2文案模型名</label>
-                    <input id="configCopywriterBackupModel" class="form-control" placeholder="如 gpt-5.4 / deepseek-chat">
+                    <input id="configCopywriterBackupModel" class="form-control" placeholder="如 gpt-5.4 / deepseek-v4-pro">
                 </div>
                 <div class="col-lg-3">
                     <label class="form-label subtle">第3文案模型名</label>
-                    <input id="configCopywriterThirdModel" class="form-control" placeholder="如 deepseek-chat / gpt-5.4">
+                    <input id="configCopywriterThirdModel" class="form-control" placeholder="如 deepseek-v4-pro / gpt-5.4">
                 </div>
                 <div class="col-lg-6">
                     <label class="form-label subtle">第3文案模型 API URL</label>
@@ -613,7 +718,7 @@
             <div class="col-lg-6">
                 <div class="panel p-4 h-100">
                     <div class="section-title">热点导入</div>
-                    <div class="subtle mb-3">支持两种格式：1. JSON数组；2. 每行一条，按“关键词|标题|链接|点赞|收藏|评论|曝光量|作者|摘要”粘贴。</div>
+                    <div class="subtle mb-3">支持三种格式：1. JSON数组；2. 每行一条，按“关键词|标题|链接|点赞|收藏|评论|曝光量|作者|摘要”粘贴；3. 直接粘 CSV / 表格文本，表头可用“关键词,标题,链接,点赞量,收藏量,评论量,阅读量,作者,摘要,发布时间”。</div>
 
                     <div class="row g-3 mb-3">
                 <div class="col-md-4">
@@ -648,7 +753,16 @@
 
                     <div class="mb-3">
                         <label class="form-label subtle">粘贴热点数据</label>
-                        <textarea id="trendPayload" rows="10" class="form-control" placeholder='[{"keyword":"脂肪肝","title":"脂肪肝体检后别只看转氨酶","likes":320,"favorites":118,"comments":26,"views":6800}]'></textarea>
+                        <textarea id="trendPayload" rows="10" class="form-control" placeholder='[{"keyword":"脂肪肝","title":"脂肪肝体检后别只看转氨酶","likes":320,"favorites":118,"comments":26,"views":6800}]
+
+或直接粘 CSV / 表格：
+关键词,标题,链接,点赞量,收藏量,评论量,阅读量,作者,摘要,发布时间
+FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,8800,护肝小助手,这是一条爆款笔记摘要,2026-04-19 10:00:00'></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label subtle">或选择本地文件</label>
+                        <input id="trendPayloadFile" type="file" accept=".json,.csv,.txt,.tsv,text/csv,application/json,text/plain" class="form-control">
+                        <div class="subtle mt-2">支持 `json / csv / txt / tsv`。选中文件后会自动把内容读进上面的输入框，你可以先预览再导入。</div>
                     </div>
 
                     <button class="btn btn-outline-primary me-2" onclick="previewTrendsImport()">预览导入</button>
@@ -2136,6 +2250,15 @@
                 '"': '&quot;',
                 "'": '&#39;'
             }[char]));
+        }
+
+        async function copyReleaseManifest() {
+            const payload = document.getElementById('releaseManifestPayload')?.textContent || '{}';
+            const message = await copyPlainText(payload, '已复制当前版本 JSON');
+            const wrap = document.getElementById('releaseManifestMsg');
+            if (wrap) {
+                wrap.textContent = message;
+            }
         }
 
         async function copyPlainText(text, successMessage = '已复制') {
@@ -5131,6 +5254,35 @@
             }
         }
 
+        function loadTrendPayloadFile(event) {
+            const file = event?.target?.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                const text = String(reader.result || '');
+                const payloadInput = document.getElementById('trendPayload');
+                if (payloadInput) {
+                    payloadInput.value = text;
+                }
+                const batchNameInput = document.getElementById('trendBatchName');
+                if (batchNameInput && !String(batchNameInput.value || '').trim()) {
+                    const rawName = String(file.name || '').replace(/\.[^.]+$/, '').trim();
+                    batchNameInput.value = rawName || batchNameInput.value;
+                }
+                const msg = document.getElementById('trendImportMsg');
+                if (msg) {
+                    msg.textContent = `已读取文件：${file.name}，建议先点“预览导入”确认字段映射。`;
+                }
+            };
+            reader.onerror = () => {
+                const msg = document.getElementById('trendImportMsg');
+                if (msg) {
+                    msg.textContent = '读取文件失败，请改用复制粘贴或换一个 UTF-8 编码文件重试。';
+                }
+            };
+            reader.readAsText(file, 'utf-8');
+        }
+
         async function previewTrendsImport() {
             const payload = {
                 template_key: document.getElementById('trendTemplateKey').value,
@@ -6263,6 +6415,7 @@
         document.getElementById('assetJobReferenceAssetIds')?.addEventListener('input', () => {
             loadAssetJobReferenceSuggestions();
         });
+        document.getElementById('trendPayloadFile')?.addEventListener('change', loadTrendPayloadFile);
         document.getElementById('hotwordTimeWindow')?.addEventListener('change', syncHotwordDateState);
         document.getElementById('configHotwordTimeWindow')?.addEventListener('change', syncHotwordDateState);
         syncHotwordDateState();

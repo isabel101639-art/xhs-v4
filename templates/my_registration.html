@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>我的报名 - 福瑞医科小红书任务</title>
+    <title>我的任务 - 福瑞医科小红书任务</title>
+    <meta name="xhs-release-version" content="{{ (release_manifest or {}).get('release_version', '') }}">
+    <meta name="xhs-release-fingerprint" content="{{ (release_manifest or {}).get('release_fingerprint', '') }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link rel="stylesheet" href="/static/css/public_site.css">
@@ -33,6 +35,158 @@
         .platform-dy { background: #eef7ff; border-color: #c5e1ff; }
         .platform-video { background: #f2fff5; border-color: #c9f2d3; }
         .platform-weibo { background: #fff9ec; border-color: #ffe3a8; }
+        .task-step-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+        .task-step-chip.is-done {
+            background: #ecfdf3;
+            color: #127a45;
+        }
+        .task-meta {
+            font-size: 12px;
+            color: #6b7280;
+        }
+        .task-overview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        .task-overview-card {
+            border-radius: 18px;
+            border: 1px solid rgba(22,33,43,0.08);
+            background: rgba(255,255,255,0.96);
+            padding: 16px;
+            box-shadow: 0 12px 22px rgba(22,33,43,0.04);
+        }
+        .task-overview-card .label {
+            font-size: 11px;
+            color: #64748b;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            margin-bottom: 6px;
+        }
+        .task-overview-card .value {
+            font-size: 28px;
+            line-height: 1;
+            font-weight: 800;
+            color: #0f172a;
+        }
+        .task-overview-card .note {
+            font-size: 12px;
+            line-height: 1.7;
+            color: #64748b;
+            margin-top: 8px;
+        }
+        .release-public-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 10px;
+            margin: 16px 0 4px;
+        }
+        .release-public-card {
+            border-radius: 16px;
+            border: 1px solid rgba(22,33,43,0.08);
+            background: rgba(255,255,255,0.9);
+            padding: 12px 14px;
+        }
+        .release-public-card .label {
+            font-size: 11px;
+            color: #64748b;
+            font-weight: 700;
+            margin-bottom: 4px;
+            letter-spacing: 0.04em;
+        }
+        .release-public-card .value {
+            font-size: 13px;
+            color: #0f172a;
+            font-weight: 700;
+            word-break: break-word;
+        }
+        .task-overview-card.primary {
+            background: linear-gradient(180deg, rgba(255,245,243,0.98), rgba(255,250,248,0.96));
+            border-color: rgba(239,78,69,0.18);
+        }
+        .task-overview-card.primary .value {
+            color: var(--xhs-red);
+        }
+        .task-focus-card {
+            border-radius: 20px;
+            border: 1px solid rgba(239,78,69,0.16);
+            background: linear-gradient(180deg, rgba(255,248,245,0.98), rgba(255,255,255,0.96));
+            padding: 18px;
+            margin-bottom: 20px;
+            box-shadow: 0 14px 26px rgba(239,78,69,0.08);
+        }
+        .task-focus-card .focus-kicker {
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            color: var(--xhs-red);
+            margin-bottom: 8px;
+        }
+        .task-action-stack {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 10px;
+            min-width: 220px;
+        }
+        .task-action-note {
+            font-size: 12px;
+            line-height: 1.7;
+            color: #64748b;
+            text-align: right;
+            max-width: 260px;
+        }
+        .task-filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+        .task-filter-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(15,23,42,0.06);
+            color: #475569;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            border: 1px solid transparent;
+        }
+        .task-filter-chip.active {
+            background: rgba(239,78,69,0.10);
+            color: var(--xhs-red);
+            border-color: rgba(239,78,69,0.18);
+        }
+        .strategy-summary-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .strategy-summary-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 9px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            background: rgba(15,23,42,0.06);
+            color: #475569;
+        }
     
         /* MOBILE_PATCH */
         @media (max-width: 768px) {
@@ -41,11 +195,13 @@
             .table { font-size: 13px; }
             .btn { margin-top: 6px; }
             .platform-grid .platform-card { font-size: 11px; }
+            .task-action-stack { align-items: stretch; min-width: 100%; }
+            .task-action-note { text-align: left; max-width: none; }
         }
 
     </style>
 </head>
-<body class="public-body">
+<body class="public-body" data-release-manifest="release-manifest" data-release-version="{{ (release_manifest or {}).get('release_version', '') }}">
     <div class="public-shell">
     <nav class="navbar navbar-dark public-navbar mb-4">
         <div class="container public-container">
@@ -60,8 +216,22 @@
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
                 <div>
                     <div class="public-eyebrow mb-3"><i class="bi bi-person-lines-fill"></i> My Workspace</div>
-                    <h4 class="mb-2 fw-bold">查询我的报名</h4>
-                    <div class="public-note">输入组号和姓名，查看自己当前报名、提报状态和小红书数据表现。</div>
+                    <h4 class="mb-2 fw-bold">查询我的任务</h4>
+                    <div class="public-note">输入组号和姓名，查看当前任务进度、发布状态、数据同步情况和小红书表现。</div>
+                </div>
+            </div>
+            <div id="releasePublicSummary" class="release-public-summary">
+                <div class="release-public-card">
+                    <div class="label">当前版本</div>
+                    <div class="value">{{ (release_manifest or {}).get('release_version', '-') }}</div>
+                </div>
+                <div class="release-public-card">
+                    <div class="label">当前阶段</div>
+                    <div class="value">{{ (release_manifest or {}).get('release_stage_label', '-') }}</div>
+                </div>
+                <div class="release-public-card">
+                    <div class="label">目标上线日</div>
+                    <div class="value">{{ (release_manifest or {}).get('release_target_date', '-') }}</div>
                 </div>
             </div>
             <form method="POST">
@@ -91,26 +261,113 @@
                 </div>
             </form>
         </div>
+        <script id="releaseManifestPayload" type="application/json">{{ (release_manifest or {})|tojson }}</script>
 
         {% if error %}
         <div class="alert alert-warning">{{ error }}</div>
         {% endif %}
 
-        <!-- 多条报名记录显示列表 -->
+        <!-- 多条任务记录显示列表 -->
         {% if registrations %}
         <div class="card p-4">
-            <h5 class="mb-3">您的报名记录（共{{ registrations|length }}条）</h5>
+            <h5 class="mb-3">您的任务记录（共{{ registrations|length }}条）</h5>
+            {% if task_workspace_summary %}
+            <div class="task-overview-grid">
+                <div class="task-overview-card primary">
+                    <div class="label">总任务</div>
+                    <div class="value">{{ task_workspace_summary.total or 0 }}</div>
+                    <div class="note">当前已完成 {{ task_workspace_summary.completion_rate or 0 }}% 的任务闭环。</div>
+                </div>
+                <div class="task-overview-card">
+                    <div class="label">待推进</div>
+                    <div class="value">{{ task_workspace_summary.active_count or 0 }}</div>
+                    <div class="note">还没完全闭环的任务数。</div>
+                </div>
+                <div class="task-overview-card">
+                    <div class="label">已选策略</div>
+                    <div class="value">{{ (task_workspace_summary.counts or {}).get('strategy_ready', 0) }}</div>
+                    <div class="note">已经选好推荐组合，下一步直接去生成内容。</div>
+                </div>
+                <div class="task-overview-card">
+                    <div class="label">待发布</div>
+                    <div class="value">{{ (task_workspace_summary.counts or {}).get('pending_publish', 0) }}</div>
+                    <div class="note">文案和图片基本已准备好，优先去发布。</div>
+                </div>
+                <div class="task-overview-card">
+                    <div class="label">数据更新中</div>
+                    <div class="value">{{ (task_workspace_summary.counts or {}).get('syncing', 0) }}</div>
+                    <div class="note">已提交链接，系统正在同步表现数据。</div>
+                </div>
+                <div class="task-overview-card">
+                    <div class="label">已发布</div>
+                    <div class="value">{{ (task_workspace_summary.counts or {}).get('published', 0) }}</div>
+                    <div class="note">已经进入发布和复盘阶段的任务。</div>
+                </div>
+            </div>
+            {% if task_workspace_summary.focus_item %}
+            <div class="task-focus-card">
+                <div class="focus-kicker">建议优先处理</div>
+                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                    <div>
+                        <div class="fw-semibold mb-1">{{ task_workspace_summary.focus_item.topic_name }}</div>
+                        <div class="small text-muted mb-2">当前状态：{{ task_workspace_summary.focus_item.status_label }}</div>
+                        <div class="small text-muted">{{ task_workspace_summary.focus_message }}</div>
+                    </div>
+                    <a href="{{ task_workspace_summary.focus_item.task_url }}" target="{{ task_workspace_summary.focus_item.task_target or '_self' }}" class="btn btn-xhs">
+                        {{ task_workspace_summary.focus_item.action_label or '继续处理任务' }}
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+            {% endif %}
+            <div class="task-filter-bar">
+                <button type="button" class="task-filter-chip active" data-task-filter="all" onclick="applyTaskFilter('all')">全部</button>
+                <button type="button" class="task-filter-chip" data-task-filter="active" onclick="applyTaskFilter('active')">只看待处理</button>
+                <button type="button" class="task-filter-chip" data-task-filter="strategy_ready" onclick="applyTaskFilter('strategy_ready')">已选策略</button>
+                <button type="button" class="task-filter-chip" data-task-filter="pending_publish" onclick="applyTaskFilter('pending_publish')">待发布</button>
+                <button type="button" class="task-filter-chip" data-task-filter="syncing" onclick="applyTaskFilter('syncing')">数据更新中</button>
+                <button type="button" class="task-filter-chip" data-task-filter="published" onclick="applyTaskFilter('published')">已发布</button>
+            </div>
             {% for reg in registrations %}
             {% set tracking = tracking_summaries.get(reg.id) if tracking_summaries else None %}
-            {% set detail_url = reg.submission.xhs_link if reg.submission and reg.submission.xhs_link else ('/register_success/' ~ reg.id) %}
-            {% set detail_target = '_blank' if reg.submission and reg.submission.xhs_link else '_self' %}
-            <div class="border rounded p-3 mb-3">
-                <div class="d-flex justify-content-between align-items-center">
+            {% set task = task_summaries.get(reg.id) if task_summaries else None %}
+            <div class="border rounded p-3 mb-3 task-record-card" data-task-status="{{ task.status_key if task else 'unknown' }}">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
                     <div>
                         <h6>{{ reg.topic.topic_name }}</h6>
                         <p class="mb-1 text-muted">
                             <small>组号：{{ reg.group_num }} | 小红书：{{ reg.xhs_account }}</small>
                         </p>
+                        {% if task %}
+                        <div class="d-flex align-items-center gap-2 flex-wrap mt-2">
+                            <span class="badge {{ task.status_badge_class }}">{{ task.status_label }}</span>
+                            <span class="task-meta">{{ task.status_note }}</span>
+                        </div>
+                        <div class="d-flex gap-2 flex-wrap mt-2">
+                            {% for step in task.steps %}
+                            <span class="task-step-chip {% if step.done %}is-done{% endif %}">
+                                <i class="bi {% if step.done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>
+                                {{ step.label }}
+                            </span>
+                            {% endfor %}
+                        </div>
+                        <div class="task-meta mt-2">
+                            {% if task.has_selected_copy %}已确认文案方案{% elif task.has_strategy_plan %}已选好推荐策略{% else %}文案方案待确认{% endif %}
+                            {% if task.has_generated_asset %}
+                            ｜ 图片结果 {{ task.generated_asset_count or 0 }} 项 ｜ 最近图片状态：{{ task.latest_asset_status_label }}
+                            {% endif %}
+                            {% if task.tracking_status_label %}
+                            ｜ 跟踪状态：{{ task.tracking_status_label }}
+                            {% endif %}
+                        </div>
+                        {% if task.strategy_summary_items %}
+                        <div class="strategy-summary-row">
+                            {% for item in task.strategy_summary_items %}
+                            <span class="strategy-summary-chip">{{ item }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        {% endif %}
                         {% if reg.submission %}
                         <div class="platform-grid mt-2">
                             <div class="row g-2 mb-2">
@@ -155,10 +412,15 @@
                         </div>
                         {% endif %}
                     </div>
-                    <div>
+                    <div class="task-action-stack">
+                        {% if task %}
+                        <div class="task-action-note">
+                            下一步：{{ task.status_note }}
+                        </div>
+                        {% endif %}
                         {% if reg.submission and reg.submission.xhs_link %}
-                        <span class="badge bg-success">已提交</span>
-                        <a href="{{ detail_url }}" target="{{ detail_target }}" class="btn btn-sm btn-outline-primary ms-2">查看详情</a>
+                        <a href="{{ task.action_url if task else ('/register_success/' ~ reg.id) }}" target="{{ task.task_target if task else '_self' }}" class="btn btn-sm btn-outline-primary ms-2">{{ task.action_label if task else '查看任务详情' }}</a>
+                        <a href="{{ reg.submission.xhs_link }}" target="_blank" class="btn btn-sm btn-outline-dark ms-2">查看笔记</a>
                         <button type="button" class="btn btn-sm btn-primary ms-2"
                                 onclick="openUpdateDataModal({{ reg.id }}, {
                                     xhs_profile_link: {{ (reg.submission.xhs_profile_link or (tracking.profile_url if tracking else ''))|tojson }},
@@ -166,17 +428,8 @@
                                     xhs_views: {{ reg.submission.xhs_views or 0 }}, xhs_likes: {{ reg.submission.xhs_likes or 0 }}, xhs_favorites: {{ reg.submission.xhs_favorites or 0 }}, xhs_comments: {{ reg.submission.xhs_comments or 0 }}
                                 })">更新数据</button>
                         {% else %}
-                        <span class="badge bg-secondary">待提交</span>
-                        <a href="{{ detail_url }}" target="{{ detail_target }}" class="btn btn-sm btn-xhs ms-2">查看详情</a>
-<button type="button" class="btn btn-sm btn-primary ms-2"
-onclick='openUpdateDataModal({{ reg.id }}, {
-xhs_profile_link: {{ (reg.submission.xhs_profile_link or (tracking.profile_url if tracking else ""))|tojson if reg.submission or tracking else '""' }},
-xhs_link: {{ (reg.submission.xhs_link or "")|tojson if reg.submission else '""' }},
-xhs_views: {{ reg.submission.xhs_views or 0 if reg.submission else 0 }},
-xhs_likes: {{ reg.submission.xhs_likes or 0 if reg.submission else 0 }},
-xhs_favorites: {{ reg.submission.xhs_favorites or 0 if reg.submission else 0 }},
-xhs_comments: {{ reg.submission.xhs_comments or 0 if reg.submission else 0 }}
-})'>更新数据</button>
+                        <a href="{{ task.action_url if task else ('/register_success/' ~ reg.id) }}" target="{{ task.task_target if task else '_self' }}" class="btn btn-sm btn-xhs ms-2">{{ task.action_label if task else '查看任务详情' }}</a>
+                        <a href="{{ task.task_url if task else ('/register_success/' ~ reg.id) }}" target="{{ task.task_target if task else '_self' }}" class="btn btn-sm btn-outline-secondary ms-2">查看任务详情</a>
                         {% endif %}
                     </div>
                 </div>
@@ -325,6 +578,22 @@ xhs_comments: {{ reg.submission.xhs_comments or 0 if reg.submission else 0 }}
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let updateModal;
+        function applyTaskFilter(filterKey) {
+            const cards = Array.from(document.querySelectorAll('.task-record-card'));
+            const chips = Array.from(document.querySelectorAll('[data-task-filter]'));
+            chips.forEach((chip) => chip.classList.toggle('active', chip.getAttribute('data-task-filter') === filterKey));
+            cards.forEach((card) => {
+                const status = card.getAttribute('data-task-status') || '';
+                const activeMatch = ['not_generated', 'strategy_ready', 'generated', 'pending_publish', 'syncing'].includes(status);
+                const visible = (
+                    filterKey === 'all' ||
+                    (filterKey === 'active' && activeMatch) ||
+                    status === filterKey
+                );
+                card.style.display = visible ? '' : 'none';
+            });
+        }
+
         function openUpdateDataModal(regId, metrics) {
             document.getElementById('update_registration_id').value = regId;
             const fields = ['xhs_profile_link','xhs_link','xhs_views','xhs_likes','xhs_favorites','xhs_comments'];

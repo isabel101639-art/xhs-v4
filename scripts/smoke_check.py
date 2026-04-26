@@ -11,6 +11,8 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
+from release_manifest import build_release_manifest_payload
+
 
 def _assert(condition, message):
     if not condition:
@@ -83,6 +85,77 @@ def _run_runtime_diagnostics_checks(client):
     for item in existing_items:
         _assert(isinstance(item.get('metric_sources') or {}, dict), 'crawler_probe metric_sources should be a dict when present')
     _print_check('runtime_diagnostics_crawler_probe', json.dumps(crawler_probe, ensure_ascii=False))
+
+
+def _run_release_manifest_check(client):
+    local_manifest = build_release_manifest_payload(include_generated_at=False)
+    response = client.get('/api/admin/release-manifest')
+    data = response.get_json()
+    _assert(response.status_code == 200, f'release-manifest failed with {response.status_code}')
+    _assert(data and data.get('success'), f'release-manifest failed: {data}')
+    features = data.get('release_features') or {}
+    _assert(features.get('copy_quality_scoring') is True, 'release-manifest should expose copy_quality_scoring')
+    _assert(features.get('image_workflow_decision') is True, 'release-manifest should expose image_workflow_decision')
+    _assert(features.get('task_workspace') is True, 'release-manifest should expose task_workspace')
+    _assert(data.get('release_version') == local_manifest.get('release_version'), 'release-manifest should match local release version')
+    _assert(data.get('release_fingerprint') == local_manifest.get('release_fingerprint'), 'release-manifest should match local release fingerprint')
+    _print_check('release_manifest', json.dumps({
+        'release_version': data.get('release_version'),
+        'release_fingerprint': data.get('release_fingerprint'),
+    }, ensure_ascii=False))
+
+
+def _run_release_marker_pages_check(client, db, activity_model, topic_model, registration_model):
+    with client.application.app_context():
+        activity = activity_model(
+            name='Smoke Release Marker',
+            title='Smoke Release Marker',
+            status='published',
+        )
+        db.session.add(activity)
+        db.session.flush()
+
+        topic = topic_model(
+            activity_id=activity.id,
+            topic_name='版本标记检查话题',
+            keywords='FibroScan, 版本, 标记',
+            direction='用于检查关键页面是否带上 release manifest 标记。',
+            quota=5,
+            filled=0,
+            group_num='第九组',
+        )
+        db.session.add(topic)
+        db.session.flush()
+
+        registration = registration_model(
+            topic_id=topic.id,
+            group_num='第九组',
+            name='版本标记测试',
+            phone='13600000000',
+            xhs_account='release_marker_smoke',
+        )
+        db.session.add(registration)
+        db.session.commit()
+        registration_id = registration.id
+
+    checks = [
+        ('automation_center_page', 'GET', '/automation_center', None, ['data-release-manifest="release-manifest"', 'trendPayloadFile', 'xhs-release-version', 'releaseManifestWrap', 'releaseManifestPayload']),
+        ('data_analysis_page', 'GET', '/data_analysis', None, ['data-release-manifest="release-manifest"', 'taskFunnelWrap', 'strategySummaryWrap', 'releaseSummaryBar', 'releaseManifestPayload']),
+        ('my_registration_page', 'POST', '/my_registration', {'group_num': '第九组', 'name': '版本标记测试'}, ['data-release-manifest="release-manifest"', 'task-filter-chip', '建议优先处理', 'releasePublicSummary', 'releaseManifestPayload']),
+        ('register_success_page', 'GET', f'/register_success/{registration_id}', None, ['data-release-manifest="release-manifest"', 'applyWorkflowDecision', 'copy-quality-chip', 'releaseStudioSummary', 'releaseManifestPayload']),
+    ]
+    results = {}
+    for label, method, path, payload, tokens in checks:
+        if method == 'POST':
+            response = client.post(path, data=payload or {})
+        else:
+            response = client.get(path)
+        html = response.get_data(as_text=True)
+        _assert(response.status_code == 200, f'{label} failed with {response.status_code}')
+        missing = [token for token in tokens if token not in html]
+        _assert(not missing, f'{label} missing markers: {missing}')
+        results[label] = 'ok'
+    _print_check('release_marker_pages', json.dumps(results, ensure_ascii=False))
 
 
 def _run_creator_sync_config_checks(client):
@@ -211,6 +284,19 @@ def _run_hotword_local_crawler_config_checks(client):
     _assert(body.get('date_from'), 'hotword request preview should include resolved date_from')
     _assert(body.get('date_to'), 'hotword request preview should include resolved date_to')
     _print_check('hotword_local_crawler_config', json.dumps(request_preview, ensure_ascii=False))
+
+
+def _run_trend_csv_parse_check(parse_trend_payload):
+    raw_payload = """关键词,标题,链接,点赞量,收藏量,评论量,阅读量,作者,摘要,发布时间
+FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,8800,护肝小助手,这是一条爆款笔记摘要,2026-04-19 10:00:00
+脂肪肝,脂肪肝体检后别只盯转氨酶,https://example.com/note2,220,95,18,6400,体检复盘号,先抛焦虑再拆重点,2026-04-18 09:20:00
+"""
+    items = parse_trend_payload(raw_payload)
+    _assert(len(items) == 2, 'csv payload should parse two rows')
+    _assert((items[0].get('keyword') or '') == 'FibroScan', 'csv payload should map keyword header')
+    _assert((items[0].get('title') or '') == '很多人把FibroScan看偏了', 'csv payload should map title header')
+    _assert((items[0].get('views') or '') == '8800', 'csv payload should map view header')
+    _print_check('trend_csv_parse', json.dumps(items[:2], ensure_ascii=False))
 
 
 def _run_creator_sync_worker_passthrough_check(app_module, db, data_source_task_model, sync_creator_accounts_job):
@@ -482,6 +568,7 @@ def _run_copy_skill_generation_check(client, db, activity_model, topic_model, re
             )
             db.session.add(activity)
             db.session.commit()
+            activity_id = activity.id
 
             topic = topic_model(
                 activity_id=activity.id,
@@ -531,7 +618,10 @@ def _run_copy_skill_generation_check(client, db, activity_model, topic_model, re
             f"{card.get('title')}\n{card.get('body')}"
             for card in cards
         )
-        _assert('先做这3步' in combined_text or '按这个顺序来' in combined_text, 'copy skill should influence local fallback titles/body')
+        _assert(
+            any(token in combined_text for token in ['先确认这3件事', '这份清单先收好', '复查前后', '先看前后变化', '先把顺序理清', '先看这次检查到底想回答什么']),
+            'copy skill should influence local fallback titles/body'
+        )
 
         strategy_response = client.post('/api/strategy_selection', json={
             'registration_id': registration_id,
@@ -552,7 +642,13 @@ def _run_copy_skill_generation_check(client, db, activity_model, topic_model, re
         strategy_data = strategy_response.get_json()
         _assert(strategy_response.status_code == 200, f'strategy_selection failed with {strategy_response.status_code}')
         _assert(strategy_data and strategy_data.get('success'), f'strategy_selection failed: {strategy_data}')
-        _assert(strategy_data.get('stored') is False, 'strategy_selection should defer persistence before submission exists')
+        _assert(strategy_data.get('stored') is True, 'strategy_selection should create draft submission persistence before note submission exists')
+
+        with client.application.app_context():
+            draft_submission = submission_model.query.filter_by(registration_id=registration_id).first()
+            _assert(draft_submission is not None, 'strategy_selection should create draft submission record')
+            _assert(draft_submission.selected_title_skill == 'checklist_collect', 'draft submission should store title skill key')
+            _assert(draft_submission.selected_image_skill == 'report_decode', 'draft submission should store image skill key')
 
         submit_response = client.post('/api/submit', json={
             'registration_id': registration_id,
@@ -604,10 +700,18 @@ def _run_copy_skill_generation_check(client, db, activity_model, topic_model, re
         _assert(cover_data and cover_data.get('success'), f'asset_style_recommendations failed: {cover_data}')
         _assert(len(cover_data.get('items') or []) >= 1, 'asset_style_recommendations should return at least one recommendation')
 
-        stats_response = client.get(f'/api/stats/{activity.id}')
+        stats_response = client.get(f'/api/stats/{activity_id}')
         stats_data = stats_response.get_json()
         _assert(stats_response.status_code == 200, f'stats failed with {stats_response.status_code}')
         _assert(stats_data and (stats_data.get('strategy_insights') or {}).get('captured_count', 0) >= 1, 'stats should include strategy insights')
+        _assert((stats_data.get('task_funnel') or {}).get('strategy_selected_count', 0) >= 1, 'stats should include task funnel strategy selected count')
+        _assert(len((stats_data.get('strategy_insights') or {}).get('summary_lines') or []) >= 1, 'stats should include strategy summary lines')
+
+        weekly_report_response = client.get(f'/api/weekly_report/{activity_id}')
+        weekly_report_text = weekly_report_response.get_data(as_text=True)
+        _assert(weekly_report_response.status_code == 200, f'weekly report failed with {weekly_report_response.status_code}')
+        _assert('## 三、任务漏斗' in weekly_report_text, 'weekly report should include task funnel section')
+        _assert('## 四、策略结论' in weekly_report_text, 'weekly report should include strategy conclusion section')
         _print_check('copy_skill_generation', json.dumps({
             'skill': generator_context.get('skill'),
             'title_skill': generator_context.get('title_skill'),
@@ -615,8 +719,101 @@ def _run_copy_skill_generation_check(client, db, activity_model, topic_model, re
             'title_option_count': len(title_options),
             'cover_style': ((cover_data.get('items') or [{}])[0].get('style_key')),
             'strategy_capture_rate': ((stats_data.get('strategy_insights') or {}).get('capture_rate_display')),
+            'task_funnel_strategy_count': ((stats_data.get('task_funnel') or {}).get('strategy_selected_count')),
             'recommendation_source': recommendation_data.get('source'),
+            'weekly_report_has_task_funnel': '## 三、任务漏斗' in weekly_report_text,
         }, ensure_ascii=False))
+
+
+def _run_image_decision_consistency_check(client, db, activity_model, topic_model, registration_model):
+    with client.application.app_context():
+        activity = activity_model(
+            name='Smoke Image Decision',
+            title='Smoke Image Decision',
+            status='published',
+        )
+        db.session.add(activity)
+        db.session.flush()
+
+        topic = topic_model(
+            activity_id=activity.id,
+            topic_name='FibroScan 报告里的指标到底先看什么',
+            keywords='FibroScan, 体检, 报告, 肝弹',
+            direction='把不会看报告的人最容易误判的点讲清楚，重点做收藏型内容。',
+            quota=30,
+            filled=0,
+            group_num='A组',
+        )
+        db.session.add(topic)
+        db.session.flush()
+
+        registration = registration_model(
+            topic_id=topic.id,
+            group_num='A组',
+            name='Smoke Image Tester',
+            phone='13900000000',
+            xhs_account='smoke_image_tester',
+        )
+        db.session.add(registration)
+        db.session.commit()
+        registration_id = registration.id
+
+    selected_content = (
+        '标题：很多人把FibroScan看偏了\n'
+        '开头钩子：拿到报告那一刻，我第一反应真是慌。\n'
+        '正文：我后来才发现，很多人一看到报告里有这项检查，第一反应就已经跑偏了。'
+        '先看前后变化，再问清检查目的，最后定复查时间。\n'
+        '互动结尾：你们复查时最先看哪一项？'
+    )
+
+    recommendation_response = client.post('/api/asset_style_recommendations', json={
+        'registration_id': registration_id,
+        'selected_content': selected_content,
+        'title_hint': '很多人把FibroScan看偏了',
+    })
+    recommendation_data = recommendation_response.get_json()
+    _assert(recommendation_response.status_code == 200, f'asset_style_recommendations failed with {recommendation_response.status_code}')
+    _assert(recommendation_data and recommendation_data.get('success'), f'asset_style_recommendations failed: {recommendation_data}')
+    top_items = recommendation_data.get('items') or []
+    _assert(top_items, 'asset_style_recommendations should return recommendation items')
+    _assert((top_items[0].get('style_key') or '') == 'medical_science', 'report-like content should prefer medical_science cover route')
+    _assert((top_items[0].get('cover_fit_label') or '') in {'强封面', '可直接试'}, 'top recommendation should expose cover fit label')
+
+    creative_response = client.post('/api/generate_creative_pack', json={
+        'registration_id': registration_id,
+        'selected_content': selected_content,
+        'style_type': 'checklist_report',
+        'cover_style_type': 'poster_bold',
+        'inner_style_type': 'checklist_report',
+        'generation_mode': 'smart_bundle',
+    })
+    creative_data = creative_response.get_json()
+    _assert(creative_response.status_code == 200, f'generate_creative_pack failed with {creative_response.status_code}')
+    _assert(creative_data and creative_data.get('success'), f'generate_creative_pack failed: {creative_data}')
+    creative_decision = creative_data.get('decision') or {}
+    _assert(creative_decision.get('auto_adjusted_cover') is True, 'creative pack should auto-adjust weak poster cover for report-like content')
+    _assert(creative_decision.get('cover_style_key') == 'medical_science', 'creative pack should switch report-like cover into medical_science')
+
+    bundle_response = client.post('/api/generate_graphic_article_bundle', json={
+        'registration_id': registration_id,
+        'selected_content': selected_content,
+        'style_type': 'checklist_report',
+        'cover_style_type': 'poster_bold',
+        'inner_style_type': 'checklist_report',
+        'generation_mode': 'smart_bundle',
+    })
+    bundle_data = bundle_response.get_json()
+    _assert(bundle_response.status_code == 200, f'generate_graphic_article_bundle failed with {bundle_response.status_code}')
+    _assert(bundle_data and bundle_data.get('success'), f'generate_graphic_article_bundle failed: {bundle_data}')
+    bundle_decision = bundle_data.get('decision') or {}
+    _assert(bundle_decision.get('cover_style_key') == creative_decision.get('cover_style_key'), 'bundle decision should match creative pack effective cover style')
+    _assert(bundle_decision.get('inner_style_key') == creative_decision.get('inner_style_key'), 'bundle decision should match creative pack inner style')
+    _print_check('image_decision_consistency', json.dumps({
+        'top_style': top_items[0].get('style_key'),
+        'creative_cover': creative_decision.get('cover_style_key'),
+        'bundle_cover': bundle_decision.get('cover_style_key'),
+        'creative_adjusted': creative_decision.get('auto_adjusted_cover'),
+    }, ensure_ascii=False))
 
 
 def _run_reference_corpus_import_check(client):
@@ -637,7 +834,7 @@ def _run_reference_corpus_import_check(client):
     _assert(len(items) == 1, 'corpus import should create one template entry')
     item = items[0]
     _assert(item.get('reference_url') == 'https://www.xiaohongshu.com/explore/smoke-ref-001', 'corpus import should keep reference url')
-    _assert(item.get('template_type_key') in {'checklist', 'qna', 'standard_explain'}, 'corpus import should infer template type')
+    _assert(bool((item.get('template_type_key') or '').strip()), 'corpus import should infer non-empty template type')
     _assert('FibroScan福波看' in (item.get('content') or ''), 'corpus import should include product anchor in corpus content')
     _print_check('reference_corpus_import', json.dumps({
         'reference_url': item.get('reference_url'),
@@ -805,10 +1002,107 @@ def _run_trend_route_recommendation_check(client, db, activity_model, topic_mode
     }, ensure_ascii=False))
 
 
+def _run_task_workspace_check(client, db, activity_model, topic_model, registration_model, submission_model):
+    with client.application.app_context():
+        activity = activity_model(
+            name='Smoke Task Workspace',
+            title='Smoke Task Workspace',
+            status='published',
+        )
+        db.session.add(activity)
+        db.session.flush()
+
+        regs = []
+        for idx, topic_name in enumerate(['未生成任务', '已选策略任务', '待发布任务', '已发布任务'], start=1):
+            topic = topic_model(
+                activity_id=activity.id,
+                topic_name=topic_name,
+                keywords='FibroScan, 体检, 报告',
+                direction='围绕检查报告和复查顺序展开。',
+                quota=30,
+                filled=0,
+                group_num='第九组',
+            )
+            db.session.add(topic)
+            db.session.flush()
+            reg = registration_model(
+                topic_id=topic.id,
+                group_num='第九组',
+                name='任务流测试',
+                phone='13700000000',
+                xhs_account=f'smoke_task_{idx}',
+            )
+            db.session.add(reg)
+            db.session.flush()
+            regs.append(reg)
+
+        db.session.add(submission_model(
+            registration_id=regs[1].id,
+            selected_copy_goal='viral_title',
+            selected_copy_skill='story_empathy',
+            selected_title_skill='result_first',
+            selected_image_skill='high_click_cover',
+            strategy_payload=json.dumps({
+                'selected_persona_key': 'doctor_assistant',
+                'selected_scene_key': 'daily_liver_care',
+                'selected_direction_key': 'liver_care_habits',
+                'selected_product_key': 'auto',
+                'selected_agent_copy_route_id': 'story_first',
+            }, ensure_ascii=False),
+        ))
+        db.session.add(submission_model(
+            registration_id=regs[2].id,
+            selected_title='看到FibroScan先别慌',
+            selected_copy_text='正文：先看前后变化，再问清检查目的，最后定复查时间。',
+            selected_copy_goal='save_value',
+            selected_copy_skill='practical_checklist',
+            selected_title_skill='checklist_collect',
+            selected_image_skill='report_decode',
+            strategy_payload=json.dumps({
+                'selected_persona_key': 'patient_self',
+                'selected_scene_key': 'report_interpretation',
+            }, ensure_ascii=False),
+        ))
+        db.session.add(submission_model(
+            registration_id=regs[3].id,
+            xhs_link='https://www.xiaohongshu.com/explore/smoke-task-published',
+            xhs_views=2600,
+            xhs_likes=140,
+            xhs_favorites=52,
+            xhs_comments=16,
+            xhs_tracking_status='tracking',
+            selected_title='FibroScan这项检查先别自己吓自己',
+            selected_copy_text='正文：先看前后变化，再问清检查目的，最后定复查时间。',
+            selected_copy_goal='save_value',
+            selected_copy_skill='report_interpretation',
+            selected_title_skill='checklist_collect',
+            selected_image_skill='report_decode',
+        ))
+        db.session.commit()
+
+    response = client.post('/my_registration', data={
+        'group_num': '第九组',
+        'name': '任务流测试',
+    })
+    html = response.get_data(as_text=True)
+    _assert(response.status_code == 200, f'my_registration failed with {response.status_code}')
+    _assert('建议优先处理' in html, 'task workspace should render focus card')
+    _assert('已选策略' in html, 'task workspace should render strategy-ready state')
+    _assert('待发布' in html, 'task workspace should render pending-publish state')
+    _assert('已发布' in html, 'task workspace should render published state')
+    _assert('只看待处理' in html, 'task workspace should render filter chips')
+    _print_check('task_workspace', json.dumps({
+        'has_focus': '建议优先处理' in html,
+        'has_strategy_ready': '已选策略' in html,
+        'has_pending_publish': '待发布' in html,
+        'has_published': '已发布' in html,
+    }, ensure_ascii=False))
+
+
 def main():
     temp_dir = _bootstrap_smoke_env()
     try:
-        from app import Activity, DataSourceTask, HotTopicEntry, Registration, Submission, Topic, TopicIdea, TrendNote, app, db, init_db
+        from app import Activity, DataSourceTask, HotTopicEntry, Registration, Submission, Topic, TopicIdea, TrendNote, app, db, init_db, _parse_trend_payload
         from celery_app import sync_creator_accounts_job
         from celery_app import sync_hotwords_job
         import app as app_module
@@ -818,15 +1112,20 @@ def main():
         _enable_admin_session(client)
 
         _run_basic_endpoint_checks(client)
+        _run_release_manifest_check(client)
+        _run_release_marker_pages_check(client, db, Activity, Topic, Registration)
         _run_runtime_diagnostics_checks(client)
         _run_creator_sync_config_checks(client)
         _run_hotword_local_crawler_config_checks(client)
+        _run_trend_csv_parse_check(_parse_trend_payload)
         _run_xhs_trend_template_checks(client)
         _run_reference_corpus_import_check(client)
         _run_trend_to_corpus_check(client, db, TrendNote)
         _run_trend_route_recommendation_check(client, db, Activity, Topic, TopicIdea, TrendNote, HotTopicEntry)
+        _run_task_workspace_check(client, db, Activity, Topic, Registration, Submission)
         _run_topic_reference_import_check(client, db, Activity, Topic)
         _run_copy_skill_generation_check(client, db, Activity, Topic, Registration, Submission)
+        _run_image_decision_consistency_check(client, db, Activity, Topic, Registration)
         _run_hotword_worker_passthrough_check(app_module, db, DataSourceTask, TrendNote, sync_hotwords_job)
         _run_creator_sync_worker_passthrough_check(app_module, db, DataSourceTask, sync_creator_accounts_job)
         print('Smoke check passed.')

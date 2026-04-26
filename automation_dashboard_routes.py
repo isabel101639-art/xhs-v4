@@ -42,6 +42,7 @@ def register_automation_dashboard_routes(app, helpers):
     build_first_run_playbooks_payload = helpers['build_first_run_playbooks_payload']
     build_integration_contract_payload = helpers['build_integration_contract_payload']
     build_integration_acceptance_payload = helpers['build_integration_acceptance_payload']
+    build_release_manifest_payload = helpers['build_release_manifest_payload']
     build_trial_readiness_payload = helpers['build_trial_readiness_payload']
     build_go_live_readiness_payload = helpers['build_go_live_readiness_payload']
     build_go_live_checklist_payload = helpers['build_go_live_checklist_payload']
@@ -80,6 +81,7 @@ def register_automation_dashboard_routes(app, helpers):
         return render_template(
             'automation_center.html',
             activities=activities,
+            release_manifest=build_release_manifest_payload(),
             default_topic_quota=default_topic_quota(),
             asset_style_types=asset_style_type_options(),
             image_provider_options=image_provider_options(),
@@ -312,7 +314,7 @@ def register_automation_dashboard_routes(app, helpers):
         hotword_health = helpers['hotword_healthcheck'](timeout_seconds=2)
         creator_sync_settings = creator_sync_runtime_settings()
         creator_sync_health = helpers['creator_sync_healthcheck'](timeout_seconds=2)
-        copywriter_health = helpers['copywriter_healthcheck'](timeout_seconds=5)
+        copywriter_health = helpers['copywriter_healthcheck'](timeout_seconds=20)
         copywriter = helpers['copywriter_capabilities']()
         image_health = image_provider_healthcheck(timeout_seconds=5)
         last_worker_ping = helpers['latest_worker_ping_snapshot']()
@@ -416,6 +418,16 @@ def register_automation_dashboard_routes(app, helpers):
             },
             'schedules': next_runs,
             'recent_jobs': [helpers['serialize_operation_log'](item) for item in recent_jobs],
+        })
+
+    @app.route('/api/admin/release-manifest')
+    def release_manifest():
+        guard = admin_json_guard()
+        if guard:
+            return guard
+        return jsonify({
+            'success': True,
+            **build_release_manifest_payload(),
         })
 
     @app.route('/api/admin/readiness-check')

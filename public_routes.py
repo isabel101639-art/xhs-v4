@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from flask import jsonify, render_template, request
 
-from models import Activity, AssetLibrary, CorpusEntry, HotTopicEntry, LiverIpProfilePlan, Registration, Submission, Topic, TrendNote
+from models import Activity, AssetGenerationTask, AssetLibrary, CorpusEntry, HotTopicEntry, LiverIpProfilePlan, Registration, Submission, Topic, TrendNote
 
 
 LIVER_SCIENCE_PUBLIC_KEYWORDS = [
@@ -313,6 +313,11 @@ def register_public_routes(app, helpers):
     default_home_page_config = helpers['default_home_page_config']
     default_site_nav_items = helpers['default_site_nav_items']
     asset_style_type_options = helpers['asset_style_type_options']
+    copy_persona_options = helpers['copy_persona_options']
+    copy_scene_options = helpers['copy_scene_options']
+    copy_direction_options = helpers['copy_direction_options']
+    copy_goal_options = helpers['copy_goal_options']
+    copy_product_options = helpers['copy_product_options']
     copy_skill_options = helpers['copy_skill_options']
     title_skill_options = helpers['title_skill_options']
     image_skill_options = helpers['image_skill_options']
@@ -328,6 +333,11 @@ def register_public_routes(app, helpers):
     db = helpers['db']
     datetime = helpers['datetime']
     image_skill_preset_map = image_skill_presets() or {}
+    copy_persona_label_map = copy_persona_options() or {}
+    copy_scene_label_map = copy_scene_options() or {}
+    copy_direction_label_map = copy_direction_options() or {}
+    copy_goal_label_map = copy_goal_options() or {}
+    copy_product_label_map = copy_product_options() or {}
     asset_style_meta_map = {
         (item.get('key') or ''): item
         for item in (asset_style_type_options() or [])
@@ -1041,17 +1051,256 @@ def register_public_routes(app, helpers):
                 score += 20
         return score
 
+    def _asset_task_status_label(status=''):
+        return {
+            'queued': '待出图',
+            'running': '出图中',
+            'success': '已出图',
+            'failed': '出图失败',
+        }.get((status or '').strip(), '未出图')
+
+    def _task_status_priority(status_key=''):
+        return {
+            'pending_publish': 0,
+            'generated': 1,
+            'strategy_ready': 2,
+            'not_generated': 3,
+            'syncing': 4,
+            'published': 5,
+        }.get((status_key or '').strip(), 9)
+
+    def _build_registration_task_summary(registration, tracking_summary=None):
+        submission = getattr(registration, 'submission', None)
+        tracking_summary = tracking_summary or {}
+        base_task_url = f'/register_success/{registration.id}'
+        strategy = serialize_submission_strategy(submission) if submission else {}
+        generator_context = strategy.get('generator_context') if isinstance(strategy.get('generator_context'), dict) else {}
+        latest_asset_task = db.session.query(
+            AssetGenerationTask.id.label('id'),
+            AssetGenerationTask.status.label('status'),
+            AssetGenerationTask.updated_at.label('updated_at'),
+            AssetGenerationTask.created_at.label('created_at'),
+        ).filter(
+            AssetGenerationTask.registration_id == registration.id,
+        ).order_by(
+            AssetGenerationTask.updated_at.desc(),
+            AssetGenerationTask.created_at.desc(),
+            AssetGenerationTask.id.desc(),
+        ).first()
+        asset_library_count = db.session.query(db.func.count(AssetLibrary.id)).filter(
+            AssetLibrary.registration_id == registration.id,
+            AssetLibrary.pool_status != 'archived',
+        ).scalar() or 0
+
+        has_strategy_plan = bool(submission and any([
+            (strategy.get('selected_persona_key') or '').strip(),
+            (strategy.get('selected_scene_key') or '').strip(),
+            (strategy.get('selected_direction_key') or '').strip(),
+            (strategy.get('selected_product_key') or '').strip(),
+            (strategy.get('selected_agent_copy_route_id') or '').strip(),
+            (strategy.get('selected_agent_image_route_id') or '').strip(),
+            (strategy.get('selected_image_agent_plan_id') or '').strip(),
+        ]))
+        has_selected_copy = bool(submission and any([
+            (submission.selected_copy_text or '').strip(),
+            (submission.selected_title or '').strip(),
+        ]))
+        has_generated_asset = asset_library_count > 0 or bool(
+            latest_asset_task and latest_asset_task.status in {'queued', 'running', 'success'}
+        )
+        has_submission_link = bool(submission and (submission.xhs_link or '').strip())
+        has_synced_metrics = bool(submission and any([
+            submission.xhs_views or 0,
+            submission.xhs_likes or 0,
+            submission.xhs_favorites or 0,
+            submission.xhs_comments or 0,
+        ]))
+        tracking_status = (tracking_summary.get('status') or '').strip()
+        has_tracking_progress = bool(tracking_summary and any([
+            tracking_summary.get('current_month_post_count') or 0,
+            tracking_summary.get('total_post_count') or 0,
+            tracking_summary.get('last_synced_at') or '',
+        ]))
+
+        if has_submission_link:
+            if has_synced_metrics or has_tracking_progress or tracking_status == 'tracking':
+                status_key = 'published'
+                status_label = '已发布'
+                status_badge_class = 'bg-success'
+                status_note = '笔记链接已提交，系统已经拿到发布结果或同步数据。'
+                action_label = '查看任务与数据'
+                action_url = f'{base_task_url}#submitForm'
+            else:
+                status_key = 'syncing'
+                status_label = '数据更新中'
+                status_badge_class = 'bg-primary'
+                status_note = tracking_summary.get('message') or '笔记链接已提交，系统正在同步账号和互动数据。'
+                action_label = '去更新数据'
+                action_url = f'{base_task_url}#submitForm'
+        elif has_selected_copy:
+            status_key = 'pending_publish'
+            status_label = '待发布'
+            status_badge_class = 'bg-warning text-dark'
+            status_note = '文案方案已经确定，下一步去发布笔记并回填链接。'
+            action_label = '去提交链接'
+            action_url = f'{base_task_url}#submitForm'
+        elif has_strategy_plan:
+            status_key = 'strategy_ready'
+            status_label = '已选策略'
+            status_badge_class = 'bg-light text-dark'
+            status_note = '已经选好人设、场景或路线，下一步生成文案和图片。'
+            action_label = '去生成内容'
+            action_url = f'{base_task_url}#copyStudio'
+        elif has_generated_asset:
+            status_key = 'generated'
+            status_label = '已生成'
+            status_badge_class = 'bg-info text-dark'
+            status_note = (
+                f'已生成 {asset_library_count} 张图片，最近图片任务状态：{_asset_task_status_label(getattr(latest_asset_task, "status", ""))}。'
+                if asset_library_count or latest_asset_task else
+                '已经开始生成图文内容，可以继续确认并完善。'
+            )
+            action_label = '继续完善内容'
+            action_url = f'{base_task_url}#copyStudio'
+        else:
+            status_key = 'not_generated'
+            status_label = '未生成'
+            status_badge_class = 'bg-secondary'
+            status_note = '还没有生成文案或图片，建议先进入任务详情生成内容。'
+            action_label = '去生成内容'
+            action_url = f'{base_task_url}#copyStudio'
+
+        strategy_summary_items = []
+        if generator_context.get('persona'):
+            strategy_summary_items.append(f"人设：{generator_context.get('persona')}")
+        if generator_context.get('scene'):
+            strategy_summary_items.append(f"场景：{generator_context.get('scene')}")
+        if generator_context.get('goal'):
+            strategy_summary_items.append(f"目标：{generator_context.get('goal')}")
+        if generator_context.get('selected_copy_route_label'):
+            strategy_summary_items.append(f"文案路线：{generator_context.get('selected_copy_route_label')}")
+        if generator_context.get('selected_image_route_label'):
+            strategy_summary_items.append(f"图片路线：{generator_context.get('selected_image_route_label')}")
+        if not strategy_summary_items and strategy:
+            if strategy.get('selected_persona_key'):
+                strategy_summary_items.append(f"人设：{copy_persona_label_map.get(strategy.get('selected_persona_key'), strategy.get('selected_persona_key'))}")
+            if strategy.get('selected_scene_key'):
+                strategy_summary_items.append(f"场景：{copy_scene_label_map.get(strategy.get('selected_scene_key'), strategy.get('selected_scene_key'))}")
+            if strategy.get('selected_direction_key'):
+                strategy_summary_items.append(f"方向：{copy_direction_label_map.get(strategy.get('selected_direction_key'), strategy.get('selected_direction_key'))}")
+            if strategy.get('selected_product_key'):
+                strategy_summary_items.append(f"产品：{copy_product_label_map.get(strategy.get('selected_product_key'), strategy.get('selected_product_key'))}")
+            if strategy.get('selected_copy_goal'):
+                strategy_summary_items.append(f"目标：{copy_goal_label_map.get(strategy.get('selected_copy_goal'), strategy.get('selected_copy_goal'))}")
+            if strategy.get('selected_copy_skill'):
+                strategy_summary_items.append(f"文案：{copy_skill_options().get(strategy.get('selected_copy_skill'), strategy.get('selected_copy_skill'))}")
+            if strategy.get('selected_title_skill'):
+                strategy_summary_items.append(f"标题：{title_skill_options().get(strategy.get('selected_title_skill'), strategy.get('selected_title_skill'))}")
+            if strategy.get('selected_image_skill'):
+                strategy_summary_items.append(f"图片：{image_skill_options().get(strategy.get('selected_image_skill'), strategy.get('selected_image_skill'))}")
+
+        return {
+            'status_key': status_key,
+            'status_priority': _task_status_priority(status_key),
+            'status_label': status_label,
+            'status_badge_class': status_badge_class,
+            'status_note': status_note,
+            'action_label': action_label,
+            'action_url': action_url,
+            'task_url': base_task_url,
+            'task_target': '_self',
+            'note_url': (submission.xhs_link or '').strip() if submission else '',
+            'note_target': '_blank',
+            'has_strategy_plan': has_strategy_plan,
+            'has_selected_copy': has_selected_copy,
+            'has_generated_asset': has_generated_asset,
+            'generated_asset_count': asset_library_count,
+            'latest_asset_status_label': _asset_task_status_label(getattr(latest_asset_task, 'status', '')),
+            'tracking_status_label': tracking_summary.get('status_label') or '',
+            'strategy_summary_items': strategy_summary_items[:5],
+            'steps': [
+                {'label': '策略选择', 'done': has_strategy_plan},
+                {'label': '内容生成', 'done': bool(has_selected_copy or has_generated_asset)},
+                {'label': '提交链接', 'done': has_submission_link},
+                {'label': '数据同步', 'done': bool(has_synced_metrics or has_tracking_progress or tracking_status == 'tracking')},
+            ],
+        }
+
+    def _build_task_workspace_summary(registrations, task_summaries=None):
+        task_summaries = task_summaries or {}
+        items = []
+        for reg in registrations or []:
+            task = task_summaries.get(reg.id) or {}
+            if not task:
+                continue
+            items.append({
+                'registration_id': reg.id,
+                'topic_name': reg.topic.topic_name if getattr(reg, 'topic', None) else '未命名任务',
+                **task,
+            })
+
+        total = len(items)
+        status_counts = {
+            'not_generated': len([item for item in items if item.get('status_key') == 'not_generated']),
+            'strategy_ready': len([item for item in items if item.get('status_key') == 'strategy_ready']),
+            'generated': len([item for item in items if item.get('status_key') == 'generated']),
+            'pending_publish': len([item for item in items if item.get('status_key') == 'pending_publish']),
+            'syncing': len([item for item in items if item.get('status_key') == 'syncing']),
+            'published': len([item for item in items if item.get('status_key') == 'published']),
+        }
+        active_count = total - status_counts['published']
+        completion_rate = round((status_counts['published'] / total) * 100, 1) if total else 0
+
+        focus_priority = ['pending_publish', 'generated', 'strategy_ready', 'not_generated', 'syncing', 'published']
+        focus_item = None
+        for status_key in focus_priority:
+            focus_item = next((item for item in items if item.get('status_key') == status_key), None)
+            if focus_item:
+                break
+
+        focus_message_map = {
+            'pending_publish': '这条任务已经接近完成，优先去发布并提交链接，最容易形成闭环。',
+            'generated': '这条任务已经产出内容，优先补齐最后确认和发布动作。',
+            'strategy_ready': '这条任务已经选好推荐策略，下一步直接生成文案和图片，不要再停留在选择阶段。',
+            'not_generated': '这条任务还没开始生成内容，建议先把第一条内容做出来。',
+            'syncing': '这条任务已经提交链接，当前重点是观察同步结果并补齐最新数据。',
+            'published': '当前任务都已进入发布阶段，可以回头复盘表现最好的那一条。',
+        }
+
+        return {
+            'total': total,
+            'active_count': active_count,
+            'completion_rate': completion_rate,
+            'counts': status_counts,
+            'focus_item': focus_item,
+            'focus_message': focus_message_map.get((focus_item or {}).get('status_key'), ''),
+        }
+
     def render_my_registration_page(registrations=None, error=''):
         registrations = registrations or []
         tracking_summaries = {
             reg.id: build_registration_tracking_summary(reg)
             for reg in registrations
         }
+        task_summaries = {
+            reg.id: _build_registration_task_summary(reg, tracking_summary=tracking_summaries.get(reg.id) or {})
+            for reg in registrations
+        }
+        registrations = sorted(
+            registrations,
+            key=lambda reg: (
+                (task_summaries.get(reg.id) or {}).get('status_priority', 9),
+                -reg.id,
+            ),
+        )
+        task_workspace_summary = _build_task_workspace_summary(registrations, task_summaries=task_summaries)
         return render_template(
             'my_registration.html',
             registrations=registrations,
             error=error,
             tracking_summaries=tracking_summaries,
+            task_summaries=task_summaries,
+            task_workspace_summary=task_workspace_summary,
             **build_public_context(),
         )
 
@@ -1306,18 +1555,16 @@ def register_public_routes(app, helpers):
 
         submission = Submission.query.filter_by(registration_id=reg.id).first()
         if not submission:
-            return jsonify({
-                'success': True,
-                'stored': False,
-                'message': '当前仅暂存到前端，正式提交笔记后会自动写入策略留痕',
-            })
+            submission = Submission(registration_id=reg.id)
+            db.session.add(submission)
+            db.session.flush()
 
         strategy = apply_submission_strategy_snapshot(submission, data, registration=reg)
         db.session.commit()
         return jsonify({
             'success': True,
             'stored': True,
-            'message': '策略方案已保存',
+            'message': '任务策略已保存',
             'strategy': strategy,
         })
 

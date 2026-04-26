@@ -6,11 +6,12 @@ from models import Activity
 def register_analytics_routes(app, helpers):
     build_dashboard_stats = helpers['build_dashboard_stats']
     build_report_markdown = helpers['build_report_markdown']
+    build_release_manifest_payload = helpers['build_release_manifest_payload']
 
     @app.route('/data_analysis')
     def data_analysis():
         activities = Activity.query.order_by(Activity.created_at.desc()).all()
-        return render_template('data_analysis.html', activities=activities)
+        return render_template('data_analysis.html', activities=activities, release_manifest=build_release_manifest_payload())
 
     @app.route('/api/stats/<int:activity_id>')
     def get_stats(activity_id):

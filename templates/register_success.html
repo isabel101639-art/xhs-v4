@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>报名成功 - 福瑞医科小红书任务</title>
+    <meta name="xhs-release-version" content="{{ (release_manifest or {}).get('release_version', '') }}">
+    <meta name="xhs-release-fingerprint" content="{{ (release_manifest or {}).get('release_fingerprint', '') }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link rel="stylesheet" href="/static/css/public_site.css">
@@ -67,6 +69,32 @@
             font-size: 13px;
             line-height: 1.75;
             box-shadow: 0 14px 28px rgba(22,33,43,0.05);
+        }
+        .release-studio-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+        .release-studio-card {
+            border-radius: 16px;
+            border: 1px solid rgba(22,33,43,0.08);
+            background: rgba(255,255,255,0.92);
+            padding: 12px 14px;
+            box-shadow: 0 10px 22px rgba(22,33,43,0.04);
+        }
+        .release-studio-card .label {
+            font-size: 11px;
+            color: #64748b;
+            font-weight: 700;
+            margin-bottom: 4px;
+            letter-spacing: 0.04em;
+        }
+        .release-studio-card .value {
+            font-size: 13px;
+            color: #0f172a;
+            font-weight: 700;
+            word-break: break-word;
         }
         .studio-field {
             background: rgba(255,255,255,0.84);
@@ -213,6 +241,19 @@
             font-weight: 700;
             margin-bottom: 10px;
         }
+        .copy-quality-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 9px;
+            border-radius: 999px;
+            background: rgba(15,118,110,0.10);
+            color: #0f766e;
+            font-size: 11px;
+            line-height: 1.4;
+            font-weight: 800;
+            margin-bottom: 10px;
+            margin-left: 8px;
+        }
         .copy-section-label {
             font-size: 12px;
             color: #64748b;
@@ -353,6 +394,16 @@
         .agent-route-card.active-image {
             border-color: rgba(37, 99, 235, 0.35);
             box-shadow: 0 16px 30px rgba(37, 99, 235, 0.10);
+        }
+        .agent-route-card.active-image .fw-semibold,
+        .agent-route-card.active-copy .fw-semibold {
+            color: #0f172a;
+        }
+        .agent-route-card.active-image {
+            background: linear-gradient(180deg, rgba(244,248,255,0.98), rgba(255,255,255,0.96));
+        }
+        .agent-route-card.active-copy {
+            background: linear-gradient(180deg, rgba(255,244,242,0.98), rgba(255,255,255,0.96));
         }
         .agent-route-meta {
             font-size: 12px;
@@ -616,6 +667,35 @@
             line-height: 1.7;
             margin-top: 8px;
         }
+        .title-option-card.active .title-option-title {
+            color: var(--xhs-red);
+        }
+        .title-option-card.active .title-option-rank {
+            background: rgba(239,78,69,0.10);
+            color: var(--xhs-red);
+        }
+        .strategy-recommendation-card {
+            margin-top: 10px;
+            padding: 14px 16px;
+            border-radius: 18px;
+            background: rgba(255,255,255,0.92);
+            border: 1px solid rgba(22,33,43,0.08);
+            box-shadow: 0 12px 24px rgba(22,33,43,0.04);
+        }
+        .strategy-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(239,78,69,0.08);
+            color: var(--xhs-red);
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .strategy-chip.is-secondary {
+            background: rgba(15,23,42,0.06);
+            color: #475569;
+        }
     
         /* MOBILE_PATCH */
         @media (max-width: 768px) {
@@ -629,12 +709,12 @@
 
     </style>
 </head>
-<body class="public-body">
+<body class="public-body" data-release-manifest="release-manifest" data-release-version="{{ (release_manifest or {}).get('release_version', '') }}">
     <div class="public-shell">
     <nav class="navbar navbar-dark public-navbar">
         <div class="container public-container d-flex justify-content-between align-items-center">
             <a class="navbar-brand" href="/">← 返回首页</a>
-            <a class="text-white text-decoration-none" href="/my_registration">我的报名</a>
+            <a class="text-white text-decoration-none" href="/my_registration">我的任务</a>
         </div>
     </nav>
 
@@ -644,9 +724,28 @@
             <h5><i class="bi bi-check-circle"></i> 报名成功！</h5>
             <p class="mb-0">您已成功报名：<strong>{{ registration.topic.topic_name }}</strong></p>
         </div>
+        <div id="releaseStudioSummary" class="release-studio-summary">
+            <div class="release-studio-card">
+                <div class="label">当前版本</div>
+                <div class="value">{{ (release_manifest or {}).get('release_version', '-') }}</div>
+            </div>
+            <div class="release-studio-card">
+                <div class="label">当前阶段</div>
+                <div class="value">{{ (release_manifest or {}).get('release_stage_label', '-') }}</div>
+            </div>
+            <div class="release-studio-card">
+                <div class="label">目标上线日</div>
+                <div class="value">{{ (release_manifest or {}).get('release_target_date', '-') }}</div>
+            </div>
+            <div class="release-studio-card">
+                <div class="label">版本指纹</div>
+                <div class="value">{{ (release_manifest or {}).get('release_fingerprint', '-') }}</div>
+            </div>
+        </div>
+        <script id="releaseManifestPayload" type="application/json">{{ (release_manifest or {})|tojson }}</script>
 
         <!-- 一键生成文案 -->
-        <div class="success-card copy-studio mb-4">
+        <div id="copyStudio" class="success-card copy-studio mb-4">
             <div class="studio-kicker"><i class="bi bi-stars"></i> 千人千面文案工作台</div>
             <div class="studio-head">
                 <div>
@@ -821,14 +920,14 @@
                     <i class="bi bi-chat-dots"></i> 新手冲互动
                 </button>
                 <button type="button" class="outline-pill-btn" onclick="applyRecommendedViralPreset()">
-                    <i class="bi bi-lightning-charge"></i> 应用系统推荐组合
+                    <i class="bi bi-lightning-charge"></i> 应用推荐并分析
                 </button>
                 <button id="generateBtn" class="studio-primary-btn" onclick="generateCopy()">
                     <i class="bi bi-stars"></i> 生成文案
                 </button>
             </div>
             <div id="viralOperationTips" class="form-text mt-2">系统会根据当前话题推荐更适合的文案打法、标题打法和图片打法。</div>
-            <div id="strategyRecommendationBar" class="form-text mt-2">系统正在准备近期实战推荐。</div>
+            <div id="strategyRecommendationBar" class="strategy-recommendation-card">系统正在准备近期实战推荐。</div>
             <div id="agentDecisionBar" class="form-text mt-2">建议先让 Agent 分析，再选文案路线和图片路线。</div>
 
             <div id="agentAnalysisArea" class="mt-4" style="display:none;">
@@ -1032,7 +1131,7 @@
         </div>
 
         <!-- 提交笔记 -->
-        <div class="success-card">
+        <div id="submitFormCard" class="success-card">
             <h6><i class="bi bi-upload"></i> 提交数据（仅小红书）</h6>
             <form id="submitForm">
                 <div class="alert alert-info">当前只需要提交小红书账号主页、本次笔记链接和互动数据，其他平台暂不展示。</div>
@@ -1094,6 +1193,8 @@
         let strategyControlsTouchedByUser = false;
         let isApplyingPresetProgrammatically = false;
         let didAutoApplyHistoricalRecommendation = false;
+        let copyAgentAnalysisPromise = null;
+        let lastRecommendedAnalysisKey = '';
         const assetStyleTypeDefinitions = {{ asset_style_types|tojson }};
         const imageSkillPresets = {{ image_skill_presets|tojson }};
         const topicContextText = {{ ((registration.topic.topic_name or '') ~ ' ' ~ (registration.topic.keywords or '') ~ ' ' ~ (registration.topic.direction or ''))|tojson }};
@@ -1171,6 +1272,37 @@
             },
         };
 
+        function getSelectOptionLabel(selectId, value, fallback = '') {
+            const select = document.getElementById(selectId);
+            if (!select || !value) return fallback || value || '';
+            const match = Array.from(select.options || []).find((item) => item.value === value);
+            return (match?.textContent || fallback || value || '').trim();
+        }
+
+        function getStrategyDraftStorageKey() {
+            return `xhs_v4_strategy_draft_${String({{ registration.id }})}`;
+        }
+
+        function loadLocalStrategyDraft() {
+            try {
+                const raw = localStorage.getItem(getStrategyDraftStorageKey()) || '';
+                if (!raw) return {};
+                const data = JSON.parse(raw);
+                return data && typeof data === 'object' ? data : {};
+            } catch (error) {
+                return {};
+            }
+        }
+
+        function saveLocalStrategyDraft(payload) {
+            if (!payload || typeof payload !== 'object') return;
+            try {
+                localStorage.setItem(getStrategyDraftStorageKey(), JSON.stringify(payload));
+            } catch (error) {
+                return;
+            }
+        }
+
         function detectRecommendedPreset() {
             if (dynamicStrategyRecommendation && dynamicStrategyRecommendation.success && dynamicStrategyRecommendation.recommended) {
                 return {
@@ -1184,6 +1316,10 @@
             const currentGoal = document.getElementById('copyGoal')?.value || 'balanced';
             if (currentGoal === 'comment_engagement') {
                 return {
+                    personaKey: 'patient_friend',
+                    sceneKey: 'clinic_consulting',
+                    directionKey: 'liver_care_habits',
+                    productKey: 'auto',
                     copyGoal: 'comment_engagement',
                     copySkill: 'discussion_hook',
                     titleSkill: 'question_gap',
@@ -1195,6 +1331,10 @@
             }
             if (/体检|检查|报告|指标|FibroScan|福波看|复查/.test(text)) {
                 return {
+                    personaKey: 'physical_exam_blogger',
+                    sceneKey: 'report_interpretation',
+                    directionKey: 'report_interpretation',
+                    productKey: 'fibroscan',
                     copyGoal: 'save_value',
                     copySkill: 'report_interpretation',
                     titleSkill: 'checklist_collect',
@@ -1206,6 +1346,10 @@
             }
             if (/误区|为什么|是不是|别再|千万别|想当然|搞错/.test(text)) {
                 return {
+                    personaKey: 'medical_science',
+                    sceneKey: 'daily_liver_care',
+                    directionKey: 'myth_busting',
+                    productKey: 'auto',
                     copyGoal: 'viral_title',
                     copySkill: 'myth_busting',
                     titleSkill: 'conflict_reverse',
@@ -1217,6 +1361,10 @@
             }
             if (/经历|经验|踩坑|复盘|后来|家属|陪诊|我妈|我爸/.test(text)) {
                 return {
+                    personaKey: /家属|陪诊/.test(text) ? 'caregiver' : 'patient_self',
+                    sceneKey: /家属|陪诊/.test(text) ? 'family_support' : 'daily_liver_care',
+                    directionKey: /家属|陪诊/.test(text) ? 'family_care' : 'liver_care_habits',
+                    productKey: 'auto',
                     copyGoal: 'balanced',
                     copySkill: 'story_empathy',
                     titleSkill: 'emotional_diary',
@@ -1227,6 +1375,10 @@
                 };
             }
             return {
+                personaKey: 'doctor_assistant',
+                sceneKey: 'daily_liver_care',
+                directionKey: 'liver_care_habits',
+                productKey: 'auto',
                 copyGoal: 'viral_title',
                 copySkill: 'story_empathy',
                 titleSkill: 'result_first',
@@ -1246,7 +1398,37 @@
             const topRow = (dynamicStrategyRecommendation?.historical_rows || [])[0] || {};
             const sampleTitles = (topRow.sample_titles || []).filter(Boolean).slice(0, 2).join(' / ');
             const autoApplyText = didAutoApplyHistoricalRecommendation ? '｜已自动应用' : '';
-            wrap.textContent = `${sourceLabel}｜${confidenceLabel}${autoApplyText}｜建议组合：${recommended.titleSkill || '-'} × ${recommended.imageSkill || '-'}。${recommended.reason || ''}${sampleTitles ? ` 近期标题样本：${sampleTitles}` : ''}`;
+            const decisionProfile = dynamicStrategyRecommendation?.decision_profile || {};
+            const personaLabel = decisionProfile.persona_label || recommended.personaLabel || getSelectOptionLabel('copyPersona', recommended.persona_key || recommended.personaKey, '系统自动匹配');
+            const sceneLabel = decisionProfile.scene_label || recommended.sceneLabel || getSelectOptionLabel('copyScene', recommended.scene_key || recommended.sceneKey, '系统自动匹配');
+            const directionLabel = decisionProfile.direction_label || recommended.directionLabel || getSelectOptionLabel('copyDirection', recommended.direction_key || recommended.directionKey, '系统自动匹配');
+            const productLabel = decisionProfile.product_label || recommended.productLabel || getSelectOptionLabel('copyProduct', recommended.product_key || recommended.productKey, '自动匹配');
+            const goalLabel = getSelectOptionLabel('copyGoal', recommended.copyGoal, recommended.copyGoal || '-');
+            const copySkillLabel = getSelectOptionLabel('copySkill', recommended.copySkill, recommended.copySkill || '-');
+            const titleSkillLabel = getSelectOptionLabel('titleSkill', recommended.titleSkill, recommended.titleSkill || '-');
+            const imageSkillLabel = getSelectOptionLabel('imageSkill', recommended.imageSkill, recommended.imageSkill || '-');
+            wrap.innerHTML = `
+                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                    <div>
+                        <div class="fw-semibold mb-2">系统推荐组合</div>
+                        <div class="small text-muted">${sourceLabel}｜${confidenceLabel}${autoApplyText}</div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="applyRecommendedViralPreset()">一键应用并分析</button>
+                </div>
+                <div class="d-flex gap-2 flex-wrap mt-3">
+                    <span class="strategy-chip">人设：${escapeHtml(personaLabel)}</span>
+                    <span class="strategy-chip">场景：${escapeHtml(sceneLabel)}</span>
+                    <span class="strategy-chip">方向：${escapeHtml(directionLabel)}</span>
+                    <span class="strategy-chip">产品：${escapeHtml(productLabel)}</span>
+                </div>
+                <div class="d-flex gap-2 flex-wrap mt-2">
+                    <span class="strategy-chip is-secondary">目标：${escapeHtml(goalLabel)}</span>
+                    <span class="strategy-chip is-secondary">文案：${escapeHtml(copySkillLabel)}</span>
+                    <span class="strategy-chip is-secondary">标题：${escapeHtml(titleSkillLabel)}</span>
+                    <span class="strategy-chip is-secondary">图片：${escapeHtml(imageSkillLabel)}</span>
+                </div>
+                <div class="small text-muted mt-3">${escapeHtml(recommended.reason || '')}${sampleTitles ? ` ｜ 近期标题样本：${escapeHtml(sampleTitles)}` : ''}</div>
+            `;
         }
 
         async function loadStrategyRecommendation() {
@@ -1283,14 +1465,15 @@
                 return;
             }
             didAutoApplyHistoricalRecommendation = true;
-            applyPresetObject({
+            applyPresetAndAnalyze({
                 ...dynamicStrategyRecommendation.recommended,
                 reason: dynamicStrategyRecommendation.reason || '已按近期实战表现自动切换推荐组合。',
                 source: dynamicStrategyRecommendation.source || 'historical',
                 confidence: dynamicStrategyRecommendation.confidence || 'medium',
             }, {
                 persistReason: 'auto_apply_historical_recommendation',
-                markAutoApplied: false,
+                autoAnalyze: true,
+                forceAnalyze: true,
             });
         }
 
@@ -1308,6 +1491,10 @@
             if (goalKey === 'save_value') {
                 if (/体检|检查|报告|指标|FibroScan|福波看|复查/.test(text)) {
                     return {
+                        personaKey: 'physical_exam_blogger',
+                        sceneKey: 'report_interpretation',
+                        directionKey: 'report_interpretation',
+                        productKey: 'fibroscan',
                         copyGoal: 'save_value',
                         copySkill: 'report_interpretation',
                         titleSkill: 'checklist_collect',
@@ -1316,6 +1503,10 @@
                     };
                 }
                 return {
+                    personaKey: 'health_manager',
+                    sceneKey: 'diet_adjustment',
+                    directionKey: 'diet_nutrition',
+                    productKey: 'auto',
                     copyGoal: 'save_value',
                     copySkill: 'practical_checklist',
                     titleSkill: 'checklist_collect',
@@ -1325,6 +1516,10 @@
             }
             if (goalKey === 'comment_engagement') {
                 return {
+                    personaKey: 'patient_friend',
+                    sceneKey: 'clinic_consulting',
+                    directionKey: 'liver_care_habits',
+                    productKey: 'auto',
                     copyGoal: 'comment_engagement',
                     copySkill: 'discussion_hook',
                     titleSkill: 'question_gap',
@@ -1333,6 +1528,10 @@
                 };
             }
             return {
+                personaKey: /经历|经验|陪诊|家属|后来|踩坑/.test(text) ? (/家属|陪诊/.test(text) ? 'caregiver' : 'patient_self') : 'doctor_assistant',
+                sceneKey: /误区|为什么|是不是|别再|千万别/.test(text) ? 'daily_liver_care' : 'physical_exam_alert',
+                directionKey: /误区|为什么|是不是|别再|千万别/.test(text) ? 'myth_busting' : 'liver_care_habits',
+                productKey: 'auto',
                 copyGoal: 'viral_title',
                 copySkill: /经历|经验|陪诊|家属|后来|踩坑/.test(text) ? 'story_empathy' : 'myth_busting',
                 titleSkill: /误区|为什么|是不是|别再|千万别/.test(text) ? 'conflict_reverse' : 'result_first',
@@ -1348,14 +1547,23 @@
             const copySkill = document.getElementById('copySkill');
             const titleSkill = document.getElementById('titleSkill');
             const imageSkill = document.getElementById('imageSkill');
+            const persona = document.getElementById('copyPersona');
+            const scene = document.getElementById('copyScene');
+            const direction = document.getElementById('copyDirection');
+            const product = document.getElementById('copyProduct');
             const workflowMode = document.getElementById('assetWorkflowMode');
             isApplyingPresetProgrammatically = true;
             try {
+                if (persona && (preset.persona_key || preset.personaKey)) persona.value = preset.persona_key || preset.personaKey;
+                if (scene && (preset.scene_key || preset.sceneKey)) scene.value = preset.scene_key || preset.sceneKey;
+                if (direction && (preset.direction_key || preset.directionKey)) direction.value = preset.direction_key || preset.directionKey;
+                if (product && (preset.product_key || preset.productKey)) product.value = preset.product_key || preset.productKey;
                 if (copyGoal && preset.copyGoal) copyGoal.value = preset.copyGoal;
                 if (copySkill && preset.copySkill) copySkill.value = preset.copySkill;
                 if (titleSkill && preset.titleSkill) titleSkill.value = preset.titleSkill;
                 if (imageSkill && preset.imageSkill) imageSkill.value = preset.imageSkill;
                 if (workflowMode && preset.generation_mode) workflowMode.value = preset.generation_mode;
+                toggleCopyCustomInputs();
                 refreshTitleSkillHelp();
                 applyImageSkillPreset();
                 if (preset.cover_style_type) {
@@ -1377,24 +1585,86 @@
             }
         }
 
+        function buildPresetAnalysisKey(preset) {
+            const payload = {
+                persona: preset?.persona_key || preset?.personaKey || document.getElementById('copyPersona')?.value || '',
+                scene: preset?.scene_key || preset?.sceneKey || document.getElementById('copyScene')?.value || '',
+                direction: preset?.direction_key || preset?.directionKey || document.getElementById('copyDirection')?.value || '',
+                product: preset?.product_key || preset?.productKey || document.getElementById('copyProduct')?.value || '',
+                goal: preset?.copyGoal || document.getElementById('copyGoal')?.value || '',
+                copySkill: preset?.copySkill || document.getElementById('copySkill')?.value || '',
+                titleSkill: preset?.titleSkill || document.getElementById('titleSkill')?.value || '',
+                imageSkill: preset?.imageSkill || document.getElementById('imageSkill')?.value || '',
+            };
+            return JSON.stringify(payload);
+        }
+
+        async function applyPresetAndAnalyze(preset, options = {}) {
+            if (!preset) return false;
+            applyPresetObject(preset, options);
+            const shouldAnalyze = options.autoAnalyze !== false;
+            if (!shouldAnalyze) {
+                return true;
+            }
+            const nextKey = buildPresetAnalysisKey(preset);
+            if (!options.forceAnalyze && nextKey === lastRecommendedAnalysisKey && copyAgentAnalysis) {
+                renderAgentDecisionBar();
+                return true;
+            }
+            const bar = document.getElementById('agentDecisionBar');
+            if (bar) {
+                bar.textContent = '系统推荐已应用，Agent 正在按推荐的人设、场景、方向和产品重新分析路线...';
+            }
+            const ok = await fetchCopyAgentAnalysis();
+            if (ok) {
+                lastRecommendedAnalysisKey = nextKey;
+                scheduleStrategyPersistence(options.persistReason || 'apply_preset_analyze');
+            }
+            return ok;
+        }
+
         function applyBeginnerPreset(goalKey) {
-            applyPresetObject(getBeginnerPreset(goalKey));
+            applyPresetAndAnalyze(getBeginnerPreset(goalKey), {
+                persistReason: `apply_beginner_preset_${goalKey}`,
+                autoAnalyze: true,
+                forceAnalyze: true,
+            });
         }
 
         function restoreSavedStrategySettings() {
-            if (!initialSavedStrategy || !Object.keys(initialSavedStrategy).length) {
+            const draftStrategy = loadLocalStrategyDraft();
+            const sourceStrategy = (initialSavedStrategy && Object.keys(initialSavedStrategy).length)
+                ? initialSavedStrategy
+                : draftStrategy;
+            if (!sourceStrategy || !Object.keys(sourceStrategy).length) {
                 return;
             }
+            const persona = document.getElementById('copyPersona');
+            const scene = document.getElementById('copyScene');
+            const direction = document.getElementById('copyDirection');
+            const product = document.getElementById('copyProduct');
             const copyGoal = document.getElementById('copyGoal');
             const copySkill = document.getElementById('copySkill');
             const titleSkill = document.getElementById('titleSkill');
             const imageSkill = document.getElementById('imageSkill');
             const workflowMode = document.getElementById('assetWorkflowMode');
-            if (copyGoal && initialSavedStrategy.selected_copy_goal) copyGoal.value = initialSavedStrategy.selected_copy_goal;
-            if (copySkill && initialSavedStrategy.selected_copy_skill) copySkill.value = initialSavedStrategy.selected_copy_skill;
-            if (titleSkill && initialSavedStrategy.selected_title_skill) titleSkill.value = initialSavedStrategy.selected_title_skill;
-            if (imageSkill && initialSavedStrategy.selected_image_skill) imageSkill.value = initialSavedStrategy.selected_image_skill;
-            if (workflowMode && initialSavedStrategy.selected_generation_mode) workflowMode.value = initialSavedStrategy.selected_generation_mode;
+            if (persona && sourceStrategy.selected_persona_key) persona.value = sourceStrategy.selected_persona_key;
+            if (scene && sourceStrategy.selected_scene_key) scene.value = sourceStrategy.selected_scene_key;
+            if (direction && sourceStrategy.selected_direction_key) direction.value = sourceStrategy.selected_direction_key;
+            if (product && sourceStrategy.selected_product_key) product.value = sourceStrategy.selected_product_key;
+            if (copyGoal && sourceStrategy.selected_copy_goal) copyGoal.value = sourceStrategy.selected_copy_goal;
+            if (copySkill && sourceStrategy.selected_copy_skill) copySkill.value = sourceStrategy.selected_copy_skill;
+            if (titleSkill && sourceStrategy.selected_title_skill) titleSkill.value = sourceStrategy.selected_title_skill;
+            if (imageSkill && sourceStrategy.selected_image_skill) imageSkill.value = sourceStrategy.selected_image_skill;
+            if (workflowMode && sourceStrategy.selected_generation_mode) workflowMode.value = sourceStrategy.selected_generation_mode;
+            selectedAgentCopyRouteId = sourceStrategy.selected_agent_copy_route_id || '';
+            selectedAgentImageRouteId = sourceStrategy.selected_agent_image_route_id || '';
+            selectedImageAgentPlanId = sourceStrategy.selected_image_agent_plan_id || '';
+            selectedReferencePlanId = sourceStrategy.selected_reference_plan_id || '';
+            selectedReferenceAssetIds = Array.isArray(sourceStrategy.selected_reference_asset_ids)
+                ? sourceStrategy.selected_reference_asset_ids.map((item) => Number(item)).filter((item) => Number.isFinite(item) && item > 0)
+                : [];
+            toggleCopyCustomInputs();
         }
 
         function applyIpAgentSeedIfAvailable() {
@@ -1531,21 +1801,20 @@
 
         function buildCurrentStrategyPayload(reason = 'auto_save') {
             const currentCard = buildSelectedCopyCard();
-            if (!currentCard && (!titleOptions || !titleOptions.length)) {
-                if (initialSavedStrategy && initialSavedStrategy.selected_title) {
-                    return {
-                        registration_id: {{ registration.id }},
-                        reason,
-                        ...initialSavedStrategy,
-                    };
-                }
-                return null;
-            }
             const workflow = resolveAssetWorkflowConfig();
             return {
                 registration_id: {{ registration.id }},
                 reason,
-                selected_title: getSelectedTitleText(),
+                selected_persona_key: document.getElementById('copyPersona')?.value || '',
+                selected_scene_key: document.getElementById('copyScene')?.value || '',
+                selected_direction_key: document.getElementById('copyDirection')?.value || '',
+                selected_product_key: document.getElementById('copyProduct')?.value || '',
+                selected_agent_copy_route_id: selectedAgentCopyRouteId || '',
+                selected_agent_image_route_id: selectedAgentImageRouteId || '',
+                selected_image_agent_plan_id: selectedImageAgentPlanId || '',
+                selected_reference_plan_id: selectedReferencePlanId || '',
+                selected_reference_asset_ids: selectedReferenceAssetIds || [],
+                selected_title: currentCard ? getSelectedTitleText() : (initialSavedStrategy.selected_title || ''),
                 selected_title_source: titleOptions[selectedTitle]?.source || '系统推荐',
                 selected_title_index: selectedTitle || 0,
                 selected_copy_version_index: selectedVersion || 0,
@@ -1565,6 +1834,7 @@
         async function persistStrategySelection(reason = 'auto_save', force = false) {
             const payload = buildCurrentStrategyPayload(reason);
             if (!payload) return false;
+            saveLocalStrategyDraft(payload);
             const hashPayload = { ...payload, reason: '' };
             const nextHash = JSON.stringify(hashPayload);
             if (!force && nextHash === lastSavedStrategyHash) {
@@ -1700,6 +1970,31 @@
             return found ? found[0] : 'custom';
         }
 
+        function applyWorkflowDecision(decision = {}, options = {}) {
+            if (!decision || typeof decision !== 'object') return;
+            const familySelect = document.getElementById('assetStyleFamily');
+            const coverSelect = document.getElementById('assetCoverStyleType');
+            const innerSelect = document.getElementById('assetInnerStyleType');
+            const familyKey = findAssetFamilyByStyle(decision.cover_style_key || decision.inner_style_key || '');
+            if (familySelect && familyKey) {
+                familySelect.value = familyKey;
+            }
+            refreshAssetWorkflowControls();
+            if (coverSelect && decision.cover_style_key) {
+                coverSelect.value = decision.cover_style_key;
+            }
+            if (innerSelect && decision.inner_style_key) {
+                innerSelect.value = decision.inner_style_key;
+            }
+            refreshAssetStyleTypeHelp();
+            if (!options.silent && decision.adjustment_note) {
+                const executionBar = document.getElementById('imageExecutionBar');
+                if (executionBar) {
+                    executionBar.textContent = `系统已自动调整图片工作流：${decision.adjustment_note}${decision.execution_note ? ` ｜ ${decision.execution_note}` : ''}`;
+                }
+            }
+        }
+
         function renderAgentDecisionBar() {
             const wrap = document.getElementById('agentDecisionBar');
             if (!wrap) return;
@@ -1723,6 +2018,7 @@
                 node.classList.toggle('active-copy', active);
             });
             renderAgentDecisionBar();
+            scheduleStrategyPersistence('select_agent_copy_route');
         }
 
         function applyAgentImageRoute(routeId) {
@@ -1748,6 +2044,7 @@
                 node.classList.toggle('active-image', active);
             });
             refreshImageAgentPlans();
+            scheduleStrategyPersistence('select_agent_image_route');
         }
 
         function renderCopyAgentAnalysis() {
@@ -1791,8 +2088,10 @@
                     <div class="agent-route-meta"><strong>封面/内页：</strong>${escapeHtml(route.cover_style_type || '-')} ｜ ${escapeHtml(route.inner_style_type || '-')}</div>
                 </div>
             `).join('');
-            if (!selectedAgentCopyRouteId) selectedAgentCopyRouteId = copyAgentAnalysis.recommended_copy_route_id || '';
-            if (!selectedAgentImageRouteId) selectedAgentImageRouteId = copyAgentAnalysis.recommended_image_route_id || '';
+            const hasSelectedCopyRoute = (copyAgentAnalysis.copy_routes || []).some((item) => item.id === selectedAgentCopyRouteId);
+            const hasSelectedImageRoute = (copyAgentAnalysis.image_routes || []).some((item) => item.id === selectedAgentImageRouteId);
+            if (!hasSelectedCopyRoute) selectedAgentCopyRouteId = copyAgentAnalysis.recommended_copy_route_id || '';
+            if (!hasSelectedImageRoute) selectedAgentImageRouteId = copyAgentAnalysis.recommended_image_route_id || '';
             if (selectedAgentCopyRouteId) selectAgentCopyRoute(selectedAgentCopyRouteId);
             if (selectedAgentImageRouteId) applyAgentImageRoute(selectedAgentImageRouteId);
             renderAgentDecisionBar();
@@ -1823,6 +2122,7 @@
                 const active = (node.getAttribute('data-image-agent-plan') || '') === selectedImageAgentPlanId;
                 node.classList.toggle('active-image', active);
             });
+            scheduleStrategyPersistence('select_image_agent_plan');
         }
 
         function renderImageExecutionBar(planOverride = null) {
@@ -1835,7 +2135,7 @@
                 wrap.textContent = '先在“图片 Agent 方案分析”里选一条路线，系统再按这条路线预览封面和内页。';
                 return;
             }
-            wrap.textContent = `当前图片路线：${plan.label || '-'} ｜ 封面重点：${plan.cover_focus || ''} ｜ 内页重点：${plan.inner_focus || ''} ｜ 样式：${plan.cover_style_type || '-'} / ${plan.inner_style_type || '-'}${referencePlan ? ` ｜ 参考图策略：${referencePlan.label || '-'}` : ''}${referenceCount ? ` ｜ 已选参考图 ${referenceCount} 张` : ''}`;
+            wrap.textContent = `当前图片路线：${plan.label || '-'} ｜ 封面适配度：${plan.cover_fit_label || '-'}${plan.cover_fit_score ? ` ${plan.cover_fit_score}` : ''} ｜ 封面重点：${plan.cover_focus || ''} ｜ 内页重点：${plan.inner_focus || ''} ｜ 样式：${plan.cover_style_type || '-'} / ${plan.inner_style_type || '-'}${referencePlan ? ` ｜ 参考图策略：${referencePlan.label || '-'}` : ''}${referenceCount ? ` ｜ 已选参考图 ${referenceCount} 张` : ''}${plan.execution_note ? ` ｜ ${plan.execution_note}` : ''}`;
         }
 
         function renderImageAgentPlans() {
@@ -1857,12 +2157,16 @@
                         </div>
                         <button type="button" class="btn btn-sm btn-outline-primary" onclick="applyImageAgentPlan('${plan.id}')">选这套</button>
                     </div>
+                    <div class="agent-route-meta"><strong>封面适配度：</strong>${escapeHtml(plan.cover_fit_label || '-')} ${plan.cover_fit_score ? `（${escapeHtml(String(plan.cover_fit_score))}）` : ''}</div>
+                    <div class="agent-route-meta"><strong>适配原因：</strong>${escapeHtml(plan.cover_fit_reason || '')}</div>
                     <div class="agent-route-meta"><strong>封面重点：</strong>${escapeHtml(plan.cover_focus || '')}</div>
                     <div class="agent-route-meta"><strong>内页重点：</strong>${escapeHtml(plan.inner_focus || '')}</div>
+                    ${plan.execution_note ? `<div class="agent-route-meta"><strong>执行建议：</strong>${escapeHtml(plan.execution_note || '')}</div>` : ''}
                     <div class="agent-route-meta"><strong>样式：</strong>${escapeHtml(plan.cover_style_type || '-')} ｜ ${escapeHtml(plan.inner_style_type || '-')}</div>
                 </div>
             `).join('');
-            if (!selectedImageAgentPlanId) {
+            const hasSelectedPlan = (imageAgentAnalysis.plans || []).some((item) => item.id === selectedImageAgentPlanId);
+            if (!hasSelectedPlan) {
                 selectedImageAgentPlanId = imageAgentAnalysis.recommended_plan_id || '';
             }
             if (selectedImageAgentPlanId) {
@@ -1924,6 +2228,10 @@
         }
 
         async function fetchCopyAgentAnalysis() {
+            if (copyAgentAnalysisPromise) {
+                return copyAgentAnalysisPromise;
+            }
+            copyAgentAnalysisPromise = (async () => {
             try {
                 const res = await fetch('/api/copy_agent_analysis', {
                     method: 'POST',
@@ -1954,7 +2262,11 @@
             } catch (error) {
                 alert('Agent 分析失败，请稍后重试');
                 return false;
+            } finally {
+                copyAgentAnalysisPromise = null;
             }
+            })();
+            return copyAgentAnalysisPromise;
         }
 
         function renderCoverRecommendations(items) {
@@ -1975,6 +2287,9 @@
                         <div>
                             <div class="fw-semibold">${escapeHtml(item.style_label || item.style_key || '封面方案')}</div>
                             <div class="small text-muted">${escapeHtml(item.reason || '')}</div>
+                            ${item.cover_fit_label ? `<div class="small text-muted mt-1">封面适配度：${escapeHtml(item.cover_fit_label)}${item.cover_fit_score ? `（${escapeHtml(String(item.cover_fit_score))}）` : ''}</div>` : ''}
+                            ${item.cover_fit_reason ? `<div class="small text-muted mt-1">${escapeHtml(item.cover_fit_reason)}</div>` : ''}
+                            ${item.execution_note ? `<div class="small text-muted mt-1">${escapeHtml(item.execution_note)}</div>` : ''}
                             ${item.coverage_hint ? `<div class="small text-muted mt-1">${escapeHtml(item.coverage_hint)}</div>` : ''}
                         </div>
                         <button type="button" class="btn btn-sm btn-outline-primary" onclick="applyCoverRecommendation(${index})">应用</button>
@@ -2110,6 +2425,7 @@
             }
             renderReferenceAssets();
             renderResultOverview();
+            scheduleStrategyPersistence('toggle_reference_asset');
         }
 
         async function loadReferenceAssets() {
@@ -2151,6 +2467,7 @@
                 node.classList.toggle('active-image', active);
             });
             renderResultOverview();
+            scheduleStrategyPersistence('select_reference_plan');
         }
 
         function renderReferenceImagePlans() {
@@ -2182,7 +2499,8 @@
                 </div>
                 `).join('')}
             `;
-            if (!selectedReferencePlanId) {
+            const hasSelectedReferencePlan = (referenceImageAnalysis.plans || []).some((item) => item.id === selectedReferencePlanId);
+            if (!hasSelectedReferencePlan) {
                 selectedReferencePlanId = referenceImageAnalysis.recommended_plan_id || '';
             }
             if (selectedReferencePlanId) {
@@ -2298,7 +2616,11 @@
         }
 
         function applyRecommendedViralPreset() {
-            applyPresetObject(detectRecommendedPreset());
+            applyPresetAndAnalyze(detectRecommendedPreset(), {
+                persistReason: 'apply_recommended_preset',
+                autoAnalyze: true,
+                forceAnalyze: true,
+            });
         }
 
         function renderAssetStyleOptions(selectId, optionKeys, selectedKey) {
@@ -2468,7 +2790,13 @@
                         <div class="text-muted small mb-2">${escapeHtml([card.strategy, card.scene].filter(Boolean).join(' ｜ '))}</div>
                         <div class="copy-title">${escapeHtml(card.title)}</div>
                         <div class="copy-hook"><strong>开头钩子：</strong> ${escapeHtml(card.hook || '系统已自动生成钩子')}</div>
-                        <div class="copy-fit-chip">${escapeHtml(describeCopyCardFit(card))}</div>
+                        <div>
+                            <span class="copy-fit-chip">${escapeHtml(describeCopyCardFit(card))}</span>
+                            ${card.quality_score ? `<span class="copy-quality-chip">质量分 ${escapeHtml(String(card.quality_score))}</span>` : ''}
+                        </div>
+                        ${(card.quality_reasons || []).length
+                            ? `<div class="copy-highlight-list">${(card.quality_reasons || []).map((item) => `<span class="copy-highlight-chip">${escapeHtml(item)}</span>`).join('')}</div>`
+                            : ''}
                         ${(extractCopyHighlights(card.body).length
                             ? `<div class="copy-section-label">重点摘要</div>`
                             : '')}
@@ -2697,6 +3025,8 @@
             }
 
             window.latestCreativeAssets = data.assets || [];
+            const decision = data.decision || {};
+            applyWorkflowDecision(decision, { silent: true });
             const selectedRefs = referenceAssetItems.filter((item) => selectedReferenceAssetIds.includes(item.id)).slice(0, 3);
             const referencePlanLabel = getSelectedReferencePlanLabel();
             const referencePlanLogic = getSelectedReferencePlanLogic();
@@ -2732,6 +3062,13 @@
                     </div>
                 </div>
             `).join('');
+            if (decision.cover_fit_label || decision.adjustment_note) {
+                document.getElementById('creativePackList').innerHTML = `
+                    <div class="image-plan-bar mb-3">
+                        当前封面适配度：${escapeHtml(decision.cover_fit_label || '-')} ${decision.cover_fit_score ? `(${escapeHtml(String(decision.cover_fit_score))})` : ''} ｜ 封面样式：${escapeHtml(decision.cover_style_label || '-')} ｜ 内页样式：${escapeHtml(decision.inner_style_label || '-')} ${decision.adjustment_note ? `｜ ${escapeHtml(decision.adjustment_note)}` : ''} ${decision.execution_note ? `｜ ${escapeHtml(decision.execution_note)}` : ''}
+                    </div>
+                ` + document.getElementById('creativePackList').innerHTML;
+            }
             document.getElementById('creativePackArea').style.display = 'block';
         }
 
@@ -2770,6 +3107,8 @@
             }
 
             window.latestGraphicBundles = data.items || [];
+            const decision = data.decision || {};
+            applyWorkflowDecision(decision, { silent: true });
             const selectedRefs = referenceAssetItems.filter((item) => selectedReferenceAssetIds.includes(item.id)).slice(0, 3);
             const referencePlanLabel = getSelectedReferencePlanLabel();
             const referencePlanLogic = getSelectedReferencePlanLogic();
@@ -2804,6 +3143,13 @@
                     </div>
                 </div>
             `).join('');
+            if (decision.cover_fit_label || decision.adjustment_note) {
+                document.getElementById('graphicBundleList').innerHTML = `
+                    <div class="image-plan-bar mb-3">
+                        当前封面适配度：${escapeHtml(decision.cover_fit_label || '-')} ${decision.cover_fit_score ? `(${escapeHtml(String(decision.cover_fit_score))})` : ''} ｜ 封面样式：${escapeHtml(decision.cover_style_label || '-')} ｜ 内页样式：${escapeHtml(decision.inner_style_label || '-')} ${decision.adjustment_note ? `｜ ${escapeHtml(decision.adjustment_note)}` : ''} ${decision.execution_note ? `｜ ${escapeHtml(decision.execution_note)}` : ''}
+                    </div>
+                ` + document.getElementById('graphicBundleList').innerHTML;
+            }
             document.getElementById('graphicBundleArea').style.display = 'block';
         }
 
@@ -2908,7 +3254,9 @@
                 return;
             }
             window.currentAssetTaskId = data.asset_task_id;
-            document.getElementById('assetTaskMsg').textContent = `${data.message || '图片任务已创建'}，任务ID：${data.asset_task_id}`;
+            const decision = data.decision || {};
+            applyWorkflowDecision(decision, { silent: true });
+            document.getElementById('assetTaskMsg').textContent = `${data.message || '图片任务已创建'}，任务ID：${data.asset_task_id}${decision.adjustment_note ? ` ｜ ${decision.adjustment_note}` : ''}${decision.execution_note ? ` ｜ ${decision.execution_note}` : ''}`;
             const quotaWrap = document.getElementById('assetAttemptQuotaNote');
             if (quotaWrap) {
                 quotaWrap.textContent = `真实图片生成剩余 ${data.remaining_attempts}/${data.max_attempts} 次。建议先继续用模板预览确认方向，再决定是否继续调用真实图片 API。`;

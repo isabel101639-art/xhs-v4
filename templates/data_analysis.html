@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>数据分析 - 福瑞医科小红书任务</title>
+    <meta name="xhs-release-version" content="{{ (release_manifest or {}).get('release_version', '') }}">
+    <meta name="xhs-release-fingerprint" content="{{ (release_manifest or {}).get('release_fingerprint', '') }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         :root {
@@ -51,6 +53,38 @@
             border-radius: 18px;
             padding: 20px;
             height: 100%;
+        }
+
+        .release-summary-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            padding: 16px;
+            border-radius: 18px;
+            border: 1px solid rgba(239, 78, 69, 0.12);
+            background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(255,248,244,0.94));
+            margin-top: 16px;
+        }
+
+        .release-summary-item {
+            border-radius: 14px;
+            border: 1px solid rgba(239, 78, 69, 0.10);
+            background: rgba(255,255,255,0.92);
+            padding: 12px 14px;
+        }
+
+        .release-summary-item .label {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .release-summary-item .value {
+            color: var(--ink);
+            font-size: 14px;
+            font-weight: 700;
+            word-break: break-word;
         }
 
         .metric-number {
@@ -169,7 +203,7 @@
         }
     </style>
 </head>
-<body>
+<body data-release-manifest="release-manifest" data-release-version="{{ (release_manifest or {}).get('release_version', '') }}">
     <nav class="navbar navbar-dark mb-4">
         <div class="container">
             <a class="navbar-brand" href="/">← 返回首页</a>
@@ -189,6 +223,24 @@
                     <div class="subtle">只做增量优化，统一统计口径，先可用再美化。</div>
                 </div>
                 <div class="subtle">最后更新：<span id="updatedAt">--</span></div>
+            </div>
+            <div id="releaseSummaryBar" class="release-summary-bar">
+                <div class="release-summary-item">
+                    <div class="label">当前版本</div>
+                    <div class="value">{{ (release_manifest or {}).get('release_version', '-') }}</div>
+                </div>
+                <div class="release-summary-item">
+                    <div class="label">当前阶段</div>
+                    <div class="value">{{ (release_manifest or {}).get('release_stage_label', '-') }}</div>
+                </div>
+                <div class="release-summary-item">
+                    <div class="label">目标上线日</div>
+                    <div class="value">{{ (release_manifest or {}).get('release_target_date', '-') }}</div>
+                </div>
+                <div class="release-summary-item">
+                    <div class="label">版本指纹</div>
+                    <div class="value">{{ (release_manifest or {}).get('release_fingerprint', '-') }}</div>
+                </div>
             </div>
 
             <div class="row g-3 mt-1">
@@ -227,6 +279,7 @@
                 </div>
             </div>
         </div>
+        <script id="releaseManifestPayload" type="application/json">{{ (release_manifest or {})|tojson }}</script>
 
         <div class="sticky-note p-4 mb-4">
             <div class="section-title mb-2">固定口径</div>
@@ -256,6 +309,23 @@
                 <div class="metric-card">
                     <div class="metric-number" id="metricInteractions">0</div>
                     <div class="metric-label">总互动</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+            <div class="col-md-6">
+                <div class="panel p-4 h-100">
+                    <div class="section-title">任务漏斗</div>
+                    <div class="subtle mb-3">看从选策略到提链、同步的转化，先发现卡点在哪里。</div>
+                    <div id="taskFunnelWrap"></div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="panel p-4 h-100">
+                    <div class="section-title">最近策略留痕</div>
+                    <div class="subtle mb-3">最近用了什么标题打法、图片打法，方便回看和复盘。</div>
+                    <div id="strategyLatestWrap"></div>
                 </div>
             </div>
         </div>
@@ -327,6 +397,7 @@
                 <div class="section-title mb-0">爆款策略复盘</div>
                 <div class="subtle">看标题打法、图片打法和组合打法，后续推荐会基于这里越来越准。</div>
             </div>
+            <div id="strategySummaryWrap" class="mb-4"></div>
             <div class="row g-4">
                 <div class="col-md-4">
                     <div class="platform-card h-100">
@@ -634,6 +705,39 @@
                 insight.combo_rows || [],
                 '当前还没有足够的组合留痕'
             );
+
+            const summaryWrap = document.getElementById('strategySummaryWrap');
+            const summaryLines = insight.summary_lines || [];
+            summaryWrap.innerHTML = summaryLines.map((line) => `
+                <div class="list-line">
+                    <strong>策略结论：</strong> ${escapeHtml(line)}
+                </div>
+            `).join('') || '<div class="empty-box">当前还没有足够的策略结论</div>';
+
+            const latestWrap = document.getElementById('strategyLatestWrap');
+            const latestRows = insight.latest_submissions || [];
+            latestWrap.innerHTML = latestRows.map((row) => `
+                <div class="list-line">
+                    <div><strong>${escapeHtml(row.title || '-')}</strong></div>
+                    <div class="subtle mt-1">标题：${escapeHtml(row.title_skill || '-')} ｜ 图片：${escapeHtml(row.image_skill || '-')}</div>
+                    <div class="subtle mt-1">曝光 ${row.views || 0} ｜ 互动 ${row.interactions || 0} ｜ 留痕时间 ${escapeHtml(row.strategy_updated_at || '-')}</div>
+                </div>
+            `).join('') || '<div class="empty-box">最近还没有策略留痕</div>';
+        }
+
+        function renderTaskFunnel(stats) {
+            const wrap = document.getElementById('taskFunnelWrap');
+            const funnel = stats.task_funnel || {};
+            const steps = funnel.steps || [];
+            wrap.innerHTML = steps.map((step) => `
+                <div class="list-line">
+                    <div class="d-flex justify-content-between align-items-center gap-2">
+                        <strong>${escapeHtml(step.label || '-')}</strong>
+                        <span class="chip">${step.count || 0} ｜ ${escapeHtml(step.rate_display || '-')}</span>
+                    </div>
+                    <div class="subtle mt-2">${escapeHtml(step.note || '')}</div>
+                </div>
+            `).join('') || '<div class="empty-box">暂无任务漏斗数据</div>';
         }
 
         function renderAdvice(stats) {
@@ -660,6 +764,7 @@
             document.getElementById('updatedAt').textContent = stats.updated_at || '--';
             renderDefinitions(stats.definitions || []);
             renderOverview(stats);
+            renderTaskFunnel(stats);
             renderPlatforms(stats);
             renderGroupRankings(stats);
             renderPersonalRankings(stats);

@@ -182,7 +182,7 @@ def register():
 import requests
 
 DEEPSEEK_API_KEY = os.environ.get('DEEPSEEK_API_KEY', '')
-DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions'
+DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions'
 
 # 小红书API配置
 XHS_PROXY = os.environ.get('XHS_PROXY', None)  # 如需代理设置
@@ -284,7 +284,7 @@ def generate_copy():
         if DEEPSEEK_API_KEY:
             headers = {'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'}
             payload = {
-                'model': 'deepseek-chat',
+                'model': 'deepseek-v4-pro',
                 'messages': [{'role': 'user', 'content': prompt}],
                 'temperature': 0.8
             }

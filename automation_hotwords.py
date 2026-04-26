@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 import re
 from datetime import datetime
@@ -226,6 +228,95 @@ def parse_trend_payload(raw_payload):
                 if isinstance(row, dict):
                     items.append(row)
         return items
+
+    lines = [line for line in payload.splitlines() if line.strip()]
+    if not lines:
+        return []
+
+    header_alias_map = {
+        '关键词': 'keyword',
+        '关键字': 'keyword',
+        '搜索词': 'keyword',
+        '话题词': 'keyword',
+        '标题': 'title',
+        '热点标题': 'title',
+        '内容标题': 'title',
+        '笔记标题': 'title',
+        '链接': 'link',
+        '地址': 'link',
+        'url': 'link',
+        '分享链接': 'link',
+        '作者': 'author',
+        '账号': 'author',
+        '昵称': 'author',
+        '摘要': 'summary',
+        '简介': 'summary',
+        '描述': 'summary',
+        '内容摘要': 'summary',
+        '点赞': 'likes',
+        '点赞量': 'likes',
+        '收藏': 'favorites',
+        '收藏量': 'favorites',
+        '评论': 'comments',
+        '评论量': 'comments',
+        '曝光': 'views',
+        '曝光量': 'views',
+        '阅读': 'views',
+        '阅读量': 'views',
+        '浏览': 'views',
+        '浏览量': 'views',
+        '热度': 'hot_score',
+        '热度值': 'hot_score',
+        '热度分': 'hot_score',
+        '发布时间': 'publish_time',
+        '时间': 'publish_time',
+        '平台': 'source_platform',
+        '来源平台': 'source_platform',
+        '来源渠道': 'source_channel',
+    }
+
+    def normalize_header(text):
+        raw = str(text or '').strip().strip('"').strip("'")
+        lowered = raw.lower()
+        return header_alias_map.get(raw) or header_alias_map.get(lowered) or lowered
+
+    def looks_like_header_row(row):
+        normalized = [normalize_header(item) for item in row]
+        matched = [item for item in normalized if item in {
+            'keyword', 'title', 'link', 'likes', 'favorites', 'comments', 'views', 'author', 'summary', 'hot_score', 'publish_time'
+        }]
+        return len(matched) >= 2
+
+    def try_parse_tabular_text():
+        sample = '\n'.join(lines[:5])
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=',\t;|')
+        except Exception:
+            dialect = csv.excel
+            dialect.delimiter = '\t' if '\t' in sample else ','
+        reader = list(csv.reader(io.StringIO(payload), dialect))
+        reader = [[str(cell or '').strip() for cell in row] for row in reader if any(str(cell or '').strip() for cell in row)]
+        if not reader:
+            return []
+        if looks_like_header_row(reader[0]):
+            headers = [normalize_header(item) for item in reader[0]]
+            rows = []
+            for raw_row in reader[1:]:
+                padded = raw_row + [''] * max(0, len(headers) - len(raw_row))
+                row_obj = {}
+                for index, header in enumerate(headers):
+                    if not header:
+                        continue
+                    row_obj[header] = padded[index] if index < len(padded) else ''
+                if row_obj:
+                    rows.append(row_obj)
+            if rows:
+                return rows
+        return []
+
+    tabular_items = try_parse_tabular_text()
+    if tabular_items:
+        return tabular_items
 
     for line in payload.splitlines():
         line = line.strip()
