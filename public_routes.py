@@ -324,6 +324,7 @@ def register_public_routes(app, helpers):
     image_skill_presets = helpers['image_skill_presets']
     build_asset_style_recommendation_payload = helpers['build_asset_style_recommendation_payload']
     build_strategy_recommendation_payload = helpers['build_strategy_recommendation_payload']
+    build_task_agent_brief_payload = helpers['build_task_agent_brief_payload']
     apply_submission_strategy_snapshot = helpers['apply_submission_strategy_snapshot']
     serialize_submission_strategy = helpers['serialize_submission_strategy']
     validate_required_platform_data = helpers['validate_required_platform_data']
@@ -456,6 +457,7 @@ def register_public_routes(app, helpers):
 
     def serialize_public_asset(item):
         tags = [part.strip() for part in (item.tags or '').split(',') if part.strip()]
+        payload_json = load_json_value(item.raw_payload, {})
         library_type_label_map = {
             'generated': '生成资产',
             'product': '产品图库',
@@ -470,12 +472,17 @@ def register_public_routes(app, helpers):
             'product_name': item.product_name or '',
             'product_category': item.product_category or '',
             'product_indication': item.product_indication or '',
+            'library_type_key': item.library_type or 'generated',
             'library_type': library_type_label_map.get(item.library_type or 'generated', item.library_type or '生成资产'),
             'asset_type': item.asset_type or '',
             'style_type_key': item.style_type_key or '',
             'visual_role': item.visual_role or '',
             'source_provider': item.source_provider or '',
             'download_name': item.download_name or '',
+            'usable_score': safe_int(payload_json.get('usable_score'), 0),
+            'usable_label': (payload_json.get('usable_label') or '').strip(),
+            'recommended_usage': (payload_json.get('recommended_usage') or '').strip(),
+            'recommended_usage_label': (payload_json.get('recommended_usage_label') or '').strip(),
             'tags': tags[:8],
             'created_at': item.created_at.strftime('%Y-%m-%d %H:%M:%S') if item.created_at else '',
         }
@@ -609,6 +616,93 @@ def register_public_routes(app, helpers):
         item['key']: item
         for item in LIVER_SCIENCE_IP_LANES
     }
+
+    def build_public_topic_recommendation(topic):
+        if not topic:
+            return {}
+        text = ' '.join(filter(None, [
+            topic.topic_name or '',
+            topic.keywords or '',
+            topic.direction or '',
+            topic.reference_content or '',
+        ]))
+        lane_key = infer_liver_science_lane_key(text)
+        persona_key = infer_liver_science_persona_key(text)
+        lane_meta = lane_meta_map.get(lane_key, {})
+        persona_meta = persona_meta_map.get(persona_key, {})
+        available = max((topic.quota or 0) - (topic.filled or 0), 0)
+        quota = max(topic.quota or 0, 0)
+        fill_ratio = ((topic.filled or 0) / quota) if quota else 0
+
+        score = 58
+        if available <= 0:
+            score = 0
+        else:
+            score += min(available, 18)
+            if quota and fill_ratio <= 0.35:
+                score += 10
+            elif quota and fill_ratio <= 0.7:
+                score += 4
+            else:
+                score -= 6
+            if (topic.source_type or '') in {'topic_idea', 'trend_note'}:
+                score += 10
+            if any(token in text for token in ['体检', '检查', '报告', '转氨酶', 'FibroScan', '福波看', '肝弹']):
+                score += 10
+            if any(token in text for token in ['误区', '为什么', '别再', '是不是', '搞错']):
+                score += 8
+            if any(token in text for token in ['脂肪肝', '减脂', '饮食', '运动', '体重']):
+                score += 6
+            if (topic.reference_link or '').strip():
+                score += 4
+            if (topic.reference_content or '').strip() or (topic.writing_example or '').strip():
+                score += 4
+        score = max(min(int(score), 100), 0)
+
+        if available <= 0:
+            recommendation_label = '已满'
+        elif score >= 88:
+            recommendation_label = '优先报名'
+        elif score >= 74:
+            recommendation_label = '推荐报名'
+        else:
+            recommendation_label = '可补位'
+
+        if lane_key == 'report_interpretation':
+            recommended_goal = '收藏种草优先'
+        elif lane_key == 'myth_busting':
+            recommended_goal = '爆款点击优先'
+        elif lane_key in {'emotion_mindbody', 'family_care'}:
+            recommended_goal = '评论互动优先'
+        else:
+            recommended_goal = '均衡输出'
+
+        if available <= 0:
+            recommendation_reason = '当前名额已满，建议进入下一期或做同类补位题。'
+        elif score >= 88:
+            recommendation_reason = '当前更适合优先分发，热度、执行价值和剩余名额都更匹配。'
+        elif score >= 74:
+            recommendation_reason = '当前适合作为常规推荐题，适合快速开工。'
+        else:
+            recommendation_reason = '当前更适合作为补位题，建议放在优先题后面分发。'
+
+        return {
+            'recommendation_score': score,
+            'recommendation_label': recommendation_label,
+            'recommendation_reason': recommendation_reason,
+            'lane_key': lane_key,
+            'lane_title': lane_meta.get('title') or '',
+            'persona_key': persona_key,
+            'persona_title': persona_meta.get('title') or '',
+            'recommended_goal': recommended_goal,
+            'available': available,
+        }
+
+    def serialize_public_topic(topic):
+        return {
+            **serialize_topic(topic),
+            **build_public_topic_recommendation(topic),
+        }
 
     def is_liver_science_text(text):
         haystack = (text or '').strip()
@@ -1323,6 +1417,16 @@ def register_public_routes(app, helpers):
             max_value=120,
         )
         all_topics = list(activity.topics) if activity else []
+        all_topics = sorted(
+            all_topics,
+            key=lambda topic: (
+                (build_public_topic_recommendation(topic).get('recommendation_score') or 0),
+                (build_public_topic_recommendation(topic).get('available') or 0),
+                topic.created_at or datetime.min,
+                topic.id or 0,
+            ),
+            reverse=True,
+        )
         primary_topics = all_topics[:split_index]
         secondary_topics = all_topics[split_index:]
         first_available_topic = next((topic for topic in all_topics if (topic.filled or 0) < (topic.quota or 0)), None)
@@ -1489,6 +1593,7 @@ def register_public_routes(app, helpers):
     @app.route('/api/public-assets')
     def public_assets_api():
         library_type = (request.args.get('library_type') or '').strip()
+        library_types_raw = (request.args.get('library_types') or '').strip()
         keyword = (request.args.get('keyword') or '').strip()
         limit = min(max(int(request.args.get('limit') or 12), 1), 60)
 
@@ -1497,7 +1602,13 @@ def register_public_routes(app, helpers):
             AssetLibrary.preview_url != '',
             AssetLibrary.pool_status != 'archived',
         )
-        if library_type:
+        if library_types_raw:
+            library_types = [item.strip() for item in library_types_raw.split(',') if item.strip()]
+            if len(library_types) == 1:
+                query = query.filter_by(library_type=library_types[0])
+            elif library_types:
+                query = query.filter(AssetLibrary.library_type.in_(library_types))
+        elif library_type:
             query = query.filter_by(library_type=library_type)
         if keyword:
             for token in [item.strip() for item in keyword.replace('，', ',').replace('、', ',').split(',') if item.strip()][:5]:
@@ -1508,16 +1619,32 @@ def register_public_routes(app, helpers):
                     (AssetLibrary.product_name.contains(token)) |
                     (AssetLibrary.product_indication.contains(token))
                 )
-        items = query.order_by(AssetLibrary.created_at.desc(), AssetLibrary.id.desc()).limit(limit).all()
+        items = query.order_by(AssetLibrary.created_at.desc(), AssetLibrary.id.desc()).all()
+        serialized_items = [serialize_public_asset(item) for item in items]
+        usage_rank_map = {'cover': 3, 'inner': 2, 'general': 1}
+        serialized_items.sort(
+            key=lambda item: (
+                100000 if item.get('library_type_key') == 'generated' else 0,
+                (item.get('usable_score') or 0) * 10,
+                usage_rank_map.get(item.get('recommended_usage') or '', 0),
+                item.get('created_at') or '',
+            ),
+            reverse=True,
+        )
         return jsonify({
             'success': True,
-            'items': [serialize_public_asset(item) for item in items],
+            'items': serialized_items[:limit],
         })
 
     @app.route('/topic/<int:topic_id>')
     def topic_detail(topic_id):
         topic = Topic.query.get_or_404(topic_id)
-        return render_template('topic_detail.html', topic=topic, **build_public_context())
+        return render_template(
+            'topic_detail.html',
+            topic=topic,
+            topic_recommendation=build_public_topic_recommendation(topic),
+            **build_public_context(),
+        )
 
     @app.route('/register_success/<int:reg_id>')
     def register_success(reg_id):
@@ -1533,6 +1660,7 @@ def register_public_routes(app, helpers):
             image_skill_presets=image_skill_presets(),
             saved_strategy=serialize_submission_strategy(reg.submission) if reg.submission else {},
             strategy_recommendation=build_strategy_recommendation_payload(reg),
+            task_agent_brief=build_task_agent_brief_payload(reg),
             **build_public_context(),
         )
 
@@ -1545,6 +1673,11 @@ def register_public_routes(app, helpers):
     def public_strategy_recommendations(reg_id):
         reg = Registration.query.get_or_404(reg_id)
         return jsonify(build_strategy_recommendation_payload(reg))
+
+    @app.route('/api/task_agent_brief/<int:reg_id>')
+    def public_task_agent_brief(reg_id):
+        reg = Registration.query.get_or_404(reg_id)
+        return jsonify(build_task_agent_brief_payload(reg))
 
     @app.route('/api/strategy_selection', methods=['POST'])
     def save_strategy_selection():
@@ -1589,7 +1722,17 @@ def register_public_routes(app, helpers):
     @app.route('/api/topics/<int:activity_id>')
     def get_topics(activity_id):
         topics = Topic.query.filter_by(activity_id=activity_id).all()
-        return jsonify([serialize_topic(topic) for topic in topics])
+        topics = sorted(
+            topics,
+            key=lambda topic: (
+                (build_public_topic_recommendation(topic).get('recommendation_score') or 0),
+                (build_public_topic_recommendation(topic).get('available') or 0),
+                topic.created_at or datetime.min,
+                topic.id or 0,
+            ),
+            reverse=True,
+        )
+        return jsonify([serialize_public_topic(topic) for topic in topics])
 
     @app.route('/api/profile_by_phone')
     def profile_by_phone():

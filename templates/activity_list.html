@@ -82,6 +82,7 @@
                         <h6>${topic.topic_name}</h6>
                         <p class="small text-muted mb-1">组号: ${topic.group_num}</p>
                         <p class="small text-muted mb-1">来源: ${topic.source_type || 'manual'}</p>
+                        <p class="small text-muted mb-1">建议: ${topic.recommendation_label || '常规'} ｜ ${topic.persona_title || '通用人设'}</p>
                         <p class="small mb-1">名额: ${topic.filled}/${topic.quota}</p>
                         <span class="badge ${topic.filled >= topic.quota ? 'bg-secondary' : 'bg-success'}">
                             ${topic.filled >= topic.quota ? '已满' : '报名中'}

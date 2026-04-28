@@ -6,6 +6,7 @@
     <title>数据分析 - 福瑞医科小红书任务</title>
     <meta name="xhs-release-version" content="{{ (release_manifest or {}).get('release_version', '') }}">
     <meta name="xhs-release-fingerprint" content="{{ (release_manifest or {}).get('release_fingerprint', '') }}">
+    <meta name="xhs-release-commit" content="{{ (release_manifest or {}).get('release_commit_sha', '') }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         :root {
@@ -177,6 +178,25 @@
             border-bottom: none;
         }
 
+        .advice-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 14px;
+        }
+
+        .advice-card {
+            border: 1px solid rgba(239, 78, 69, 0.12);
+            border-radius: 18px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(255,248,244,0.94));
+            padding: 16px;
+        }
+
+        .advice-card .title {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
         .empty-box {
             color: var(--muted);
             padding: 18px 0;
@@ -240,6 +260,10 @@
                 <div class="release-summary-item">
                     <div class="label">版本指纹</div>
                     <div class="value">{{ (release_manifest or {}).get('release_fingerprint', '-') }}</div>
+                </div>
+                <div class="release-summary-item">
+                    <div class="label">Commit</div>
+                    <div class="value">{{ (release_manifest or {}).get('release_commit_sha', '-') }}</div>
                 </div>
             </div>
 
@@ -311,6 +335,15 @@
                     <div class="metric-label">总互动</div>
                 </div>
             </div>
+        </div>
+
+        <div class="panel p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <div class="section-title mb-0">运营建议</div>
+                <div class="subtle">直接给动作，不只看数字。</div>
+            </div>
+            <div id="adviceHeadlineWrap" class="list-line fw-semibold"></div>
+            <div id="operationalAdviceWrap" class="advice-grid mt-3"></div>
         </div>
 
         <div class="row g-4 mb-4">
@@ -482,6 +515,20 @@
                 </div>
             </div>
         </div>
+
+        <div class="panel p-4 mt-4">
+            <div class="section-title">近期冠军变化</div>
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <div class="subtle mb-2">标题打法最近一批 vs 上一批</div>
+                    <div id="titleTrendWrap"></div>
+                </div>
+                <div class="col-md-6">
+                    <div class="subtle mb-2">图片打法最近一批 vs 上一批</div>
+                    <div id="imageTrendWrap"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -534,6 +581,27 @@
                 return;
             }
             groupWrap.innerHTML = rows.map((row) => `<span class="chip">${escapeHtml(row.group)} · ${row.participants}人</span>`).join('');
+        }
+
+        function renderOperationalAdvice(stats) {
+            const advice = stats.operational_advice || {};
+            const headlineWrap = document.getElementById('adviceHeadlineWrap');
+            const wrap = document.getElementById('operationalAdviceWrap');
+            if (headlineWrap) {
+                headlineWrap.textContent = advice.headline || '当前暂无明确的运营优先级建议。';
+            }
+            const sections = [
+                { title: '当前最急', rows: advice.urgent_actions || [] },
+                { title: '当前该放大', rows: advice.winning_moves || [] },
+                { title: '当前风险', rows: advice.risk_alerts || [] },
+                { title: '下周动作', rows: advice.next_week_actions || [] },
+            ];
+            wrap.innerHTML = sections.map((section) => `
+                <div class="advice-card">
+                    <div class="title">${escapeHtml(section.title)}</div>
+                    ${(section.rows || []).map((line) => `<div class="list-line">${escapeHtml(line)}</div>`).join('') || '<div class="empty-box">暂无建议</div>'}
+                </div>
+            `).join('');
         }
 
         function renderPlatforms(stats) {
@@ -723,6 +791,27 @@
                     <div class="subtle mt-1">曝光 ${row.views || 0} ｜ 互动 ${row.interactions || 0} ｜ 留痕时间 ${escapeHtml(row.strategy_updated_at || '-')}</div>
                 </div>
             `).join('') || '<div class="empty-box">最近还没有策略留痕</div>';
+
+            const renderTrendRows = (rows, emptyText) => rows.map((row) => `
+                <div class="list-line">
+                    <div class="d-flex justify-content-between align-items-center gap-2">
+                        <strong>${escapeHtml(row.label || row.key || '-')}</strong>
+                        <span class="chip">${escapeHtml(row.trend_label || '-')}</span>
+                    </div>
+                    <div class="subtle mt-1">最近 ${row.recent_count || 0} 条 ｜ 平均互动 ${row.recent_avg_interactions || 0}</div>
+                    <div class="subtle">上一批 ${row.previous_count || 0} 条 ｜ 平均互动 ${row.previous_avg_interactions || 0}</div>
+                    <div class="subtle">变化 ${row.delta_avg_interactions > 0 ? '+' : ''}${row.delta_avg_interactions || 0}</div>
+                </div>
+            `).join('') || `<div class="empty-box">${escapeHtml(emptyText)}</div>`;
+
+            document.getElementById('titleTrendWrap').innerHTML = renderTrendRows(
+                insight.title_trend_rows || [],
+                '当前还没有足够的标题打法变化样本'
+            );
+            document.getElementById('imageTrendWrap').innerHTML = renderTrendRows(
+                insight.image_trend_rows || [],
+                '当前还没有足够的图片打法变化样本'
+            );
         }
 
         function renderTaskFunnel(stats) {
@@ -764,6 +853,7 @@
             document.getElementById('updatedAt').textContent = stats.updated_at || '--';
             renderDefinitions(stats.definitions || []);
             renderOverview(stats);
+            renderOperationalAdvice(stats);
             renderTaskFunnel(stats);
             renderPlatforms(stats);
             renderGroupRankings(stats);

@@ -353,6 +353,10 @@
                                     <i class="bi bi-stars"></i>
                                     保存并去生成文案
                                 </button>
+                                <button type="button" class="hero-action hero-action-primary" onclick='saveHotTopicSeedAndGoBundle({{ item.generator_seed|tojson|safe }})'>
+                                    <i class="bi bi-images"></i>
+                                    保存并去生成图文
+                                </button>
                                 <button type="button" class="hero-action hero-action-secondary" onclick='saveHotTopicSeed({{ item.generator_seed|tojson|safe }})'>
                                     <i class="bi bi-bookmark-plus"></i>
                                     保存为热点预设
@@ -387,6 +391,18 @@
 
         function saveHotTopicSeedAndGo(seed) {
             saveHotTopicSeed(seed);
+            localStorage.setItem('xhs_v4_hot_topic_action', 'task_autopilot');
+            const lastRegId = localStorage.getItem('xhs_v4_last_registration_id');
+            if (lastRegId) {
+                window.location.href = `/register_success/${encodeURIComponent(lastRegId)}`;
+                return;
+            }
+            window.location.href = '/my_registration';
+        }
+
+        function saveHotTopicSeedAndGoBundle(seed) {
+            saveHotTopicSeed(seed);
+            localStorage.setItem('xhs_v4_hot_topic_action', 'bundle_autopilot');
             const lastRegId = localStorage.getItem('xhs_v4_last_registration_id');
             if (lastRegId) {
                 window.location.href = `/register_success/${encodeURIComponent(lastRegId)}`;

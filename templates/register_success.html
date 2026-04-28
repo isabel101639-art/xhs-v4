@@ -6,6 +6,7 @@
     <title>报名成功 - 福瑞医科小红书任务</title>
     <meta name="xhs-release-version" content="{{ (release_manifest or {}).get('release_version', '') }}">
     <meta name="xhs-release-fingerprint" content="{{ (release_manifest or {}).get('release_fingerprint', '') }}">
+    <meta name="xhs-release-commit" content="{{ (release_manifest or {}).get('release_commit_sha', '') }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link rel="stylesheet" href="/static/css/public_site.css">
@@ -696,6 +697,41 @@
             background: rgba(15,23,42,0.06);
             color: #475569;
         }
+        .task-agent-brief-card {
+            margin-top: 14px;
+            padding: 16px 18px;
+            border-radius: 18px;
+            background: linear-gradient(180deg, rgba(248,250,252,0.98), rgba(255,255,255,0.98));
+            border: 1px solid rgba(22,33,43,0.08);
+            box-shadow: 0 12px 24px rgba(22,33,43,0.04);
+        }
+        .task-agent-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(15,23,42,0.06);
+            color: #334155;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .task-agent-step {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #f8fafc;
+            color: #64748b;
+            font-size: 12px;
+            font-weight: 700;
+            border: 1px solid rgba(15,23,42,0.08);
+        }
+        .task-agent-step.is-done {
+            background: #ecfdf3;
+            color: #15803d;
+            border-color: rgba(21,128,61,0.15);
+        }
     
         /* MOBILE_PATCH */
         @media (max-width: 768px) {
@@ -740,6 +776,10 @@
             <div class="release-studio-card">
                 <div class="label">版本指纹</div>
                 <div class="value">{{ (release_manifest or {}).get('release_fingerprint', '-') }}</div>
+            </div>
+            <div class="release-studio-card">
+                <div class="label">Commit</div>
+                <div class="value">{{ (release_manifest or {}).get('release_commit_sha', '-') }}</div>
             </div>
         </div>
         <script id="releaseManifestPayload" type="application/json">{{ (release_manifest or {})|tojson }}</script>
@@ -922,12 +962,19 @@
                 <button type="button" class="outline-pill-btn" onclick="applyRecommendedViralPreset()">
                     <i class="bi bi-lightning-charge"></i> 应用推荐并分析
                 </button>
+                <button id="taskAutopilotBtn" type="button" class="outline-pill-btn" onclick="runTaskAutopilot()">
+                    <i class="bi bi-magic"></i> 一键爆款生成
+                </button>
+                <button id="bundleAutopilotBtn" type="button" class="outline-pill-btn" onclick="runBundleAutopilot()">
+                    <i class="bi bi-images"></i> 一键图文套组
+                </button>
                 <button id="generateBtn" class="studio-primary-btn" onclick="generateCopy()">
                     <i class="bi bi-stars"></i> 生成文案
                 </button>
             </div>
             <div id="viralOperationTips" class="form-text mt-2">系统会根据当前话题推荐更适合的文案打法、标题打法和图片打法。</div>
             <div id="strategyRecommendationBar" class="strategy-recommendation-card">系统正在准备近期实战推荐。</div>
+            <div id="taskAgentBriefCard" class="task-agent-brief-card">系统正在准备这条任务的 Agent 执行简报。</div>
             <div id="agentDecisionBar" class="form-text mt-2">建议先让 Agent 分析，再选文案路线和图片路线。</div>
 
             <div id="agentAnalysisArea" class="mt-4" style="display:none;">
@@ -1190,7 +1237,9 @@
         let lastSavedStrategyHash = '';
         const initialSavedStrategy = {{ saved_strategy|tojson }};
         let dynamicStrategyRecommendation = {{ strategy_recommendation|tojson }};
+        let taskAgentBrief = {{ task_agent_brief|tojson }};
         let strategyControlsTouchedByUser = false;
+        let titlePoolTouchedByUser = false;
         let isApplyingPresetProgrammatically = false;
         let didAutoApplyHistoricalRecommendation = false;
         let copyAgentAnalysisPromise = null;
@@ -1393,9 +1442,13 @@
             const wrap = document.getElementById('strategyRecommendationBar');
             if (!wrap) return;
             const recommended = detectRecommendedPreset();
-            const sourceLabel = recommended.source === 'historical' ? '近期实战推荐' : '规则推荐';
+            const sourceLabel = recommended.source === 'historical'
+                ? '近期实战推荐'
+                : (recommended.source === 'hybrid' ? '混合推荐' : '规则推荐');
             const confidenceLabel = recommended.confidence === 'high' ? '高置信' : (recommended.confidence === 'medium' ? '中置信' : '基础置信');
             const topRow = (dynamicStrategyRecommendation?.historical_rows || [])[0] || {};
+            const topTitleLeader = (dynamicStrategyRecommendation?.title_skill_leaders || [])[0] || {};
+            const topImageLeader = (dynamicStrategyRecommendation?.image_skill_leaders || [])[0] || {};
             const sampleTitles = (topRow.sample_titles || []).filter(Boolean).slice(0, 2).join(' / ');
             const autoApplyText = didAutoApplyHistoricalRecommendation ? '｜已自动应用' : '';
             const decisionProfile = dynamicStrategyRecommendation?.decision_profile || {};
@@ -1427,8 +1480,131 @@
                     <span class="strategy-chip is-secondary">标题：${escapeHtml(titleSkillLabel)}</span>
                     <span class="strategy-chip is-secondary">图片：${escapeHtml(imageSkillLabel)}</span>
                 </div>
+                ${(topTitleLeader.skill_label || topImageLeader.skill_label) ? `
+                <div class="d-flex gap-2 flex-wrap mt-2">
+                    ${topTitleLeader.skill_label ? `<span class="strategy-chip is-secondary">近期标题冠军：${escapeHtml(topTitleLeader.skill_label)} ｜ ${escapeHtml(String(topTitleLeader.count || 0))} 次 ｜ 平均互动 ${escapeHtml(String(topTitleLeader.avg_interactions || 0))}</span>` : ''}
+                    ${topImageLeader.skill_label ? `<span class="strategy-chip is-secondary">近期图片冠军：${escapeHtml(topImageLeader.skill_label)} ｜ ${escapeHtml(String(topImageLeader.count || 0))} 次 ｜ 平均互动 ${escapeHtml(String(topImageLeader.avg_interactions || 0))}</span>` : ''}
+                </div>
+                ` : ''}
                 <div class="small text-muted mt-3">${escapeHtml(recommended.reason || '')}${sampleTitles ? ` ｜ 近期标题样本：${escapeHtml(sampleTitles)}` : ''}</div>
             `;
+        }
+
+        function renderTaskAgentBrief() {
+            const wrap = document.getElementById('taskAgentBriefCard');
+            if (!wrap) return;
+            if (!taskAgentBrief || !taskAgentBrief.success) {
+                wrap.textContent = '系统暂时还没生成这条任务的 Agent 执行简报。';
+                return;
+            }
+            const labels = taskAgentBrief.labels || {};
+            const copyRoute = taskAgentBrief.copy_route || {};
+            const imageRoute = taskAgentBrief.image_route || {};
+            const imagePlan = taskAgentBrief.image_plan || {};
+            const actionSteps = taskAgentBrief.action_steps || [];
+            const metricFocus = taskAgentBrief.metric_focus || [];
+            const advice = taskAgentBrief.professional_advice || [];
+            const sourceLabel = taskAgentBrief.source === 'historical'
+                ? '近期实战'
+                : (taskAgentBrief.source === 'hybrid' ? '混合判断' : '规则判断');
+            const confidenceLabel = taskAgentBrief.confidence === 'high'
+                ? '高置信'
+                : (taskAgentBrief.confidence === 'medium' ? '中置信' : '基础置信');
+            wrap.innerHTML = `
+                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                    <div>
+                        <div class="fw-semibold mb-2">任务级 Agent 简报</div>
+                        <div class="small text-muted">${escapeHtml(sourceLabel)}｜${escapeHtml(confidenceLabel)}｜${escapeHtml(taskAgentBrief.summary || '')}</div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="applyTaskAgentBrief()">一键应用任务建议</button>
+                </div>
+                <div class="d-flex gap-2 flex-wrap mt-3">
+                    <span class="task-agent-chip">人设：${escapeHtml(labels.persona || '-')}</span>
+                    <span class="task-agent-chip">场景：${escapeHtml(labels.scene || '-')}</span>
+                    <span class="task-agent-chip">方向：${escapeHtml(labels.direction || '-')}</span>
+                    <span class="task-agent-chip">目标：${escapeHtml(labels.copy_goal || '-')}</span>
+                </div>
+                <div class="small text-muted mt-3">
+                    推荐文案路线：${escapeHtml(copyRoute.label || '-')} ｜ 推荐图片路线：${escapeHtml(imageRoute.label || '-')} ｜ 推荐出图方案：${escapeHtml(imagePlan.label || '-')}
+                </div>
+                <div class="d-flex gap-2 flex-wrap mt-3">
+                    ${actionSteps.map((item) => `<span class="task-agent-step${item.done ? ' is-done' : ''}">${item.done ? '已完成' : '待执行'} · ${escapeHtml(item.label || '')}</span>`).join('')}
+                </div>
+                ${metricFocus.length ? `<div class="small text-muted mt-3"><strong>发布后重点看：</strong>${escapeHtml(metricFocus.join(' / '))}</div>` : ''}
+                ${advice.length ? `<div class="small text-muted mt-2">${advice.map((item) => escapeHtml(item)).join(' ｜ ')}</div>` : ''}
+                ${taskAgentBrief.reason ? `<div class="small text-muted mt-2">推荐原因：${escapeHtml(taskAgentBrief.reason || '')}</div>` : ''}
+            `;
+        }
+
+        async function loadTaskAgentBrief() {
+            try {
+                const res = await fetch('/api/task_agent_brief/{{ registration.id }}');
+                const data = await res.json();
+                if (data && data.success) {
+                    taskAgentBrief = data;
+                }
+            } catch (error) {
+                return;
+            } finally {
+                renderTaskAgentBrief();
+            }
+        }
+
+        async function applyTaskAgentBrief() {
+            if (!taskAgentBrief || !taskAgentBrief.success || !taskAgentBrief.preset) {
+                return false;
+            }
+            return applyPresetAndAnalyze({
+                ...taskAgentBrief.preset,
+                reason: taskAgentBrief.reason || '已按任务级 Agent 简报应用建议。',
+                source: taskAgentBrief.source || 'heuristic',
+                confidence: taskAgentBrief.confidence || 'low',
+            }, {
+                persistReason: 'apply_task_agent_brief',
+                autoAnalyze: true,
+                forceAnalyze: true,
+            });
+        }
+
+        async function runTaskAutopilot() {
+            const autopilotBtn = document.getElementById('taskAutopilotBtn');
+            const fastMode = document.getElementById('fastMode');
+            const previousFastMode = !!(fastMode && fastMode.checked);
+            if (autopilotBtn) autopilotBtn.disabled = true;
+            if (fastMode) fastMode.checked = true;
+            try {
+                let applied = false;
+                if (taskAgentBrief && taskAgentBrief.success && taskAgentBrief.preset) {
+                    applied = await applyTaskAgentBrief();
+                }
+                if (!applied) {
+                    await applyRecommendedViralPreset();
+                }
+                const generated = await generateCopy();
+                if (generated) {
+                    document.getElementById('resultArea')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+                return generated;
+            } finally {
+                if (fastMode) fastMode.checked = previousFastMode;
+                if (autopilotBtn) autopilotBtn.disabled = false;
+            }
+        }
+
+        async function runBundleAutopilot() {
+            const bundleBtn = document.getElementById('bundleAutopilotBtn');
+            if (bundleBtn) bundleBtn.disabled = true;
+            try {
+                const generated = await runTaskAutopilot();
+                if (!generated) {
+                    return false;
+                }
+                await generateGraphicArticleBundle();
+                document.getElementById('graphicBundleArea')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                return true;
+            } finally {
+                if (bundleBtn) bundleBtn.disabled = false;
+            }
         }
 
         async function loadStrategyRecommendation() {
@@ -1442,7 +1618,11 @@
                 return;
             } finally {
                 autoApplyHistoricalRecommendationIfNeeded();
+                if (!titlePoolTouchedByUser && titleOptions.length) {
+                    rerankTitleOptionsForRecommendation(true);
+                }
                 renderStrategyRecommendationBar();
+                renderTitlePool();
                 refreshViralOperationTips();
             }
         }
@@ -1451,7 +1631,7 @@
             return Boolean(
                 dynamicStrategyRecommendation &&
                 dynamicStrategyRecommendation.success &&
-                dynamicStrategyRecommendation.source === 'historical' &&
+                ['historical', 'hybrid'].includes(dynamicStrategyRecommendation.source || '') &&
                 ['medium', 'high'].includes(dynamicStrategyRecommendation.confidence || '') &&
                 dynamicStrategyRecommendation.recommended &&
                 !didAutoApplyHistoricalRecommendation &&
@@ -1467,7 +1647,7 @@
             didAutoApplyHistoricalRecommendation = true;
             applyPresetAndAnalyze({
                 ...dynamicStrategyRecommendation.recommended,
-                reason: dynamicStrategyRecommendation.reason || '已按近期实战表现自动切换推荐组合。',
+                reason: dynamicStrategyRecommendation.reason || '已按近期表现自动切换推荐组合。',
                 source: dynamicStrategyRecommendation.source || 'historical',
                 confidence: dynamicStrategyRecommendation.confidence || 'medium',
             }, {
@@ -1762,6 +1942,30 @@
             }
         }
 
+        async function consumePendingHotTopicAction() {
+            let pendingAction = '';
+            try {
+                pendingAction = localStorage.getItem('xhs_v4_hot_topic_action') || '';
+            } catch (error) {
+                pendingAction = '';
+            }
+            if (!pendingAction) {
+                return;
+            }
+            try {
+                localStorage.removeItem('xhs_v4_hot_topic_action');
+            } catch (error) {
+                // ignore localStorage failures
+            }
+            if (pendingAction === 'bundle_autopilot') {
+                await runBundleAutopilot();
+                return;
+            }
+            if (pendingAction === 'task_autopilot') {
+                await runTaskAutopilot();
+            }
+        }
+
         function markStrategyControlsTouched() {
             if (!isApplyingPresetProgrammatically) {
                 strategyControlsTouchedByUser = true;
@@ -1771,16 +1975,78 @@
         function normalizeTitleOptions(items) {
             return (items || []).map((item) => {
                 if (typeof item === 'string') {
-                    return { title: item, source: '系统推荐', tone: '', reason: '', score: 0 };
+                    return {
+                        title: item,
+                        source: '系统推荐',
+                        tone: '',
+                        reason: '',
+                        score: 0,
+                        original_score: 0,
+                        adjusted_score: 0,
+                        champion_hint: '',
+                    };
                 }
+                const baseScore = parseInt(item?.score || '0', 10) || 0;
                 return {
                     title: String(item?.title || '').trim(),
                     source: String(item?.source || '系统推荐').trim(),
                     tone: String(item?.tone || '').trim(),
                     reason: String(item?.reason || '').trim(),
-                    score: parseInt(item?.score || '0', 10) || 0,
+                    score: baseScore,
+                    original_score: baseScore,
+                    adjusted_score: baseScore,
+                    champion_hint: String(item?.champion_hint || '').trim(),
                 };
             }).filter((item) => item.title);
+        }
+
+        function computeTitleSkillBoost(title = '', titleSkill = '') {
+            const text = String(title || '');
+            const skill = String(titleSkill || '');
+            if (!text || !skill) return 0;
+            if (skill === 'checklist_collect') {
+                return /这[3三4四5五]|清单|先看|先做|别只|收藏|流程|顺序/.test(text) ? 18 : 0;
+            }
+            if (skill === 'question_gap') {
+                return /为什么|到底|是不是|你会|你知道|吗\??|？/.test(text) ? 18 : 0;
+            }
+            if (skill === 'result_first') {
+                return /先|别|结果|变化|报告|体检|复查|第一反应/.test(text) ? 14 : 0;
+            }
+            if (skill === 'conflict_reverse') {
+                return /别再|很多人|搞错|误区|不是|反而|真相/.test(text) ? 18 : 0;
+            }
+            if (skill === 'emotional_diary') {
+                return /我|后来|那次|真的|踩坑|一开始|当时/.test(text) ? 16 : 0;
+            }
+            return 0;
+        }
+
+        function rerankTitleOptionsForRecommendation(force = false) {
+            if (!titleOptions.length) return;
+            if (!force && titlePoolTouchedByUser) return;
+            const recommended = detectRecommendedPreset();
+            const titleLeader = (dynamicStrategyRecommendation?.title_skill_leaders || [])[0] || {};
+            const targetTitleSkill = recommended.titleSkill || titleLeader.skill_key || '';
+            titleOptions = titleOptions.map((item, index) => {
+                const originalScore = parseInt(item.original_score ?? item.score ?? 0, 10) || 0;
+                const skillBoost = computeTitleSkillBoost(item.title, targetTitleSkill);
+                const championHint = skillBoost > 0 && titleLeader.skill_label
+                    ? `更贴近近期冠军打法：${titleLeader.skill_label}`
+                    : '';
+                return {
+                    ...item,
+                    original_score: originalScore,
+                    adjusted_score: originalScore + skillBoost,
+                    champion_hint: championHint,
+                    _original_index: item._original_index ?? index,
+                };
+            }).sort((a, b) => {
+                const scoreDiff = (b.adjusted_score || 0) - (a.adjusted_score || 0);
+                if (scoreDiff !== 0) return scoreDiff;
+                return (a._original_index || 0) - (b._original_index || 0);
+            });
+            selectedTitle = 0;
         }
 
         function getSelectedTitleText() {
@@ -1874,16 +2140,17 @@
                 wrap.innerHTML = '<div class="text-muted small">先生成文案后再挑标题。</div>';
                 return;
             }
+            rerankTitleOptionsForRecommendation(false);
             if (tips) {
                 const best = titleOptions[0] || {};
-                tips.textContent = `当前共生成 ${titleOptions.length} 个标题候选。建议先挑一个最想点开的，再决定要不要换正文版本。当前首推：${best.title || '系统推荐'}${best.reason ? ` ｜ ${best.reason}` : ''}${best.tone ? ` ｜ ${best.tone}` : ''}`;
+                tips.textContent = `当前共生成 ${titleOptions.length} 个标题候选。建议先挑一个最想点开的，再决定要不要换正文版本。当前首推：${best.title || '系统推荐'}${best.reason ? ` ｜ ${best.reason}` : ''}${best.tone ? ` ｜ ${best.tone}` : ''}${best.champion_hint ? ` ｜ ${best.champion_hint}` : ''}`;
             }
             wrap.innerHTML = `<div class="title-option-grid">${
                 titleOptions.map((item, index) => `
                     <div class="title-option-card ${index === selectedTitle ? 'active' : ''}" onclick="selectTitleOption(${index})">
                         <div class="d-flex justify-content-between align-items-center gap-2">
                             <span class="title-option-rank">${index === 0 ? '首推' : `候选 ${index + 1}`}</span>
-                            ${item.score ? `<span class="title-score-chip ${item.score >= 130 ? 'high' : (item.score >= 110 ? 'mid' : 'low')}">${item.score >= 130 ? '强点击' : (item.score >= 110 ? '可优先试' : '稳妥款')} ${escapeHtml(String(item.score))}</span>` : ''}
+                            ${(item.adjusted_score || item.score) ? `<span class="title-score-chip ${(item.adjusted_score || item.score) >= 130 ? 'high' : ((item.adjusted_score || item.score) >= 110 ? 'mid' : 'low')}">${(item.adjusted_score || item.score) >= 130 ? '强点击' : (((item.adjusted_score || item.score) >= 110 ? '可优先试' : '稳妥款'))} ${escapeHtml(String(item.adjusted_score || item.score))}</span>` : ''}
                         </div>
                         <div class="title-option-title">${escapeHtml(item.title || '')}</div>
                     <div class="title-option-meta">
@@ -1891,6 +2158,7 @@
                         ${item.tone ? ` ｜ ${escapeHtml(item.tone)}` : ''}
                         ${item.reason ? ` ｜ ${escapeHtml(item.reason)}` : ''}
                     </div>
+                    ${item.champion_hint ? `<span class="title-reason-chip">${escapeHtml(item.champion_hint)}</span>` : ''}
                     ${item.reason ? `<span class="title-reason-chip">${escapeHtml(item.reason)}</span>` : ''}
                 </div>
             `).join('')
@@ -1950,6 +2218,7 @@
         }
 
         function selectTitleOption(index) {
+            titlePoolTouchedByUser = true;
             selectedTitle = index;
             renderTitlePool();
             renderCopySummary();
@@ -2388,6 +2657,7 @@
                             </div>
                             <img src="${item.preview_url}" alt="${escapeHtml(item.title || '')}">
                             <div class="fw-semibold mt-2">${escapeHtml(item.title || '参考图')}</div>
+                            ${(item.recommended_usage_label || item.usable_label) ? `<div class="text-muted small mt-1">${escapeHtml(item.recommended_usage_label || '-')} ｜ ${escapeHtml(item.usable_label || '-')} ${item.usable_score ? `(${escapeHtml(String(item.usable_score))})` : ''}</div>` : ''}
                             <div class="text-muted small mt-1">${active ? '这张图会进入参考图分析' : '点击后加入参考图分析'}</div>
                         </div>
                     </div>
@@ -2431,10 +2701,20 @@
         async function loadReferenceAssets() {
             const keyword = encodeURIComponent('{{ registration.topic.keywords or registration.topic.topic_name or "" }}');
             try {
-                const res = await fetch(`/api/public-assets?library_type=reference&limit=12&keyword=${keyword}`);
+                const res = await fetch(`/api/public-assets?library_types=reference,generated&limit=12&keyword=${keyword}`);
                 const data = await res.json();
                 if (data.success) {
                     referenceAssetItems = data.items || [];
+                    if (!selectedReferenceAssetIds.length && referenceAssetItems.length) {
+                        const autoPicks = referenceAssetItems
+                            .filter((item) => (item.usable_score || 0) >= 72 || item.library_type_key === 'reference')
+                            .slice(0, 2)
+                            .map((item) => item.id)
+                            .filter(Boolean);
+                        if (autoPicks.length) {
+                            selectedReferenceAssetIds = autoPicks;
+                        }
+                    }
                 } else {
                     referenceAssetItems = [];
                 }
@@ -2616,7 +2896,7 @@
         }
 
         function applyRecommendedViralPreset() {
-            applyPresetAndAnalyze(detectRecommendedPreset(), {
+            return applyPresetAndAnalyze(detectRecommendedPreset(), {
                 persistReason: 'apply_recommended_preset',
                 autoAnalyze: true,
                 forceAnalyze: true,
@@ -2857,6 +3137,8 @@
                     versions = copyCards.map((card) => card.copy_text);
                     titles = copyCards.map((card) => card.title);
                     titleOptions = normalizeTitleOptions(data.title_options || titles.map((title) => ({ title, source: '正文版本' })));
+                    titlePoolTouchedByUser = false;
+                    rerankTitleOptionsForRecommendation(true);
                     selectedVersion = 0;
                     selectedTitle = 0;
                     renderCopySummary();
@@ -3175,7 +3457,33 @@
         }
 
         function renderGeneratedImages(items) {
-            window.latestGeneratedImages = items || [];
+            const coverCandidates = (items || [])
+                .filter((item) => item.recommended_usage === 'cover')
+                .sort((a, b) => (b.usable_score || 0) - (a.usable_score || 0));
+            const innerCandidates = (items || [])
+                .filter((item) => item.recommended_usage === 'inner')
+                .sort((a, b) => (b.usable_score || 0) - (a.usable_score || 0));
+            const generalCandidates = (items || [])
+                .filter((item) => !['cover', 'inner'].includes(item.recommended_usage || ''))
+                .sort((a, b) => (b.usable_score || 0) - (a.usable_score || 0));
+            window.latestGeneratedImages = [
+                ...coverCandidates,
+                ...innerCandidates,
+                ...generalCandidates,
+            ];
+            const summaryHtml = (coverCandidates[0] || innerCandidates[0]) ? `
+                <div class="mini-note mb-3">
+                    <strong>系统结果建议</strong>
+                    <div class="small text-muted mt-2">
+                        ${coverCandidates[0]
+                            ? `首图优先：${escapeHtml(coverCandidates[0].usable_label || '-')} ${coverCandidates[0].usable_score ? `（${escapeHtml(String(coverCandidates[0].usable_score))}）` : ''}`
+                            : '首图优先：暂无'}
+                        ${innerCandidates[0]
+                            ? ` ｜ 内页优先：${escapeHtml(innerCandidates[0].usable_label || '-')} ${innerCandidates[0].usable_score ? `（${escapeHtml(String(innerCandidates[0].usable_score))}）` : ''}`
+                            : ''}
+                    </div>
+                </div>
+            ` : '';
             document.getElementById('assetTaskList').innerHTML = window.latestGeneratedImages.map((item, index) => {
                 const previewLinkAttrs = String(item.preview_url || '').startsWith('data:')
                     ? `href="${item.preview_url}" download="${item.download_name || `asset_${index + 1}.png`}"`
@@ -3194,7 +3502,14 @@
                                     </div>
                                     <a class="btn btn-sm btn-outline-danger" ${previewLinkAttrs}>下载/打开</a>
                                 </div>
+                                <div class="d-flex gap-2 flex-wrap mb-2">
+                                    ${coverCandidates[0] && item.preview_url === coverCandidates[0].preview_url ? `<span class="copy-quality-chip">首图首选</span>` : ''}
+                                    ${innerCandidates[0] && item.preview_url === innerCandidates[0].preview_url ? `<span class="copy-quality-chip">内页首选</span>` : ''}
+                                    ${item.recommended_usage_label ? `<span class="copy-quality-chip">${escapeHtml(item.recommended_usage_label)}</span>` : ''}
+                                    ${item.usable_label ? `<span class="copy-quality-chip">可用性 ${escapeHtml(item.usable_label)}${item.usable_score ? ` ${escapeHtml(String(item.usable_score))}` : ''}</span>` : ''}
+                                </div>
                                 <div class="small text-muted mb-2">${item.subtitle || ''}</div>
+                                ${item.usability_note ? `<div class="small text-muted mb-2">${escapeHtml(item.usability_note)}</div>` : ''}
                                 <div class="border rounded p-2 mb-2" style="background:#fff;">
                                     <div class="small text-muted mb-1">配图提示词</div>
                                     <div class="small">${item.image_prompt || ''}</div>
@@ -3205,6 +3520,7 @@
                     </div>
                 `;
             }).join('');
+            document.getElementById('assetTaskList').innerHTML = `${summaryHtml}${document.getElementById('assetTaskList').innerHTML}`;
             document.getElementById('assetTaskArea').style.display = 'block';
         }
 
@@ -3273,7 +3589,8 @@
                 return;
             }
 
-            document.getElementById('assetTaskMsg').textContent = `任务状态：${item.status || '-'} ｜ ${item.message || ''}`;
+            const resultSummary = item.result_summary || {};
+            document.getElementById('assetTaskMsg').textContent = `任务状态：${item.status || '-'} ｜ ${item.message || ''}${resultSummary.best_cover_label ? ` ｜ 首图建议：${resultSummary.best_cover_label}${resultSummary.best_cover_score ? `(${resultSummary.best_cover_score})` : ''}` : ''}${resultSummary.best_inner_label ? ` ｜ 内页建议：${resultSummary.best_inner_label}${resultSummary.best_inner_score ? `(${resultSummary.best_inner_score})` : ''}` : ''}`;
             if (item.status === 'success') {
                 renderGeneratedImages(item.result_payload || []);
                 return;
@@ -3480,11 +3797,16 @@
         }
         refreshAssetStyleTypeHelp();
         renderStrategyRecommendationBar();
+        renderTaskAgentBrief();
         refreshViralOperationTips();
         loadAssetGenerationQuota();
         loadReferenceAssets();
         loadPersistedIpAgentSeed();
         loadStrategyRecommendation();
+        loadTaskAgentBrief();
+        setTimeout(() => {
+            consumePendingHotTopicAction();
+        }, 120);
     </script>
     </div>
 </body>

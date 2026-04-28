@@ -131,6 +131,10 @@
                                 <div class="topic-stat-value" style="font-size:18px;">{{ topic.group_num or '待分组' }}</div>
                             </div>
                             <div class="topic-stat">
+                                <div class="topic-stat-label">报名优先级</div>
+                                <div class="topic-stat-value" style="font-size:18px;">{{ (topic_recommendation or {}).get('recommendation_label') or '常规' }}</div>
+                            </div>
+                            <div class="topic-stat">
                                 <div class="topic-stat-label">剩余名额</div>
                                 <div class="topic-stat-value">{{ (topic.quota or 0) - (topic.filled or 0) }}</div>
                             </div>
@@ -166,6 +170,14 @@
                                 <div class="public-info-label">参考方向</div>
                                 <div class="public-info-value">{{ topic.direction or '暂无方向说明' }}</div>
                             </div>
+                            {% if topic_recommendation %}
+                            <div class="public-info-row">
+                                <div class="public-info-label">系统建议</div>
+                                <div class="public-info-value">
+                                    适合 {{ topic_recommendation.persona_title or '通用人设' }} ｜ {{ topic_recommendation.recommended_goal or '均衡输出' }}
+                                </div>
+                            </div>
+                            {% endif %}
                         </div>
 
                         {% if topic.filled < topic.quota %}
@@ -212,6 +224,13 @@
                             <div class="public-info-label">撰写方向</div>
                             <div class="public-info-value">{{ topic.direction or '暂无撰写方向' }}</div>
                         </div>
+
+                        {% if topic_recommendation %}
+                        <div class="public-info-row mt-3">
+                            <div class="public-info-label">推荐原因</div>
+                            <div class="public-info-value">{{ topic_recommendation.recommendation_reason or '当前适合作为正常分发题。' }}</div>
+                        </div>
+                        {% endif %}
 
                         {% if topic.reference_content %}
                         <div class="public-info-row mt-3">

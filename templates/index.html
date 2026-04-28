@@ -550,8 +550,15 @@
                             {% endif %}
                         </div>
                         <div class="topic-title">{{ topic.topic_name }}</div>
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            {% if topic.recommendation_label %}<span class="quota-badge quota-active-primary">{{ topic.recommendation_label }}</span>{% endif %}
+                            {% if topic.lane_title %}<span class="quota-badge quota-active-secondary">{{ topic.lane_title }}</span>{% endif %}
+                        </div>
                         <div class="info-box tag-box"><strong>关键词：</strong><br>{{ topic.keywords or '暂无' }}</div>
                         <div class="info-box guide-box"><strong>撰写方向：</strong><br>{{ topic.direction or '暂无' }}</div>
+                        {% if topic.persona_title or topic.recommended_goal %}
+                        <div class="info-box guide-box"><strong>系统建议：</strong><br>适合 {{ topic.persona_title or '通用人设' }} ｜ {{ topic.recommended_goal or '均衡输出' }}</div>
+                        {% endif %}
                         {% if topic.reference_link %}
                         <div class="info-box ref-box">
                             <strong>参考笔记</strong>
@@ -603,8 +610,15 @@
                             {% endif %}
                         </div>
                         <div class="topic-title">{{ topic.topic_name }}</div>
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            {% if topic.recommendation_label %}<span class="quota-badge quota-active-secondary">{{ topic.recommendation_label }}</span>{% endif %}
+                            {% if topic.lane_title %}<span class="quota-badge quota-active-primary">{{ topic.lane_title }}</span>{% endif %}
+                        </div>
                         <div class="info-box tag-box"><strong>关键词：</strong><br>{{ topic.keywords or '暂无' }}</div>
                         <div class="info-box guide-box"><strong>撰写方向：</strong><br>{{ topic.direction or '暂无' }}</div>
+                        {% if topic.persona_title or topic.recommended_goal %}
+                        <div class="info-box guide-box"><strong>系统建议：</strong><br>适合 {{ topic.persona_title or '通用人设' }} ｜ {{ topic.recommended_goal or '均衡输出' }}</div>
+                        {% endif %}
                         {% if topic.reference_link %}
                         <div class="info-box ref-box">
                             <strong>参考笔记</strong>

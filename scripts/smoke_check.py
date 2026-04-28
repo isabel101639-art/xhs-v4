@@ -140,9 +140,9 @@ def _run_release_marker_pages_check(client, db, activity_model, topic_model, reg
 
     checks = [
         ('automation_center_page', 'GET', '/automation_center', None, ['data-release-manifest="release-manifest"', 'trendPayloadFile', 'xhs-release-version', 'releaseManifestWrap', 'releaseManifestPayload']),
-        ('data_analysis_page', 'GET', '/data_analysis', None, ['data-release-manifest="release-manifest"', 'taskFunnelWrap', 'strategySummaryWrap', 'releaseSummaryBar', 'releaseManifestPayload']),
+        ('data_analysis_page', 'GET', '/data_analysis', None, ['data-release-manifest="release-manifest"', 'taskFunnelWrap', 'strategySummaryWrap', 'operationalAdviceWrap', 'releaseSummaryBar', 'releaseManifestPayload']),
         ('my_registration_page', 'POST', '/my_registration', {'group_num': '第九组', 'name': '版本标记测试'}, ['data-release-manifest="release-manifest"', 'task-filter-chip', '建议优先处理', 'releasePublicSummary', 'releaseManifestPayload']),
-        ('register_success_page', 'GET', f'/register_success/{registration_id}', None, ['data-release-manifest="release-manifest"', 'applyWorkflowDecision', 'copy-quality-chip', 'releaseStudioSummary', 'releaseManifestPayload']),
+        ('register_success_page', 'GET', f'/register_success/{registration_id}', None, ['data-release-manifest="release-manifest"', 'applyWorkflowDecision', 'copy-quality-chip', 'releaseStudioSummary', 'taskAgentBriefCard', 'runTaskAutopilot', 'runBundleAutopilot', 'releaseManifestPayload']),
     ]
     results = {}
     for label, method, path, payload, tokens in checks:
@@ -690,6 +690,14 @@ def _run_copy_skill_generation_check(client, db, activity_model, topic_model, re
         _assert(recommended.get('title_skill') == 'checklist_collect', 'strategy_recommendations should prefer historical title skill')
         _assert(recommended.get('image_skill') == 'report_decode', 'strategy_recommendations should prefer historical image skill')
 
+        brief_response = client.get(f'/api/task_agent_brief/{registration_id}')
+        brief_data = brief_response.get_json()
+        _assert(brief_response.status_code == 200, f'task_agent_brief failed with {brief_response.status_code}')
+        _assert(brief_data and brief_data.get('success'), f'task_agent_brief failed: {brief_data}')
+        _assert((brief_data.get('preset') or {}).get('copyGoal') == 'save_value', 'task_agent_brief should expose recommended copy goal')
+        _assert((brief_data.get('copy_route') or {}).get('label'), 'task_agent_brief should expose recommended copy route')
+        _assert(len(brief_data.get('metric_focus') or []) >= 2, 'task_agent_brief should expose metric focus suggestions')
+
         cover_response = client.post('/api/asset_style_recommendations', json={
             'registration_id': registration_id,
             'selected_content': cards[0].get('copy_text') or '',
@@ -706,12 +714,15 @@ def _run_copy_skill_generation_check(client, db, activity_model, topic_model, re
         _assert(stats_data and (stats_data.get('strategy_insights') or {}).get('captured_count', 0) >= 1, 'stats should include strategy insights')
         _assert((stats_data.get('task_funnel') or {}).get('strategy_selected_count', 0) >= 1, 'stats should include task funnel strategy selected count')
         _assert(len((stats_data.get('strategy_insights') or {}).get('summary_lines') or []) >= 1, 'stats should include strategy summary lines')
+        _assert((stats_data.get('operational_advice') or {}).get('headline'), 'stats should include operational advice headline')
+        _assert(len((stats_data.get('operational_advice') or {}).get('urgent_actions') or []) >= 1, 'stats should include operational urgent actions')
 
         weekly_report_response = client.get(f'/api/weekly_report/{activity_id}')
         weekly_report_text = weekly_report_response.get_data(as_text=True)
         _assert(weekly_report_response.status_code == 200, f'weekly report failed with {weekly_report_response.status_code}')
         _assert('## 三、任务漏斗' in weekly_report_text, 'weekly report should include task funnel section')
         _assert('## 四、策略结论' in weekly_report_text, 'weekly report should include strategy conclusion section')
+        _assert('## 五、运营建议' in weekly_report_text, 'weekly report should include operational advice section')
         _print_check('copy_skill_generation', json.dumps({
             'skill': generator_context.get('skill'),
             'title_skill': generator_context.get('title_skill'),
@@ -721,6 +732,8 @@ def _run_copy_skill_generation_check(client, db, activity_model, topic_model, re
             'strategy_capture_rate': ((stats_data.get('strategy_insights') or {}).get('capture_rate_display')),
             'task_funnel_strategy_count': ((stats_data.get('task_funnel') or {}).get('strategy_selected_count')),
             'recommendation_source': recommendation_data.get('source'),
+            'task_brief_route': ((brief_data.get('copy_route') or {}).get('label')),
+            'advice_headline': ((stats_data.get('operational_advice') or {}).get('headline')),
             'weekly_report_has_task_funnel': '## 三、任务漏斗' in weekly_report_text,
         }, ensure_ascii=False))
 
@@ -1002,6 +1015,145 @@ def _run_trend_route_recommendation_check(client, db, activity_model, topic_mode
     }, ensure_ascii=False))
 
 
+def _run_topic_import_check(client, db, activity_model, topic_model, topic_idea_model):
+    with client.application.app_context():
+        activity = activity_model(
+            name='Smoke Topic Import',
+            title='Smoke Topic Import',
+            status='draft',
+        )
+        db.session.add(activity)
+        db.session.commit()
+        activity_id = activity.id
+
+    raw_payload = (
+        '体检报告里的肝弹指标怎么看|体检,报告,FibroScan|把不会看报告的人最容易误判的点讲清楚|体检复盘博主|检查解读型|重点讲清楚先看什么再看什么|https://example.com/topic1|30|第一组\n'
+        '脂肪肝减脂到底先控饮食还是先运动|脂肪肝,减脂,饮食,运动|从高搜索问题切入，给用户可执行顺序|健管师|轻科普问答型|先给顺序，再讲原因|https://example.com/topic2|20|第二组'
+    )
+
+    preview_response = client.post('/api/topics/import_preview', json={
+        'raw_payload': raw_payload,
+        'activity_id': activity_id,
+        'target_type': 'topic_idea',
+    })
+    preview_data = preview_response.get_json()
+    _assert(preview_response.status_code == 200, f'topic import preview failed with {preview_response.status_code}')
+    _assert(preview_data and preview_data.get('success'), f'topic import preview failed: {preview_data}')
+    _assert(((preview_data.get('preview') or {}).get('count') or 0) == 2, 'topic import preview should recognize two rows')
+
+    import_response = client.post('/api/topics/import', json={
+        'raw_payload': raw_payload,
+        'activity_id': activity_id,
+        'target_type': 'topic_idea',
+    })
+    import_data = import_response.get_json()
+    _assert(import_response.status_code == 200, f'topic import failed with {import_response.status_code}')
+    _assert(import_data and import_data.get('success'), f'topic import failed: {import_data}')
+
+    with client.application.app_context():
+        idea_count = topic_idea_model.query.filter_by(activity_id=activity_id).count()
+        _assert(idea_count >= 2, 'topic import should create topic ideas')
+
+    _print_check('topic_import', json.dumps({
+        'preview_count': (preview_data.get('preview') or {}).get('count'),
+        'created_count': len((import_data.get('result') or {}).get('created') or []),
+        'activity_id': activity_id,
+    }, ensure_ascii=False))
+
+
+def _run_content_bundle_check(client, db, activity_model, topic_model, topic_idea_model, trend_note_model):
+    with client.application.app_context():
+        activity = activity_model(
+            name='Smoke Bundle Export',
+            title='Smoke Bundle Export',
+            status='published',
+        )
+        db.session.add(activity)
+        db.session.flush()
+
+        note = trend_note_model(
+            source_platform='小红书',
+            source_channel='SmokeBundle',
+            source_template_key='xhs_note_search',
+            keyword='FibroScan',
+            title='FibroScan体检后先别慌',
+            summary='适合做检查解读和收藏型内容',
+            hot_score=280,
+            pool_status='candidate',
+        )
+        db.session.add(note)
+
+        idea = topic_idea_model(
+            activity_id=activity.id,
+            topic_title='FibroScan体检后先看哪3项',
+            keywords='FibroScan,体检,报告',
+            angle='先讲最容易看偏的点，再给用户确认顺序。',
+            content_type='检查解读型',
+            persona='体检复盘博主',
+            quota=30,
+            status='approved',
+        )
+        db.session.add(idea)
+
+        topic = topic_model(
+            activity_id=activity.id,
+            topic_name='脂肪肝减脂顺序怎么排',
+            keywords='脂肪肝,减脂,饮食,运动',
+            direction='先给顺序，再给动作建议。',
+            quota=20,
+            group_num='第一组',
+        )
+        db.session.add(topic)
+        db.session.commit()
+        activity_id = activity.id
+        note_id = note.id
+        idea_id = idea.id
+        topic_id = topic.id
+
+    export_response = client.post('/api/content_bundle/export', json={
+        'activity_id': activity_id,
+        'trend_note_ids': [note_id],
+        'topic_idea_ids': [idea_id],
+        'topic_ids': [topic_id],
+        'include_trends': True,
+        'include_topic_ideas': True,
+        'include_topics': True,
+        'note': 'smoke bundle',
+    })
+    export_data = export_response.get_json()
+    _assert(export_response.status_code == 200, f'content bundle export failed with {export_response.status_code}')
+    _assert(export_data and export_data.get('success'), f'content bundle export failed: {export_data}')
+    bundle = export_data.get('bundle') or {}
+    _assert((bundle.get('summary') or {}).get('trend_count') == 1, 'content bundle export should include one trend')
+
+    preview_response = client.post('/api/content_bundle/import_preview', json={
+        'raw_payload': json.dumps(bundle, ensure_ascii=False),
+        'target_activity_id': activity_id,
+        'import_topics': True,
+    })
+    preview_data = preview_response.get_json()
+    _assert(preview_response.status_code == 200, f'content bundle preview failed with {preview_response.status_code}')
+    _assert(preview_data and preview_data.get('success'), f'content bundle preview failed: {preview_data}')
+
+    import_response = client.post('/api/content_bundle/import', json={
+        'raw_payload': json.dumps(bundle, ensure_ascii=False),
+        'target_activity_id': activity_id,
+        'import_topics': True,
+        'import_trends': True,
+        'import_topic_ideas': True,
+    })
+    import_data = import_response.get_json()
+    _assert(import_response.status_code == 200, f'content bundle import failed with {import_response.status_code}')
+    _assert(import_data and import_data.get('success'), f'content bundle import failed: {import_data}')
+
+    _print_check('content_bundle', json.dumps({
+        'trend_count': (bundle.get('summary') or {}).get('trend_count'),
+        'topic_idea_count': (bundle.get('summary') or {}).get('topic_idea_count'),
+        'topic_count': (bundle.get('summary') or {}).get('topic_count'),
+        'preview_duplicate_count': ((preview_data.get('preview') or {}).get('duplicate_count') or 0),
+    }, ensure_ascii=False))
+
+
 def _run_task_workspace_check(client, db, activity_model, topic_model, registration_model, submission_model):
     with client.application.app_context():
         activity = activity_model(
@@ -1122,6 +1274,8 @@ def main():
         _run_reference_corpus_import_check(client)
         _run_trend_to_corpus_check(client, db, TrendNote)
         _run_trend_route_recommendation_check(client, db, Activity, Topic, TopicIdea, TrendNote, HotTopicEntry)
+        _run_topic_import_check(client, db, Activity, Topic, TopicIdea)
+        _run_content_bundle_check(client, db, Activity, Topic, TopicIdea, TrendNote)
         _run_task_workspace_check(client, db, Activity, Topic, Registration, Submission)
         _run_topic_reference_import_check(client, db, Activity, Topic)
         _run_copy_skill_generation_check(client, db, Activity, Topic, Registration, Submission)

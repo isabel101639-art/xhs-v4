@@ -281,6 +281,48 @@
                         </form>
                     </div>
                 </div>
+
+                <div class="card mt-3">
+                    <div class="card-body">
+                        <h6 class="mb-3">批量导入话题</h6>
+                        <div class="text-muted small mb-3">支持三种格式：1. JSON 数组；2. CSV / 表格文本；3. 每行一条，按“话题名称|关键词|撰写方向|人设|内容类型|文案提示词|参考链接|名额|组别”粘贴。</div>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">所属活动</label>
+                                <select id="topicImportActivityId" class="form-select">
+                                    {% for activity in activities %}
+                                    <option value="{{ activity.id }}">{{ activity.name }} - {{ activity.title }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">导入目标</label>
+                                <select id="topicImportTargetType" class="form-select">
+                                    <option value="topic_idea">导入候选话题</option>
+                                    <option value="topic">导入正式话题</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 d-flex align-items-end gap-2">
+                                <button type="button" class="btn btn-outline-primary" onclick="previewTopicImport()">导入预览</button>
+                                <button type="button" class="btn btn-xhs" onclick="importTopicBatch()">确认导入</button>
+                            </div>
+                            <div class="col-md-12">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="importActivityReferenceCorpusFromTopics()">
+                                    把当前活动参考链接转成模板语料
+                                </button>
+                                <span class="text-muted small ms-2">适合你明天直接把爆款链接跟在话题里一起给我。</span>
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label">粘贴话题数据</label>
+                                <textarea id="topicImportPayload" class="form-control" rows="10" placeholder='示例：&#10;体检报告里的肝弹指标怎么看|体检,报告,FibroScan|把不会看报告的人最容易误判的点讲清楚|体检复盘博主|检查解读型|重点讲清楚先看什么再看什么|https://example.com/note|30|第一组'></textarea>
+                            </div>
+                            <div class="col-md-12">
+                                <div id="topicImportMsg" class="text-muted small mb-2"></div>
+                                <pre id="topicImportPreview" style="white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 260px; overflow: auto;">导入预览会显示在这里</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- 门户配置 -->
@@ -664,6 +706,89 @@
                     <div class="card-body">
                         <h6 class="mb-3">备份详情</h6>
                         <pre id="backupDetail" style="white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 420px; overflow: auto;">暂无备份详情</pre>
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-lg-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6 class="mb-3">导出内容发布包</h6>
+                                <div class="text-muted small mb-3">把 beta 环境里确认过的热点、候选话题、正式话题打成一个发布包，后续可导入 prod。</div>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">活动期数</label>
+                                        <select id="bundleExportActivityId" class="form-select">
+                                            {% for activity in activities %}
+                                            <option value="{{ activity.id }}">{{ activity.name }} - {{ activity.title }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">说明</label>
+                                        <input id="bundleExportNote" class="form-control" placeholder="例如：5月5日员工上线前首批任务包">
+                                    </div>
+                                    <div class="col-md-12 d-flex gap-3 flex-wrap">
+                                        <div class="form-check">
+                                            <input id="bundleExportIncludeTrends" class="form-check-input" type="checkbox" checked>
+                                            <label class="form-check-label" for="bundleExportIncludeTrends">热点</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input id="bundleExportIncludeIdeas" class="form-check-input" type="checkbox" checked>
+                                            <label class="form-check-label" for="bundleExportIncludeIdeas">候选话题</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input id="bundleExportIncludeTopics" class="form-check-input" type="checkbox" checked>
+                                            <label class="form-check-label" for="bundleExportIncludeTopics">正式话题</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-12 d-flex gap-2">
+                                        <button type="button" class="btn btn-outline-primary" onclick="exportContentBundle()">生成发布包</button>
+                                    </div>
+                                    <div class="col-md-12">
+                                        <div id="bundleMsg" class="text-muted small mb-2"></div>
+                                        <pre id="bundleExportPreview" style="white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 320px; overflow: auto;">导出的发布包会显示在这里</pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6 class="mb-3">导入内容发布包</h6>
+                                <div class="text-muted small mb-3">把 beta 导出的发布包先在 prod 预览，再决定是否正式导入。</div>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">目标活动期数</label>
+                                        <select id="bundleImportActivityId" class="form-select">
+                                            {% for activity in activities %}
+                                            <option value="{{ activity.id }}">{{ activity.name }} - {{ activity.title }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">导入目标</label>
+                                        <select id="bundleImportTopicMode" class="form-select">
+                                            <option value="ideas_only">只导入热点+候选话题</option>
+                                            <option value="with_topics">同时导入正式话题</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-12">
+                                        <label class="form-label">粘贴发布包 JSON</label>
+                                        <textarea id="bundleImportPayload" class="form-control" rows="10" placeholder='把导出的发布包 JSON 粘贴到这里'></textarea>
+                                    </div>
+                                    <div class="col-md-12 d-flex gap-2">
+                                        <button type="button" class="btn btn-outline-primary" onclick="previewContentBundleImport()">预览导入</button>
+                                        <button type="button" class="btn btn-outline-success" onclick="importContentBundle()">确认导入</button>
+                                    </div>
+                                    <div class="col-md-12">
+                                        <pre id="bundleImportPreview" style="white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 320px; overflow: auto;">导入预览会显示在这里</pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1712,6 +1837,92 @@
             }
         }
 
+        async function exportContentBundle() {
+            const activityId = parseInt(document.getElementById('bundleExportActivityId').value || '0', 10) || 0;
+            const note = document.getElementById('bundleExportNote').value.trim();
+            const includeTrends = document.getElementById('bundleExportIncludeTrends').checked;
+            const includeTopicIdeas = document.getElementById('bundleExportIncludeIdeas').checked;
+            const includeTopics = document.getElementById('bundleExportIncludeTopics').checked;
+            const res = await fetch('/api/content_bundle/export', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    activity_id: activityId,
+                    include_trends: includeTrends,
+                    include_topic_ideas: includeTopicIdeas,
+                    include_topics: includeTopics,
+                    note,
+                })
+            });
+            const data = await res.json();
+            document.getElementById('bundleMsg').textContent = data.message || '已处理';
+            if (!data.success) {
+                document.getElementById('bundleExportPreview').textContent = data.message || '发布包导出失败';
+                return;
+            }
+            document.getElementById('bundleExportPreview').textContent = JSON.stringify(data.bundle || {}, null, 2);
+            document.getElementById('bundleImportPayload').value = JSON.stringify(data.bundle || {}, null, 2);
+        }
+
+        async function previewContentBundleImport() {
+            const targetActivityId = parseInt(document.getElementById('bundleImportActivityId').value || '0', 10) || 0;
+            const bundlePayload = document.getElementById('bundleImportPayload').value.trim();
+            const importTopics = document.getElementById('bundleImportTopicMode').value === 'with_topics';
+            if (!bundlePayload) {
+                document.getElementById('bundleMsg').textContent = '请先粘贴发布包 JSON';
+                return;
+            }
+            const res = await fetch('/api/content_bundle/import_preview', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    raw_payload: bundlePayload,
+                    target_activity_id: targetActivityId,
+                    import_topics: importTopics,
+                })
+            });
+            const data = await res.json();
+            document.getElementById('bundleMsg').textContent = data.message || '已处理';
+            if (!data.success) {
+                document.getElementById('bundleImportPreview').textContent = data.message || '导入预览失败';
+                return;
+            }
+            document.getElementById('bundleImportPreview').textContent = JSON.stringify({
+                bundle_meta: data.bundle_meta || {},
+                preview: data.preview || {},
+            }, null, 2);
+        }
+
+        async function importContentBundle() {
+            const targetActivityId = parseInt(document.getElementById('bundleImportActivityId').value || '0', 10) || 0;
+            const bundlePayload = document.getElementById('bundleImportPayload').value.trim();
+            const importTopics = document.getElementById('bundleImportTopicMode').value === 'with_topics';
+            if (!bundlePayload) {
+                document.getElementById('bundleMsg').textContent = '请先粘贴发布包 JSON';
+                return;
+            }
+            const confirmed = window.confirm('确认把这份内容发布包导入当前环境吗？');
+            if (!confirmed) return;
+            const res = await fetch('/api/content_bundle/import', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    raw_payload: bundlePayload,
+                    target_activity_id: targetActivityId,
+                    import_topics: importTopics,
+                    import_trends: true,
+                    import_topic_ideas: true,
+                })
+            });
+            const data = await res.json();
+            document.getElementById('bundleMsg').textContent = data.message || '已处理';
+            if (!data.success) {
+                document.getElementById('bundleImportPreview').textContent = data.message || '发布包导入失败';
+                return;
+            }
+            document.getElementById('bundleImportPreview').textContent = JSON.stringify(data.result || {}, null, 2);
+        }
+
         function formatNavItems(items) {
             return (items || []).map((item) => {
                 const parts = [
@@ -1965,6 +2176,87 @@
             if (result.success) {
                 loadAnnouncements();
             }
+        }
+
+        async function previewTopicImport() {
+            const rawPayload = document.getElementById('topicImportPayload').value.trim();
+            const activityId = parseInt(document.getElementById('topicImportActivityId').value || '0', 10) || 0;
+            const targetType = document.getElementById('topicImportTargetType').value || 'topic_idea';
+            if (!rawPayload) {
+                document.getElementById('topicImportMsg').textContent = '请先粘贴话题数据';
+                return;
+            }
+            const res = await fetch('/api/topics/import_preview', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    raw_payload: rawPayload,
+                    activity_id: activityId,
+                    target_type: targetType,
+                })
+            });
+            const data = await res.json();
+            document.getElementById('topicImportMsg').textContent = data.message || '已处理';
+            if (!data.success) {
+                document.getElementById('topicImportPreview').textContent = data.message || '预览失败';
+                return;
+            }
+            document.getElementById('topicImportPreview').textContent = JSON.stringify(data.preview || {}, null, 2);
+        }
+
+        async function importTopicBatch() {
+            const rawPayload = document.getElementById('topicImportPayload').value.trim();
+            const activityId = parseInt(document.getElementById('topicImportActivityId').value || '0', 10) || 0;
+            const targetType = document.getElementById('topicImportTargetType').value || 'topic_idea';
+            if (!rawPayload) {
+                document.getElementById('topicImportMsg').textContent = '请先粘贴话题数据';
+                return;
+            }
+            const confirmed = window.confirm(`确认把这批话题导入为${targetType === 'topic' ? '正式话题' : '候选话题'}吗？`);
+            if (!confirmed) return;
+            const res = await fetch('/api/topics/import', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    raw_payload: rawPayload,
+                    activity_id: activityId,
+                    target_type: targetType,
+                })
+            });
+            const data = await res.json();
+            document.getElementById('topicImportMsg').textContent = data.message || '已处理';
+            if (!data.success) {
+                document.getElementById('topicImportPreview').textContent = data.message || '导入失败';
+                return;
+            }
+            document.getElementById('topicImportPreview').textContent = JSON.stringify(data.result || {}, null, 2);
+        }
+
+        async function importActivityReferenceCorpusFromTopics() {
+            const activityId = parseInt(document.getElementById('topicImportActivityId').value || '0', 10) || 0;
+            if (!activityId) {
+                document.getElementById('topicImportMsg').textContent = '请先选择活动';
+                return;
+            }
+            const confirmed = window.confirm('确认把当前活动下所有话题的参考链接批量转成模板语料吗？');
+            if (!confirmed) return;
+            const res = await fetch(`/api/activities/${activityId}/import_reference_corpus`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({})
+            });
+            const data = await res.json();
+            document.getElementById('topicImportMsg').textContent = data.message || '已处理';
+            if (!data.success) {
+                document.getElementById('topicImportPreview').textContent = data.message || '处理失败';
+                return;
+            }
+            document.getElementById('topicImportPreview').textContent = JSON.stringify({
+                processed_topics: data.processed_topics || 0,
+                created_count: data.created_count || 0,
+                updated_count: data.updated_count || 0,
+                skipped: data.skipped || [],
+            }, null, 2);
         }
 
         function creatorPlatformLabel(platform) {
