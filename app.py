@@ -14,8 +14,10 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 import os
 import json
 import csv
+import io
 import base64
 import html
+from types import SimpleNamespace
 from datetime import datetime, timedelta
 import random
 import re
@@ -4002,6 +4004,38 @@ def _metric_source_summary_text(metric_sources, preferred_keys=None):
 def _serialize_topic_idea(idea):
     source_note_id_list = _split_keywords(idea.source_note_ids or '')
     source_links_list = _split_keywords(idea.source_links or '')
+    topic_stub = SimpleNamespace(
+        topic_name=idea.topic_title or '',
+        keywords=idea.keywords or '',
+        direction=idea.angle or '',
+        reference_content=idea.asset_brief or '',
+        writing_example=idea.copy_prompt or '',
+    )
+    heuristic = _build_heuristic_strategy_recommendation(topic_stub)
+    decision_profile = _build_strategy_decision_profile(topic_stub)
+    recommended = dict(heuristic.get('recommended') or {})
+    recommended.update(decision_profile)
+    product_label, _ = _resolve_copy_product_selection(decision_profile.get('product_key') or 'auto', ' '.join([
+        idea.topic_title or '',
+        idea.keywords or '',
+        idea.angle or '',
+    ]))
+    copy_analysis = _build_copy_agent_analysis(
+        topic_stub,
+        persona_label=COPY_PERSONA_OPTIONS.get(decision_profile.get('persona_key') or 'auto', ''),
+        scene_label=COPY_SCENE_OPTIONS.get(decision_profile.get('scene_key') or 'auto', ''),
+        direction_label=COPY_DIRECTION_OPTIONS.get(decision_profile.get('direction_key') or 'auto', ''),
+        product_label=product_label,
+        copy_goal=recommended.get('copy_goal') or 'balanced',
+    )
+    recommended_copy_route = next(
+        (item for item in (copy_analysis.get('copy_routes') or []) if item.get('id') == (copy_analysis.get('recommended_copy_route_id') or '')),
+        None,
+    ) or ((copy_analysis.get('copy_routes') or [None])[0] or {})
+    recommended_image_route = next(
+        (item for item in (copy_analysis.get('image_routes') or []) if item.get('id') == (copy_analysis.get('recommended_image_route_id') or '')),
+        None,
+    ) or ((copy_analysis.get('image_routes') or [None])[0] or {})
     image_template_recommendation = _recommend_image_template_payload(
         text=' '.join([
             idea.topic_title or '',
@@ -4039,6 +4073,28 @@ def _serialize_topic_idea(idea):
         'reviewed_at': idea.reviewed_at.strftime('%Y-%m-%d %H:%M:%S') if idea.reviewed_at else '',
         'published_at': idea.published_at.strftime('%Y-%m-%d %H:%M:%S') if idea.published_at else '',
         'published_topic_id': idea.published_topic_id,
+        'recommended_goal_key': recommended.get('copy_goal') or 'balanced',
+        'recommended_goal_label': COPY_GOAL_OPTIONS.get(recommended.get('copy_goal') or 'balanced', recommended.get('copy_goal') or 'balanced'),
+        'recommended_copy_skill_key': recommended.get('copy_skill') or 'auto',
+        'recommended_copy_skill_label': COPY_SKILL_OPTIONS.get(recommended.get('copy_skill') or 'auto', recommended.get('copy_skill') or 'auto'),
+        'recommended_title_skill_key': recommended.get('title_skill') or 'auto',
+        'recommended_title_skill_label': TITLE_SKILL_OPTIONS.get(recommended.get('title_skill') or 'auto', recommended.get('title_skill') or 'auto'),
+        'recommended_image_skill_key': recommended.get('image_skill') or 'auto',
+        'recommended_image_skill_label': IMAGE_SKILL_OPTIONS.get(recommended.get('image_skill') or 'auto', recommended.get('image_skill') or 'auto'),
+        'recommended_persona_label': COPY_PERSONA_OPTIONS.get(decision_profile.get('persona_key') or 'auto', decision_profile.get('persona_key') or ''),
+        'recommended_scene_label': COPY_SCENE_OPTIONS.get(decision_profile.get('scene_key') or 'auto', decision_profile.get('scene_key') or ''),
+        'recommended_direction_label': COPY_DIRECTION_OPTIONS.get(decision_profile.get('direction_key') or 'auto', decision_profile.get('direction_key') or ''),
+        'recommended_product_label': product_label,
+        'recommended_reason': heuristic.get('reason') or '',
+        'recommended_copy_route_label': recommended_copy_route.get('label') or '',
+        'recommended_copy_route_why': recommended_copy_route.get('why') or '',
+        'recommended_image_route_label': recommended_image_route.get('label') or '',
+        'recommended_image_route_why': recommended_image_route.get('why') or '',
+        'execution_bucket_label': '｜'.join(filter(None, [
+            idea.soft_insertion or product_label,
+            idea.content_type or '',
+            COPY_GOAL_OPTIONS.get(recommended.get('copy_goal') or 'balanced', ''),
+        ]))[:180],
         **image_template_recommendation,
         'created_at': idea.created_at.strftime('%Y-%m-%d %H:%M:%S') if idea.created_at else '',
     }
@@ -4233,7 +4289,7 @@ def _normalize_topic_import_row(raw_row):
         'persona': (row.get('persona') or '').strip()[:50],
         'content_type': (row.get('content_type') or '').strip()[:50],
         'copy_prompt': (row.get('copy_prompt') or '').strip(),
-        'reference_link': (row.get('reference_link') or '').strip()[:500],
+        'reference_link': (row.get('reference_link') or '').strip(),
         'reference_content': (row.get('reference_content') or '').strip(),
         'asset_brief': (row.get('asset_brief') or '').strip(),
         'compliance_note': (row.get('compliance_note') or '').strip(),
@@ -4293,6 +4349,174 @@ def _parse_topic_import_payload(raw_payload):
     return [row for row in normalized if row]
 
 
+def _sheet_topic_group_label(sheet_name=''):
+    name = (sheet_name or '').strip()
+    if '软肝片' in name:
+        return '软肝片话题池'
+    if 'FS' in name or 'FibroScan' in name or '福波看' in name:
+        return 'FibroScan话题池'
+    return '批量导入'
+
+
+def _sheet_product_hint(sheet_name=''):
+    name = (sheet_name or '').strip()
+    if '软肝片' in name:
+        return '软肝片'
+    if 'FS' in name or 'FibroScan' in name or '福波看' in name:
+        return 'FibroScan福波看'
+    return ''
+
+
+def _first_meaningful_line(text=''):
+    for part in str(text or '').replace('\r', '\n').split('\n'):
+        clean = part.strip()
+        if clean:
+            return clean[:120]
+    return ''
+
+
+def _topic_core_from_search_text(text=''):
+    line = _first_meaningful_line(text)
+    if not line:
+        return ''
+    for sep in [' / ', '/', '｜', '|']:
+        if sep in line:
+            head = line.split(sep)[0].strip()
+            if head:
+                return head[:80]
+    return line[:80]
+
+
+def _keywords_from_tags_and_topic(topic_core='', tags=''):
+    values = []
+    if topic_core:
+        values.append(topic_core)
+    for part in re.split(r'[#\s,，、/]+', tags or ''):
+        token = (part or '').strip()
+        if not token or len(token) <= 1:
+            continue
+        values.append(token)
+    deduped = []
+    for item in values:
+        if item not in deduped:
+            deduped.append(item)
+    return ','.join(deduped[:12])[:500]
+
+
+def _build_topic_import_rows_from_workbook_sheet(ws):
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return []
+    header_index = None
+    for idx, row in enumerate(rows):
+        first_cells = [str(cell or '').strip() for cell in row[:8]]
+        joined = ' '.join(first_cells)
+        if '笔记类型' in joined and '撰写说明' in joined:
+            header_index = idx
+            break
+    if header_index is None:
+        return []
+
+    header_row = [str(cell or '').strip() for cell in rows[header_index]]
+    header_aliases = {
+        'search_text': ['C端搜索需求词', '小红书C端 / 热门搜索词'],
+        'search_keyword': ['小红书C端搜索关键词 / （来自小红书数据平台）', '搜索关键词'],
+        'note_type': ['笔记类型', '笔记类型方向'],
+        'tag_text': ['话题标签'],
+        'writing': ['撰写说明'],
+        'links': ['参考笔记链接', '笔记参考链接', '笔记参考链接 / ', '参考笔记链接 / '],
+        'sample': ['撰写示例', '笔记撰写示例'],
+        'compliance': ['特别注意（合规说明）'],
+    }
+    index_map = {}
+    for idx, header in enumerate(header_row):
+        for key, aliases in header_aliases.items():
+            if key in index_map:
+                continue
+            if any(alias in header for alias in aliases):
+                index_map[key] = idx
+                break
+
+    intro_lines = []
+    for row in rows[:header_index]:
+        parts = [str(cell or '').strip() for cell in row[:3] if str(cell or '').strip()]
+        if parts:
+            intro_lines.append(' / '.join(parts))
+    shared_compliance = '\n'.join(intro_lines).strip()
+
+    current_search_text = ''
+    normalized_rows = []
+    for row in rows[header_index + 1:]:
+        cells = [str(cell or '').strip() for cell in row]
+        if not any(cells):
+            continue
+        search_text = cells[index_map.get('search_text', 0)] if index_map.get('search_text', 0) < len(cells) else ''
+        search_keyword = cells[index_map.get('search_keyword', 1)] if index_map.get('search_keyword', 1) < len(cells) else ''
+        note_type = cells[index_map.get('note_type', 1)] if index_map.get('note_type', 1) < len(cells) else ''
+        tag_text = cells[index_map.get('tag_text', 3)] if index_map.get('tag_text', 3) < len(cells) else ''
+        writing = cells[index_map.get('writing', 4)] if index_map.get('writing', 4) < len(cells) else ''
+        links = cells[index_map.get('links', 5)] if index_map.get('links', 5) < len(cells) else ''
+        sample = cells[index_map.get('sample', 6)] if index_map.get('sample', 6) < len(cells) else ''
+        compliance = cells[index_map.get('compliance', 7)] if index_map.get('compliance', 7) < len(cells) else ''
+        if search_text:
+            current_search_text = search_text
+        if not current_search_text or not any([note_type, writing, links, sample]):
+            continue
+
+        topic_core = _topic_core_from_search_text(current_search_text)
+        note_label = _topic_core_from_search_text(note_type) or '内容执行'
+        topic_title = f'{topic_core}｜{note_label}'.strip('｜')[:200]
+        if not topic_title:
+            continue
+        product_hint = _sheet_product_hint(ws.title)
+        combined_direction = '\n'.join(filter(None, [
+            current_search_text,
+            f'笔记类型：{note_type}' if note_type else '',
+            writing,
+        ])).strip()
+        combined_reference = '\n'.join(filter(None, [
+            sample,
+            f'产品方向：{product_hint}' if product_hint else '',
+        ])).strip()
+        combined_compliance = '\n'.join(filter(None, [
+            shared_compliance,
+            compliance,
+        ])).strip()
+        normalized_rows.append({
+            'topic_title': topic_title,
+            'keywords': _keywords_from_tags_and_topic(topic_core, tag_text),
+            'direction': '\n'.join(filter(None, [combined_direction, search_keyword])).strip(),
+            'persona': '',
+            'content_type': note_label[:50],
+            'copy_prompt': sample,
+            'reference_link': '\n'.join(_split_reference_links(links)) if links else '',
+            'reference_content': combined_reference,
+            'asset_brief': writing,
+            'compliance_note': combined_compliance,
+            'quota': _default_topic_quota(),
+            'group_num': _sheet_topic_group_label(ws.title),
+            'soft_insertion': product_hint,
+        })
+    return normalized_rows
+
+
+def _parse_topic_import_file(filename='', file_bytes=b''):
+    lower_name = (filename or '').lower()
+    if lower_name.endswith('.xlsx') or lower_name.endswith('.xlsm'):
+        from openpyxl import load_workbook
+
+        workbook = load_workbook(io.BytesIO(file_bytes), data_only=True)
+        all_rows = []
+        for ws in workbook.worksheets:
+            all_rows.extend(_build_topic_import_rows_from_workbook_sheet(ws))
+        return all_rows
+    try:
+        raw_text = file_bytes.decode('utf-8')
+    except UnicodeDecodeError:
+        raw_text = file_bytes.decode('utf-8-sig', errors='ignore')
+    return _parse_topic_import_payload(raw_text)
+
+
 def _preview_topic_import_rows(rows, *, activity_id=0, target_type='topic_idea'):
     normalized_target = (target_type or 'topic_idea').strip() or 'topic_idea'
     duplicates = []
@@ -4308,15 +4532,116 @@ def _preview_topic_import_rows(rows, *, activity_id=0, target_type='topic_idea')
                 topic_title=row['topic_title'],
                 keywords=row['keywords'],
             ).order_by(TopicIdea.id.desc()).first()
+            if existing is None:
+                existing = TopicIdea.query.filter_by(
+                    topic_title=row['topic_title'],
+                    keywords=row['keywords'],
+                ).order_by(TopicIdea.id.desc()).first()
         if existing:
             duplicates.append({
                 'topic_title': row['topic_title'],
                 'existing_id': existing.id,
                 'target_type': normalized_target,
             })
+        topic_text = ' '.join(filter(None, [
+            row.get('topic_title') or '',
+            row.get('keywords') or '',
+            row.get('direction') or '',
+            row.get('reference_content') or '',
+        ]))
+        content_type_text = ' '.join(filter(None, [
+            row.get('content_type') or '',
+            row.get('direction') or '',
+            row.get('asset_brief') or '',
+        ]))
+        topic_stub = SimpleNamespace(
+            topic_name=row.get('topic_title') or '',
+            keywords=row.get('keywords') or '',
+            direction=row.get('direction') or '',
+            reference_content=row.get('reference_content') or '',
+            writing_example=row.get('copy_prompt') or '',
+        )
+        heuristic = _build_heuristic_strategy_recommendation(topic_stub)
+        decision_profile = _build_strategy_decision_profile(topic_stub)
+        recommended = dict(heuristic.get('recommended') or {})
+        recommended.update(decision_profile)
+        if any(token in content_type_text for token in ['大字报', '互动型']):
+            recommended.update({
+                'copy_goal': 'comment_engagement',
+                'copy_skill': 'discussion_hook',
+                'title_skill': 'question_gap',
+                'image_skill': 'high_click_cover',
+            })
+        elif any(token in content_type_text for token in ['深度科普', '医疗行业背景', '图表', '横向测评']):
+            recommended.update({
+                'copy_goal': 'trust_building',
+                'copy_skill': 'report_interpretation',
+                'title_skill': 'checklist_collect',
+                'image_skill': 'report_decode',
+            })
+        elif any(token in content_type_text for token in ['备忘录', '清单']):
+            recommended.update({
+                'copy_goal': 'save_value',
+                'copy_skill': 'practical_checklist',
+                'title_skill': 'checklist_collect',
+                'image_skill': 'save_worthy_cards',
+            })
+        elif any(token in content_type_text for token in ['产品实拍', '实拍']):
+            recommended.update({
+                'copy_goal': 'balanced',
+                'copy_skill': 'story_empathy',
+                'title_skill': 'emotional_diary',
+                'image_skill': 'story_atmosphere',
+            })
+        copy_route_analysis = _build_copy_agent_analysis(
+            topic_stub,
+            persona_label=COPY_PERSONA_OPTIONS.get(decision_profile.get('persona_key') or 'auto', ''),
+            scene_label=COPY_SCENE_OPTIONS.get(decision_profile.get('scene_key') or 'auto', ''),
+            direction_label=COPY_DIRECTION_OPTIONS.get(decision_profile.get('direction_key') or 'auto', ''),
+            product_label=_resolve_copy_product_selection(decision_profile.get('product_key') or 'auto', topic_text)[0],
+            copy_goal=recommended.get('copy_goal') or 'balanced',
+        )
+        recommended_copy_route = next(
+            (item for item in (copy_route_analysis.get('copy_routes') or []) if item.get('id') == (copy_route_analysis.get('recommended_copy_route_id') or '')),
+            None,
+        ) or ((copy_route_analysis.get('copy_routes') or [None])[0] or {})
+        recommended_image_route = next(
+            (item for item in (copy_route_analysis.get('image_routes') or []) if item.get('id') == (copy_route_analysis.get('recommended_image_route_id') or '')),
+            None,
+        ) or ((copy_route_analysis.get('image_routes') or [None])[0] or {})
+        image_plan_payload = _build_image_agent_analysis_payload(
+            topic_stub,
+            selected_content='\n'.join(filter(None, [
+                row.get('direction') or '',
+                row.get('reference_content') or '',
+                row.get('copy_prompt') or '',
+            ]))[:4000],
+            title_hint=(row.get('topic_title') or '')[:200],
+            preferred_route=recommended_image_route,
+        )
+        recommended_plan = next(
+            (item for item in (image_plan_payload.get('plans') or []) if item.get('id') == (image_plan_payload.get('recommended_plan_id') or '')),
+            None,
+        ) or ((image_plan_payload.get('plans') or [None])[0] or {})
         preview_items.append({
             **row,
             'duplicate': bool(existing),
+            'reference_link_count': len(_split_reference_links(row.get('reference_link') or '')),
+            'reference_links_preview': _split_reference_links(row.get('reference_link') or '')[:3],
+            'agent_summary': heuristic.get('reason') or '',
+            'recommended_goal': COPY_GOAL_OPTIONS.get(recommended.get('copy_goal') or 'balanced', recommended.get('copy_goal') or 'balanced'),
+            'recommended_copy_skill': COPY_SKILL_OPTIONS.get(recommended.get('copy_skill') or 'auto', recommended.get('copy_skill') or 'auto'),
+            'recommended_title_skill': TITLE_SKILL_OPTIONS.get(recommended.get('title_skill') or 'auto', recommended.get('title_skill') or 'auto'),
+            'recommended_image_skill': IMAGE_SKILL_OPTIONS.get(recommended.get('image_skill') or 'auto', recommended.get('image_skill') or 'auto'),
+            'recommended_persona': COPY_PERSONA_OPTIONS.get(decision_profile.get('persona_key') or 'auto', decision_profile.get('persona_key') or ''),
+            'recommended_scene': COPY_SCENE_OPTIONS.get(decision_profile.get('scene_key') or 'auto', decision_profile.get('scene_key') or ''),
+            'recommended_direction': COPY_DIRECTION_OPTIONS.get(decision_profile.get('direction_key') or 'auto', decision_profile.get('direction_key') or ''),
+            'recommended_copy_route_label': recommended_copy_route.get('label') or '',
+            'recommended_copy_route_why': recommended_copy_route.get('why') or '',
+            'recommended_image_route_label': recommended_image_route.get('label') or '',
+            'recommended_image_route_why': recommended_image_route.get('why') or '',
+            'recommended_cover_style': recommended_plan.get('style_label') or recommended_plan.get('label') or '',
+            'recommended_cover_fit': recommended_plan.get('cover_fit_label') or '',
         })
     return {
         'count': len(rows),
@@ -4360,6 +4685,11 @@ def _import_topic_rows(rows, *, activity_id=0, target_type='topic_idea'):
             keywords=row['keywords'],
         ).order_by(TopicIdea.id.desc()).first()
         if existing is None:
+            existing = TopicIdea.query.filter_by(
+                topic_title=row['topic_title'],
+                keywords=row['keywords'],
+            ).order_by(TopicIdea.id.desc()).first()
+        if existing is None:
             existing = TopicIdea(activity_id=activity_id or None)
             db.session.add(existing)
             target_rows = created
@@ -4394,7 +4724,7 @@ def _extract_content_bundle_from_request():
                 return _normalize_content_bundle(json.loads(file_storage.read().decode('utf-8')))
             except Exception as exc:
                 raise ValueError(f'发布包文件解析失败：{exc}')
-    data = request.json if request.is_json else request.form
+    data = request.get_json(silent=True) if request.is_json else request.form
     if not data:
         raise ValueError('未提供发布包内容')
     direct_bundle = data.get('bundle') if isinstance(data, dict) else None
@@ -11725,22 +12055,69 @@ def _detect_topic_strategy_traits(topic_name='', keywords='', direction=''):
     }
 
 
+def _detect_topic_format_traits(text=''):
+    joined = str(text or '').strip()
+    return {
+        'poster_like': bool(re.search(r'大字报|互动型|超大字号|一句话核心|强烈视觉冲击', joined, re.I)),
+        'checklist_like': bool(re.search(r'备忘录|清单|checklist|攻略|必做项目清单|抄作业|省钱清单', joined, re.I)),
+        'chart_like': bool(re.search(r'图表|对比图|流程图|数据可视化|风险分层|表格', joined, re.I)),
+        'realshot_like': bool(re.search(r'实拍|医院|体检中心|药盒|背影|等待区|门口|报告实拍', joined, re.I)),
+        'professional_like': bool(re.search(r'深度科普|医疗行业背景|医学生|药学|营养师|文献|研报|科研', joined, re.I)),
+        'report_photo_like': bool(re.search(r'报告解读|报告单|圈出|关键指标|结果解读|报告结果', joined, re.I)),
+        'comparison_like': bool(re.search(r'横向测评|测评|对比|红黑榜|vs|区别', joined, re.I)),
+    }
+
+
 def _build_heuristic_strategy_recommendation(topic):
     topic_name = topic.topic_name if topic else ''
     keywords = topic.keywords if topic else ''
     direction = topic.direction if topic else ''
     traits = _detect_topic_strategy_traits(topic_name, keywords, direction)
-    if traits['discussion_like']:
+    format_traits = _detect_topic_format_traits(' '.join([topic_name or '', keywords or '', direction or '']))
+    if format_traits['professional_like'] or format_traits['chart_like'] or format_traits['report_photo_like']:
+        recommended = {
+            'copy_goal': 'trust_building',
+            'copy_skill': 'report_interpretation',
+            'title_skill': 'checklist_collect',
+            'image_skill': 'report_decode',
+            'cover_style_type': 'medical_science',
+            'inner_style_type': 'checklist_report' if format_traits['report_photo_like'] else 'knowledge_card',
+            'generation_mode': 'smart_bundle',
+        }
+        reason = '当前更适合走专业解释、图表拆解或报告翻译路线，先建立信任和收藏价值。'
+    elif format_traits['checklist_like']:
+        recommended = {
+            'copy_goal': 'save_value',
+            'copy_skill': 'practical_checklist',
+            'title_skill': 'checklist_collect',
+            'image_skill': 'save_worthy_cards',
+            'cover_style_type': 'checklist',
+            'inner_style_type': 'checklist_report',
+            'generation_mode': 'smart_bundle',
+        }
+        reason = '当前内容类型更像备忘录/清单，优先做可收藏、可截图、可执行的版本。'
+    elif format_traits['poster_like'] or traits['discussion_like']:
         recommended = {
             'copy_goal': 'comment_engagement',
             'copy_skill': 'discussion_hook',
             'title_skill': 'question_gap',
+            'image_skill': 'high_click_cover',
+            'cover_style_type': 'poster_bold',
+            'inner_style_type': 'knowledge_card',
+            'generation_mode': 'smart_bundle',
+        }
+        reason = '当前更适合先冲点击和评论区互动，优先用提问型标题和高点击封面。'
+    elif format_traits['realshot_like']:
+        recommended = {
+            'copy_goal': 'balanced',
+            'copy_skill': 'story_empathy',
+            'title_skill': 'emotional_diary',
             'image_skill': 'story_atmosphere',
             'cover_style_type': 'memo_mobile',
             'inner_style_type': 'memo_classroom',
             'generation_mode': 'smart_bundle',
         }
-        reason = '当前话题更适合先把评论区打开，优先用提问型标题和陪伴感画面。'
+        reason = '当前更适合走“真实陪同 / 真实体验 / 真实复查”表达，先做可信的经历感。'
     elif traits['report_like']:
         recommended = {
             'copy_goal': 'save_value',
@@ -12649,6 +13026,7 @@ def _rerank_copy_cards(cards, *, route_key='', copy_goal='balanced'):
 
 def _fallback_copy_agent_routes(topic, topic_text='', keywords='', persona_label='', scene_label='', direction_label='', product_label='', copy_goal='balanced'):
     traits = _detect_topic_strategy_traits(topic.topic_name or topic_text, keywords, direction_label)
+    format_traits = _detect_topic_format_traits(' '.join([topic.topic_name or topic_text, keywords or '', direction_label or '']))
     lead_keyword = _split_keywords(keywords or topic_text or topic.topic_name or '')
     lead_keyword = (lead_keyword[0] if lead_keyword else (topic.topic_name or '这件事'))[:12]
     persona = persona_label or '患者本人'
@@ -12667,6 +13045,108 @@ def _fallback_copy_agent_routes(topic, topic_text='', keywords='', persona_label
             'persona_hint': persona,
             'scene_hint': scene,
         }
+
+    if format_traits['professional_like'] or format_traits['chart_like'] or format_traits['report_photo_like']:
+        return [
+            route_item(
+                'professional_decode',
+                '先把专业判断翻译成人话',
+                '适合专业背景、文献解读、图表说明和报告翻译，重点是把难点讲明白。',
+                [f'{lead_keyword}先把逻辑看懂', f'关于{lead_keyword}，我会先拆这3个指标', f'{lead_keyword}这份图表先看这里'],
+                '如果只看结论，很容易把这件事想简单。真正有用的是先把判断顺序理清。',
+                '正文像门诊解释或科普笔记：先拆核心概念，再讲判断顺序，最后给具体建议。',
+                '结尾更适合问“你们最容易卡在哪个指标或概念？”',
+                '图片适合图表卡、报告解读卡、知识卡片。',
+            ),
+            route_item(
+                'professional_checklist',
+                '先给用户一份可收藏清单',
+                '适合把复杂信息压缩成 3-5 个关键点，方便收藏和复用。',
+                [f'{lead_keyword}这份清单先收好', f'碰到{lead_keyword}，我会先看这几项', f'{lead_keyword}别只看表面，先确认这3点'],
+                '我会先把真正影响判断的几个点列出来，不然很多人看完还是会慌。',
+                '正文按清单推进：先看什么、怎么理解、接下来做什么。',
+                '结尾更适合问“哪一项是你最想让医生解释清楚的？”',
+                '图片适合清单卡、对照表、报告逐项解读。',
+            ),
+            route_item(
+                'professional_compare',
+                '先做横向对比或红黑榜',
+                '适合测评、对比、红黑榜和“不同方案怎么选”的内容。',
+                [f'{lead_keyword}怎么选，我会先对比这几项', f'{lead_keyword}别乱选，这张对比表先看', f'关于{lead_keyword}，红黑榜我只看这几点'],
+                '如果只讲一个方案，用户很难判断。先把差异摆出来，阅读效率会更高。',
+                '正文优先用对比、优缺点和适用场景讲清楚，再给结论。',
+                '结尾更适合问“如果是你，你更在意哪一项差异？”',
+                '图片适合图表卡、对比卡、知识卡片。',
+            ),
+        ]
+
+    if format_traits['checklist_like']:
+        return [
+            route_item(
+                'checklist_first',
+                '先给一份能直接保存的清单',
+                '适合备忘录、攻略、体检项目清单和“照着做”的内容。',
+                [f'{lead_keyword}先存这份清单', f'{lead_keyword}这几步别漏', f'关于{lead_keyword}，我会先按这个顺序来'],
+                '这篇我不想讲虚的，先把顺序和重点列出来，方便你直接照着做。',
+                '正文按步骤和清单推进，每条都尽量给动作和判断标准。',
+                '结尾更适合问“你们还会补哪一项？”',
+                '图片适合备忘录、清单卡、对照表。',
+            ),
+            route_item(
+                'checklist_budget',
+                '先从预算和优先级切入',
+                '适合“基础版 / 升级版 / 全面版”这类方案拆分。',
+                [f'{lead_keyword}预算不同，我会这么排', f'{lead_keyword}怎么取舍，这张表先收好', f'{lead_keyword}想少花冤枉钱，先看优先级'],
+                '很多人不是不愿意做，而是不知道预算该放在哪。先帮他把优先级排出来。',
+                '正文用“先必做、再可选、最后升级项”讲清楚。',
+                '结尾更适合问“如果预算有限，你最先保留哪一项？”',
+                '图片适合价格对照表、预算清单卡。',
+            ),
+            route_item(
+                'checklist_story',
+                '先讲一次真实准备过程',
+                '适合女儿/家属/陪诊者视角，把清单做得更有代入感。',
+                [f'给爸妈准备{lead_keyword}时，我先做了这份清单', f'{lead_keyword}那天，我最怕漏掉这几项', f'如果再来一次，{lead_keyword}我会先这么排'],
+                '先讲那次准备或体检时的慌乱，再把最后用到的清单交出来。',
+                '正文先经历后清单，兼顾真实感和实用性。',
+                '结尾更适合问“你们带父母体检最怕漏什么？”',
+                '图片适合备忘录 / 清单卡 / 课堂笔记。',
+            ),
+        ]
+
+    if format_traits['poster_like']:
+        return [
+            route_item(
+                'poster_hook',
+                '先打一条能让人停下来的大问题',
+                '适合大字报封面和互动型内容，先让人停下来再展开。',
+                [f'{lead_keyword}这件事，你会怎么选', f'{lead_keyword}先别急着下结论', f'很多人对{lead_keyword}第一反应都错了'],
+                '先把用户最纠结的那个问题打出来，不急着给标准答案。',
+                '正文像讨论贴：先抛问题，再给经历或判断，最后把评论区打开。',
+                '结尾更适合问“如果是你，你会怎么做？”',
+                '图片适合大字封面，内页再换知识卡。',
+            ),
+            route_item(
+                'poster_story',
+                '先讲一个会共鸣的瞬间',
+                '适合实拍+大字报混合，用情绪和经历把评论区拉起来。',
+                [f'那次因为{lead_keyword}，我真的慌了', f'{lead_keyword}这件事，我差点也拖过去', f'关于{lead_keyword}，我后来不敢再赌'],
+                '那一下的真实反应，比空讲道理更能让人代入。',
+                '正文先讲瞬间，再讲为什么，最后给动作。',
+                '结尾更适合问“你以前也有过这种反应吗？”',
+                '图片适合大字封面 + 备忘录内页。',
+            ),
+            route_item(
+                'poster_reverse',
+                '先纠偏，再抛互动问题',
+                '适合误区、大众认知偏差和讨论型场景。',
+                [f'{lead_keyword}很多人第一步就想错了', f'关于{lead_keyword}，最容易误会的是这里', f'{lead_keyword}别再按老办法想了'],
+                '如果先讲经历太慢，这条就直接先纠偏，再给评论区留空间。',
+                '正文先说误区，再讲正确理解，最后抛一个问题收尾。',
+                '结尾更适合问“你以前是不是也这么想？”',
+                '图片适合大字报和知识卡片。',
+            ),
+        ]
 
     if traits['report_like']:
         return [
@@ -12772,6 +13252,7 @@ def _fallback_copy_agent_routes(topic, topic_text='', keywords='', persona_label
 
 def _fallback_image_agent_routes(topic_text='', copy_routes=None):
     traits = _detect_topic_strategy_traits(topic_text, topic_text, topic_text)
+    format_traits = _detect_topic_format_traits(topic_text)
     routes = []
 
     def add_route(key, label, why, family_key, image_skill, cover_style_type, inner_style_type, preview_focus):
@@ -12787,6 +13268,21 @@ def _fallback_image_agent_routes(topic_text='', copy_routes=None):
             'preview_focus': preview_focus,
         })
 
+    if format_traits['professional_like'] or format_traits['chart_like'] or format_traits['report_photo_like']:
+        add_route('report_decode', '报告解读卡', '适合深度科普、图表说明、报告翻译和指标拆解。', 'medical_science', 'report_decode', 'medical_science', 'checklist_report', '封面先讲“这张图要看哪”，内页拆指标、对照和下一步动作。')
+        add_route('knowledge_decode', '知识图表卡', '适合横向测评、概念解释和科研/文献转人话。', 'knowledge_card', 'classroom_focus', 'knowledge_card', 'knowledge_card', '封面一句话点题，内页拆模块或对比。')
+        add_route('checklist_table', '对照清单卡', '适合预算对比、项目清单、红黑榜和流程图。', 'checklist', 'save_worthy_cards', 'checklist_table', 'checklist_table', '封面做对照句，内页用表格或步骤承接。')
+        return routes
+    if format_traits['checklist_like']:
+        add_route('checklist_cards', '清单卡', '适合备忘录、项目清单、攻略和截图收藏型内容。', 'checklist', 'save_worthy_cards', 'checklist', 'checklist_table', '封面先做问题句，内页用步骤、表格或优先级列表。')
+        add_route('memo_story', '备忘录/课堂笔记', '适合把清单写得更像真实陪同经验或复盘。', 'memo', 'story_atmosphere', 'memo_mobile', 'memo_classroom', '封面像手机备忘录，内页像手写笔记。')
+        add_route('medical_science', '医学解释图', '适合把清单背后的原因和指标关系讲清楚。', 'medical_science', 'report_decode', 'medical_science', 'knowledge_card', '封面突出重点项目，内页再解释原因。')
+        return routes
+    if format_traits['poster_like']:
+        add_route('poster_click', '大字封面', '适合先冲点击和互动，封面用一句强问题或强提醒。', 'poster', 'high_click_cover', 'poster_bold', 'knowledge_card', '封面只打一条问题句或纠偏句，内页换成知识卡。')
+        add_route('memo_story', '陪伴感卡片', '适合封面冲点击后，内页继续用真实经历接住。', 'memo', 'story_atmosphere', 'poster_handwritten', 'memo_classroom', '封面情绪更强，内页更像复盘。')
+        add_route('knowledge_card', '知识卡片', '适合把互动型问题往可收藏解释型内容过渡。', 'knowledge_card', 'classroom_focus', 'knowledge_card', 'knowledge_card', '封面一句话，内页拆 3 个判断点。')
+        return routes
     if traits['report_like']:
         add_route('report_decode', '报告解读卡', '适合看懂报告、指标和复查顺序，收藏和转发都会更稳。', 'medical_science', 'report_decode', 'medical_science', 'checklist_report', '封面突出“先别慌/先看哪项”，内页拆指标、趋势和下一步动作。')
         add_route('knowledge_decode', '知识卡片', '适合把最容易看偏的点讲清楚，比大字报更有信息密度。', 'knowledge_card', 'classroom_focus', 'knowledge_card', 'knowledge_card', '封面放一个核心判断，内页拆 3 个关键点。')
@@ -16575,7 +17071,7 @@ def preview_content_bundle_import():
     if guard:
         return guard
 
-    data = request.json or {}
+    data = (request.get_json(silent=True) or request.form or {})
     target_activity_id = _safe_int(data.get('target_activity_id'), 0)
     import_topics = _coerce_bool(data.get('import_topics', False))
     try:
@@ -16607,7 +17103,7 @@ def import_content_bundle():
     if guard:
         return guard
 
-    data = request.json or {}
+    data = (request.get_json(silent=True) or request.form or {})
     target_activity_id = _safe_int(data.get('target_activity_id'), 0)
     import_trends = _coerce_bool(data.get('import_trends', True))
     import_topic_ideas = _coerce_bool(data.get('import_topic_ideas', True))
@@ -17013,8 +17509,12 @@ def preview_topics_import():
     if guard:
         return guard
 
-    data = request.json or {}
-    rows = _parse_topic_import_payload(data.get('raw_payload') or '')
+    data = (request.get_json(silent=True) or request.form or {})
+    if request.files:
+        file_storage = request.files.get('file')
+        rows = _parse_topic_import_file(file_storage.filename or '', file_storage.read()) if file_storage and file_storage.filename else []
+    else:
+        rows = _parse_topic_import_payload(data.get('raw_payload') or '')
     if not rows:
         return jsonify({'success': False, 'message': '没有识别到可导入的话题数据'})
 
@@ -17034,8 +17534,12 @@ def import_topics():
     if guard:
         return guard
 
-    data = request.json or {}
-    rows = _parse_topic_import_payload(data.get('raw_payload') or '')
+    data = (request.get_json(silent=True) or request.form or {})
+    if request.files:
+        file_storage = request.files.get('file')
+        rows = _parse_topic_import_file(file_storage.filename or '', file_storage.read()) if file_storage and file_storage.filename else []
+    else:
+        rows = _parse_topic_import_payload(data.get('raw_payload') or '')
     if not rows:
         return jsonify({'success': False, 'message': '没有识别到可导入的话题数据'})
 

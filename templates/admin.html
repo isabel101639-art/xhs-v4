@@ -313,6 +313,10 @@
                                 <span class="text-muted small ms-2">适合你明天直接把爆款链接跟在话题里一起给我。</span>
                             </div>
                             <div class="col-md-12">
+                                <label class="form-label">上传 CSV / XLSX 文件</label>
+                                <input id="topicImportFile" type="file" class="form-control mb-3" accept=".csv,.tsv,.txt,.xlsx">
+                            </div>
+                            <div class="col-md-12">
                                 <label class="form-label">粘贴话题数据</label>
                                 <textarea id="topicImportPayload" class="form-control" rows="10" placeholder='示例：&#10;体检报告里的肝弹指标怎么看|体检,报告,FibroScan|把不会看报告的人最容易误判的点讲清楚|体检复盘博主|检查解读型|重点讲清楚先看什么再看什么|https://example.com/note|30|第一组'></textarea>
                             </div>
@@ -2180,21 +2184,34 @@
 
         async function previewTopicImport() {
             const rawPayload = document.getElementById('topicImportPayload').value.trim();
+            const file = document.getElementById('topicImportFile').files?.[0];
             const activityId = parseInt(document.getElementById('topicImportActivityId').value || '0', 10) || 0;
             const targetType = document.getElementById('topicImportTargetType').value || 'topic_idea';
-            if (!rawPayload) {
-                document.getElementById('topicImportMsg').textContent = '请先粘贴话题数据';
+            if (!rawPayload && !file) {
+                document.getElementById('topicImportMsg').textContent = '请先粘贴话题数据或选择文件';
                 return;
             }
-            const res = await fetch('/api/topics/import_preview', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    raw_payload: rawPayload,
-                    activity_id: activityId,
-                    target_type: targetType,
-                })
-            });
+            let res;
+            if (file) {
+                const form = new FormData();
+                form.append('file', file);
+                form.append('activity_id', String(activityId));
+                form.append('target_type', targetType);
+                res = await fetch('/api/topics/import_preview', {
+                    method: 'POST',
+                    body: form
+                });
+            } else {
+                res = await fetch('/api/topics/import_preview', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        raw_payload: rawPayload,
+                        activity_id: activityId,
+                        target_type: targetType,
+                    })
+                });
+            }
             const data = await res.json();
             document.getElementById('topicImportMsg').textContent = data.message || '已处理';
             if (!data.success) {
@@ -2206,23 +2223,36 @@
 
         async function importTopicBatch() {
             const rawPayload = document.getElementById('topicImportPayload').value.trim();
+            const file = document.getElementById('topicImportFile').files?.[0];
             const activityId = parseInt(document.getElementById('topicImportActivityId').value || '0', 10) || 0;
             const targetType = document.getElementById('topicImportTargetType').value || 'topic_idea';
-            if (!rawPayload) {
-                document.getElementById('topicImportMsg').textContent = '请先粘贴话题数据';
+            if (!rawPayload && !file) {
+                document.getElementById('topicImportMsg').textContent = '请先粘贴话题数据或选择文件';
                 return;
             }
             const confirmed = window.confirm(`确认把这批话题导入为${targetType === 'topic' ? '正式话题' : '候选话题'}吗？`);
             if (!confirmed) return;
-            const res = await fetch('/api/topics/import', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    raw_payload: rawPayload,
-                    activity_id: activityId,
-                    target_type: targetType,
-                })
-            });
+            let res;
+            if (file) {
+                const form = new FormData();
+                form.append('file', file);
+                form.append('activity_id', String(activityId));
+                form.append('target_type', targetType);
+                res = await fetch('/api/topics/import', {
+                    method: 'POST',
+                    body: form
+                });
+            } else {
+                res = await fetch('/api/topics/import', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        raw_payload: rawPayload,
+                        activity_id: activityId,
+                        target_type: targetType,
+                    })
+                });
+            }
             const data = await res.json();
             document.getElementById('topicImportMsg').textContent = data.message || '已处理';
             if (!data.success) {
@@ -2230,6 +2260,7 @@
                 return;
             }
             document.getElementById('topicImportPreview').textContent = JSON.stringify(data.result || {}, null, 2);
+            document.getElementById('topicImportFile').value = '';
         }
 
         async function importActivityReferenceCorpusFromTopics() {
