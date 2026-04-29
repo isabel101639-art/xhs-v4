@@ -8907,7 +8907,12 @@ def _build_local_copy_body_sections(
         sections.append(focus_line)
     if product_line and product_label and product_label not in {'自动匹配', '不植入产品'}:
         sections.append(product_line)
-    sections.append('我现在更在意的，是把事情一步步说明白，而不是靠几个专业词把人说懵。')
+    closing_lines = [
+        '我会把这篇写成普通人能直接照着判断的版本，不靠一堆名词撑专业感。',
+        '这类内容最重要的不是把话说满，而是让人看完知道下一步先做什么。',
+        '我会少讲口号，多写具体场景和判断顺序，这样更像真实笔记。',
+    ]
+    sections.append(closing_lines[index % len(closing_lines)])
 
     compact = []
     seen = set()
@@ -12820,7 +12825,7 @@ def _normalize_title_candidate(title):
     text = re.sub(r'\s+', ' ', text).strip()
     if not text:
         return ''
-    bad_title_tokens = ['带话题', '关键词', '版本']
+    bad_title_tokens = ['带话题', '关键词', '版本', '封面', '互动型', '实拍', '笔记类型', '类型']
     if any(token in text for token in bad_title_tokens):
         return ''
     return text[:24]
@@ -13028,9 +13033,6 @@ def _build_title_option_pool(cards, title_skill_profile, topic, keywords='', cop
             'reason': reason,
             'score': score,
         })
-        if len(options) >= 6:
-            break
-
     if not options:
         options.append({
             'title': '分享笔记',
@@ -13040,7 +13042,7 @@ def _build_title_option_pool(cards, title_skill_profile, topic, keywords='', cop
             'score': 60,
         })
     options.sort(key=lambda item: (item.get('score') or 0, item.get('source') == '正文版本 1'), reverse=True)
-    return options[:6]
+    return options[:5]
 
 
 def _build_seed_plan_versions(route_plan, default_cards, output_count=3):
@@ -14930,7 +14932,7 @@ def check_compliance():
     content = data.get('content', '')
 
     # 合规关键词检查
-    forbidden_words = ['最好', '第一', '最有效', '根治', '治愈', '特效', '保证', '绝对', '100%', '最靠谱', '就吃这个', '别的药都没用', '药盒', '私信我', '天猫', '京东', '胃疼', '堵得慌', '副作用', '吃完难受']
+    forbidden_words = ['最有效', '根治', '治愈', '特效', '保证', '绝对', '100%', '最靠谱', '就吃这个', '别的药都没用', '药盒', '私信我', '天猫', '京东']
     warnings = []
 
     for word in forbidden_words:

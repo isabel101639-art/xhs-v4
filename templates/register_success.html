@@ -133,6 +133,60 @@
             color: #0f172a;
             line-height: 1.6;
         }
+        .keyword-copy-box {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .keyword-chip-wrap {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .keyword-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 7px 11px;
+            border-radius: 999px;
+            background: #f1f5f9;
+            color: #334155;
+            font-size: 13px;
+            font-weight: 800;
+        }
+        .agent-progress-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 10px;
+            margin: 14px 0 18px;
+        }
+        .agent-progress-step {
+            border-radius: 16px;
+            border: 1px solid rgba(22,33,43,0.08);
+            background: rgba(255,255,255,0.86);
+            padding: 12px 14px;
+            color: #64748b;
+            font-size: 13px;
+            font-weight: 800;
+        }
+        .agent-progress-step.is-active {
+            color: #ef4e45;
+            border-color: rgba(239,78,69,0.24);
+            background: rgba(239,78,69,0.07);
+        }
+        .agent-stage-card {
+            border-radius: 22px;
+            border: 1px solid rgba(22,33,43,0.08);
+            background: rgba(255,255,255,0.9);
+            padding: 18px;
+            height: 100%;
+        }
+        .agent-stage-card .stage-label {
+            font-size: 12px;
+            color: #ef4e45;
+            font-weight: 900;
+            margin-bottom: 8px;
+        }
         .studio-actions {
             display: flex;
             justify-content: space-between;
@@ -180,6 +234,15 @@
             border-color: rgba(239, 78, 69, 0.45);
             box-shadow: 0 18px 38px rgba(239, 78, 69, 0.14);
             background: linear-gradient(180deg, rgba(255,245,243,0.98), rgba(255,250,248,0.96));
+        }
+        .copy-card-confirmed {
+            border: 1px solid rgba(15,118,110,0.22);
+            background: rgba(240,253,250,0.78);
+            border-radius: 18px;
+            padding: 12px 14px;
+            color: #0f766e;
+            font-weight: 800;
+            margin-bottom: 14px;
         }
         .copy-chip-row {
             display: flex;
@@ -760,44 +823,22 @@
             <h5><i class="bi bi-check-circle"></i> 报名成功！</h5>
             <p class="mb-0">您已成功报名：<strong>{{ registration.topic.topic_name }}</strong></p>
         </div>
-        <div id="releaseStudioSummary" class="release-studio-summary">
-            <div class="release-studio-card">
-                <div class="label">当前版本</div>
-                <div class="value">{{ (release_manifest or {}).get('release_version', '-') }}</div>
-            </div>
-            <div class="release-studio-card">
-                <div class="label">当前阶段</div>
-                <div class="value">{{ (release_manifest or {}).get('release_stage_label', '-') }}</div>
-            </div>
-            <div class="release-studio-card">
-                <div class="label">目标上线日</div>
-                <div class="value">{{ (release_manifest or {}).get('release_target_date', '-') }}</div>
-            </div>
-            <div class="release-studio-card">
-                <div class="label">版本指纹</div>
-                <div class="value">{{ (release_manifest or {}).get('release_fingerprint', '-') }}</div>
-            </div>
-            <div class="release-studio-card">
-                <div class="label">Commit</div>
-                <div class="value">{{ (release_manifest or {}).get('release_commit_sha', '-') }}</div>
-            </div>
-        </div>
         <script id="releaseManifestPayload" type="application/json">{{ (release_manifest or {})|tojson }}</script>
 
         <!-- 一键生成文案 -->
         <div id="copyStudio" class="success-card copy-studio mb-4">
-            <div class="studio-kicker"><i class="bi bi-stars"></i> 千人千面文案工作台</div>
+            <div class="studio-kicker"><i class="bi bi-stars"></i> 文案 Agent 工作台</div>
             <div class="studio-head">
                 <div>
-                    <h5>一键生成文案</h5>
-                    <p>先选人设、场景、软植入产品、内容目标、写作技能包和标题技能包，再生成更自然的 3 个差异化版本。系统会默认帮你把标题、开头钩子、产品软植入和互动结尾一起做好。</p>
+                    <h5>先定文案，再生成图片</h5>
+                    <p>Agent 会先判断人设、场景、目标和标题打法，给出 5 个标题候选；你选标题后看 3 版文案，不满意可重新生成。确认文案后，再进入图片 Agent。</p>
                 </div>
                 <div class="studio-tip">
-                    <strong>这次我已经把生成方向锁成 4 件事：</strong><br>
-                    1. 爆款标题<br>
-                    2. 开头钩子<br>
-                    3. 产品自然软植入<br>
-                    4. 结尾互动引导
+                    <strong>当前流程</strong><br>
+                    1. Agent 分析角度<br>
+                    2. 生成 5 个标题<br>
+                    3. 输出 3 版文案<br>
+                    4. 确认后进入图片 Agent
                 </div>
             </div>
 
@@ -807,13 +848,19 @@
                     <strong>{{ registration.topic.topic_name }}</strong>
                 </div>
                 <div class="studio-note-item">
-                    <div class="small-label">关键词</div>
-                    <strong>{{ registration.topic.keywords or '暂无关键词' }}</strong>
+                    <div class="small-label">关键词，可复制</div>
+                    <div class="keyword-copy-box">
+                        <div id="topicHashtagChips" class="keyword-chip-wrap"></div>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="copyTopicHashtags()">复制</button>
+                    </div>
                 </div>
-                <div class="studio-note-item">
-                    <div class="small-label">撰写说明</div>
-                    <strong>{{ registration.topic.direction[:120] if registration.topic.direction else '按话题自动理解' }}</strong>
-                </div>
+            </div>
+
+            <div class="agent-progress-bar">
+                <div class="agent-progress-step is-active" id="agentStepAnalyze">1. Agent 分析</div>
+                <div class="agent-progress-step" id="agentStepTitle">2. 选标题</div>
+                <div class="agent-progress-step" id="agentStepCopy">3. 选文案</div>
+                <div class="agent-progress-step" id="agentStepImage">4. 图片 Agent</div>
             </div>
 
             <div class="row g-3">
@@ -943,10 +990,7 @@
             </div>
 
             <div class="studio-actions">
-                <label class="studio-switch mb-0">
-                    <input class="form-check-input mt-0" type="checkbox" id="fastMode">
-                    极速生成（优先给出 3 个可选版本）
-                </label>
+                <span class="studio-switch mb-0">默认启用 Agent：先分析，再生成</span>
                 <button type="button" class="outline-pill-btn" onclick="runCopyAgentAnalysis()">
                     <i class="bi bi-diagram-3"></i> Agent先分析
                 </button>
@@ -962,14 +1006,8 @@
                 <button type="button" class="outline-pill-btn" onclick="applyRecommendedViralPreset()">
                     <i class="bi bi-lightning-charge"></i> 应用推荐并分析
                 </button>
-                <button id="taskAutopilotBtn" type="button" class="outline-pill-btn" onclick="runTaskAutopilot()">
-                    <i class="bi bi-magic"></i> 一键爆款生成
-                </button>
-                <button id="bundleAutopilotBtn" type="button" class="outline-pill-btn" onclick="runBundleAutopilot()">
-                    <i class="bi bi-images"></i> 一键图文套组
-                </button>
                 <button id="generateBtn" class="studio-primary-btn" onclick="generateCopy()">
-                    <i class="bi bi-stars"></i> 生成文案
+                    <i class="bi bi-stars"></i> Agent生成文案
                 </button>
             </div>
             <div id="viralOperationTips" class="form-text mt-2">系统会根据当前话题推荐更适合的文案打法、标题打法和图片打法。</div>
@@ -979,23 +1017,14 @@
 
             <div id="agentAnalysisArea" class="mt-4" style="display:none;">
                 <div class="row g-3">
-                    <div class="col-lg-6">
+                    <div class="col-lg-12">
                         <div class="border rounded-4 p-3" style="background:#fffaf8;">
                             <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
                                 <h6 class="mb-0">1. Agent分析文案路线</h6>
-                                <span class="text-muted small">先选一条更像人的表达路线</span>
+                                <span class="text-muted small">先选一条更像人的表达路线，图片等文案确认后再做</span>
                             </div>
                             <div id="agentAnalysisSummary" class="text-muted small mb-3">Agent 会先拆 2-3 条写法路线，再让你确认。</div>
                             <div id="agentCopyRouteWrap" class="d-grid gap-2"></div>
-                        </div>
-                    </div>
-                    <div class="col-lg-6">
-                        <div class="border rounded-4 p-3" style="background:#f7fbff;">
-                            <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
-                                <h6 class="mb-0">2. Agent分析图片路线</h6>
-                                <span class="text-muted small">先选视觉路线，再预览图片</span>
-                            </div>
-                            <div id="agentImageRouteWrap" class="d-grid gap-2"></div>
                         </div>
                     </div>
                 </div>
@@ -1003,30 +1032,20 @@
 
             <div id="loading" style="display:none;" class="mt-3">
                 <div class="spinner-border text-primary" role="status"></div>
-                <span class="ms-2">AI 正在按你选择的人设、场景、写作技能包和标题技能包生成中...</span>
+                <span class="ms-2">文案 Agent 正在分析角度、标题和 3 版正文...</span>
             </div>
 
             <!-- 生成结果 -->
             <div id="resultArea" class="mt-4" style="display:none;">
                 <div class="row g-3 mb-3">
-                    <div class="col-lg-7">
+                    <div class="col-lg-12">
                         <div class="border rounded-4 p-3" style="background:#fffaf6;">
                             <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
-                                <h6 class="mb-0">标题 A/B 池</h6>
-                                <span class="text-muted small">先定标题，再选正文和封面</span>
+                                <h6 class="mb-0">标题池（Agent 生成 5 个）</h6>
+                                <span class="text-muted small">先选标题，再看 3 版正文</span>
                             </div>
-                            <div id="titlePoolTips" class="text-muted small mb-2">系统会把当前正文版本、标题 skill 和目标打法合并成 1 组标题候选。</div>
+                            <div id="titlePoolTips" class="text-muted small mb-2">Agent 会按当前话题和目标给 5 个不重复标题。</div>
                             <div id="titlePoolWrap" class="d-flex flex-wrap gap-2"></div>
-                        </div>
-                    </div>
-                    <div class="col-lg-5">
-                        <div class="border rounded-4 p-3" style="background:#f6fbff;">
-                            <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
-                                <h6 class="mb-0">图片 Agent 方案分析</h6>
-                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="refreshImageAgentPlans()">重新分析</button>
-                            </div>
-                            <div id="imageAgentPlanSummary" class="text-muted small mb-2">系统会结合你当前选中的正文版本，先分析 2-4 条更适合的出图路线。</div>
-                            <div id="imageAgentPlanWrap" class="d-grid gap-2"></div>
                         </div>
                     </div>
                 </div>
@@ -1043,6 +1062,9 @@
                         <button class="copy-btn" onclick="copySelected()">
                             <i class="bi bi-clipboard"></i> 复制当前版本
                         </button>
+                        <button class="copy-btn" onclick="confirmCopyForImageAgent()" style="background:#0f766e;">
+                            <i class="bi bi-check2-circle"></i> 确认文案，进入图片Agent
+                        </button>
                     </div>
                 </div>
 
@@ -1054,8 +1076,17 @@
                 <!-- 合规检查结果 -->
                 <div id="complianceResult" class="mt-3"></div>
 
-                <div class="step-shell mt-3">
-                    <div class="step-kicker"><i class="bi bi-image"></i> 3. 确认图片执行方案</div>
+                <div id="imageAgentStage" class="step-shell mt-3" style="display:none;">
+                    <div class="copy-card-confirmed"><i class="bi bi-check2-circle"></i> 文案已确认，图片 Agent 将基于当前标题和正文生成方案。</div>
+                    <div class="border rounded-4 p-3 mb-3" style="background:#f6fbff;">
+                        <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                            <h6 class="mb-0">图片 Agent 方案分析</h6>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="refreshImageAgentPlans()">重新分析</button>
+                        </div>
+                        <div id="imageAgentPlanSummary" class="text-muted small mb-2">图片 Agent 会结合你确认的正文，分析封面和内页路线。</div>
+                        <div id="imageAgentPlanWrap" class="d-grid gap-2"></div>
+                    </div>
+                    <div class="step-kicker"><i class="bi bi-image"></i> 图片执行方案</div>
                     <div id="imageExecutionBar" class="image-plan-bar">先在“图片 Agent 方案分析”里选一条路线，系统再按这条路线预览封面和内页。</div>
                     <div class="d-flex flex-wrap gap-2">
                         <button class="copy-btn" type="button" onclick="generateCreativePack()" style="background:#ff8b2b;">
@@ -1163,20 +1194,6 @@
             </div>
         </div>
 
-        <!-- 话题信息 - 生成文案的参考 -->
-        <div class="success-card mb-4" style="border-left: 4px solid #ff2442;">
-            <h6><i class="bi bi-info-circle"></i> 话题参考信息</h6>
- <div class="mt-3"><div class="border rounded p-3" style="background:#fff8fa;"><div class="d-flex justify-content-between align-items-center mb-2"><strong>🔖 关键词（可直接复制粘贴）</strong><button type="button" class="btn btn-sm btn-outline-danger" onclick="(function(){var t=((document.getElementById('topicKeywords')||{}).innerText||'').trim();if(!t){return;}try{if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(t);}else{var ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();}alert('关键词已复制');}catch(e){alert('复制失败，请手动复制');}})();">复制关键词</button></div><div id="topicKeywords" style="white-space: pre-wrap; font-size: 13px; color:#444;">{{ registration.topic.keywords or '暂无关键词' }}</div></div></div>
-            <div class="row">
-                <div class="col-md-6">
-                    <p><strong>🗣️ 话题：</strong><br><span class="text-danger">{{ registration.topic.topic_name }}</span></p>
-                </div>
-                <div class="col-md-6">
-                    <p><strong>💡 撰写说明：</strong><br>{{ registration.topic.direction[:200] }}...</p>
-                </div>
-            </div>
-        </div>
-
         <!-- 提交笔记 -->
         <div id="submitFormCard" class="success-card">
             <h6><i class="bi bi-upload"></i> 提交数据（仅小红书）</h6>
@@ -1247,6 +1264,8 @@
         const assetStyleTypeDefinitions = {{ asset_style_types|tojson }};
         const imageSkillPresets = {{ image_skill_presets|tojson }};
         const topicContextText = {{ ((registration.topic.topic_name or '') ~ ' ' ~ (registration.topic.keywords or '') ~ ' ' ~ (registration.topic.direction or ''))|tojson }};
+        const rawTopicKeywords = {{ (registration.topic.keywords or '')|tojson }};
+        let copyConfirmedForImageAgent = false;
         try {
             localStorage.setItem('xhs_v4_last_registration_id', '{{ registration.id }}');
         } catch (error) {
@@ -1326,6 +1345,47 @@
             if (!select || !value) return fallback || value || '';
             const match = Array.from(select.options || []).find((item) => item.value === value);
             return (match?.textContent || fallback || value || '').trim();
+        }
+
+        function normalizeHashtags(raw) {
+            const cleaned = String(raw || '')
+                .replace(/带话题/g, ' ')
+                .split(/[\s,，、/|｜;；\n\r]+/)
+                .map((item) => item.trim().replace(/^#+/, ''))
+                .filter((item) => item && item.length <= 24);
+            const seen = new Set();
+            return cleaned.filter((item) => {
+                if (seen.has(item)) return false;
+                seen.add(item);
+                return true;
+            }).slice(0, 10).map((item) => `#${item}`);
+        }
+
+        function renderTopicHashtags() {
+            const wrap = document.getElementById('topicHashtagChips');
+            if (!wrap) return;
+            const tags = normalizeHashtags(rawTopicKeywords);
+            wrap.innerHTML = tags.length
+                ? tags.map((tag) => `<span class="keyword-chip">${escapeHtml(tag)}</span>`).join('')
+                : '<span class="text-muted small">暂无关键词</span>';
+        }
+
+        function copyTopicHashtags() {
+            const tags = normalizeHashtags(rawTopicKeywords).join(' ');
+            if (!tags) {
+                alert('暂无关键词可复制');
+                return;
+            }
+            copyText(tags);
+        }
+
+        function updateAgentProgress(stage) {
+            const order = ['Analyze', 'Title', 'Copy', 'Image'];
+            order.forEach((key) => {
+                const node = document.getElementById(`agentStep${key}`);
+                if (!node) return;
+                node.classList.toggle('is-active', key.toLowerCase() === String(stage || '').toLowerCase());
+            });
         }
 
         function getStrategyDraftStorageKey() {
@@ -2093,7 +2153,7 @@
                 selected_generation_mode: workflow.modeKey || '',
                 selected_copy_text: currentCard ? buildCopyCardText(currentCard) : '',
                 generator_context: generatorContext || {},
-                title_options: (titleOptions || []).slice(0, 8),
+                title_options: (titleOptions || []).slice(0, 5),
             };
         }
 
@@ -2141,12 +2201,13 @@
                 return;
             }
             rerankTitleOptionsForRecommendation(false);
+            const visibleTitles = titleOptions.slice(0, 5);
             if (tips) {
-                const best = titleOptions[0] || {};
-                tips.textContent = `当前共生成 ${titleOptions.length} 个标题候选。建议先挑一个最想点开的，再决定要不要换正文版本。当前首推：${best.title || '系统推荐'}${best.reason ? ` ｜ ${best.reason}` : ''}${best.tone ? ` ｜ ${best.tone}` : ''}${best.champion_hint ? ` ｜ ${best.champion_hint}` : ''}`;
+                const best = visibleTitles[0] || {};
+                tips.textContent = `当前生成 ${visibleTitles.length} 个标题候选。先选一个最想点开的标题，再看下面 3 版正文。当前首推：${best.title || '系统推荐'}${best.reason ? ` ｜ ${best.reason}` : ''}${best.tone ? ` ｜ ${best.tone}` : ''}${best.champion_hint ? ` ｜ ${best.champion_hint}` : ''}`;
             }
             wrap.innerHTML = `<div class="title-option-grid">${
-                titleOptions.map((item, index) => `
+                visibleTitles.map((item, index) => `
                     <div class="title-option-card ${index === selectedTitle ? 'active' : ''}" onclick="selectTitleOption(${index})">
                         <div class="d-flex justify-content-between align-items-center gap-2">
                             <span class="title-option-rank">${index === 0 ? '首推' : `候选 ${index + 1}`}</span>
@@ -2224,8 +2285,12 @@
             renderCopySummary();
             checkCompliance(getSelectedContent());
             refreshViralOperationTips();
-            refreshCoverRecommendations();
-            refreshImageAgentPlans();
+            if (copyConfirmedForImageAgent) {
+                copyConfirmedForImageAgent = false;
+                const imageStage = document.getElementById('imageAgentStage');
+                if (imageStage) imageStage.style.display = 'none';
+            }
+            updateAgentProgress('copy');
             scheduleStrategyPersistence('select_title');
         }
 
@@ -2276,7 +2341,7 @@
             wrap.textContent = [
                 copyAgentAnalysis.summary || '',
                 copyRoute ? `当前文案路线：${copyRoute.label}` : '',
-                imageRoute ? `当前图片路线：${imageRoute.label}` : '',
+                copyConfirmedForImageAgent && imageRoute ? `当前图片路线：${imageRoute.label}` : '',
             ].filter(Boolean).join(' ｜ ');
         }
 
@@ -2321,7 +2386,7 @@
             const summaryWrap = document.getElementById('agentAnalysisSummary');
             const copyWrap = document.getElementById('agentCopyRouteWrap');
             const imageWrap = document.getElementById('agentImageRouteWrap');
-            if (!area || !copyWrap || !imageWrap) return;
+            if (!area || !copyWrap) return;
             if (!copyAgentAnalysis) {
                 area.style.display = 'none';
                 return;
@@ -2344,25 +2409,11 @@
                     <div class="agent-route-meta"><strong>正文策略：</strong>${escapeHtml(route.body_strategy || '')}</div>
                 </div>
             `).join('');
-            imageWrap.innerHTML = (copyAgentAnalysis.image_routes || []).map((route) => `
-                <div class="agent-route-card" data-agent-image-route="${route.id}">
-                    <div class="d-flex justify-content-between align-items-start gap-2">
-                        <div>
-                            <div class="fw-semibold">${escapeHtml(route.label || '')}</div>
-                            <div class="small text-muted mt-1">${escapeHtml(route.why || '')}</div>
-                        </div>
-                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="applyAgentImageRoute('${route.id}')">用这套图</button>
-                    </div>
-                    <div class="agent-route-meta"><strong>预览重点：</strong>${escapeHtml(route.preview_focus || '')}</div>
-                    <div class="agent-route-meta"><strong>封面/内页：</strong>${escapeHtml(route.cover_style_type || '-')} ｜ ${escapeHtml(route.inner_style_type || '-')}</div>
-                </div>
-            `).join('');
             const hasSelectedCopyRoute = (copyAgentAnalysis.copy_routes || []).some((item) => item.id === selectedAgentCopyRouteId);
             const hasSelectedImageRoute = (copyAgentAnalysis.image_routes || []).some((item) => item.id === selectedAgentImageRouteId);
             if (!hasSelectedCopyRoute) selectedAgentCopyRouteId = copyAgentAnalysis.recommended_copy_route_id || '';
             if (!hasSelectedImageRoute) selectedAgentImageRouteId = copyAgentAnalysis.recommended_image_route_id || '';
             if (selectedAgentCopyRouteId) selectAgentCopyRoute(selectedAgentCopyRouteId);
-            if (selectedAgentImageRouteId) applyAgentImageRoute(selectedAgentImageRouteId);
             renderAgentDecisionBar();
         }
 
@@ -3095,12 +3146,13 @@
         }
 
         async function generateCopy() {
+            updateAgentProgress('analyze');
             document.getElementById('loading').style.display = 'block';
             document.getElementById('generateBtn').disabled = true;
 
             try {
-                const fastMode = document.getElementById('fastMode') ? document.getElementById('fastMode').checked : false;
-                if (!fastMode && !copyAgentAnalysis) {
+                const fastMode = false;
+                if (!copyAgentAnalysis) {
                     const analyzed = await fetchCopyAgentAnalysis();
                     if (!analyzed) {
                         document.getElementById('loading').style.display = 'none';
@@ -3126,17 +3178,18 @@
                         copy_skill: document.getElementById('copySkill').value,
                         title_skill: document.getElementById('titleSkill').value,
                         agent_copy_route_id: selectedAgentCopyRouteId || '',
-                        agent_image_route_id: selectedAgentImageRouteId || '',
+                        agent_image_route_id: '',
                     })
                 });
                 const data = await res.json();
 
                 if (data.success) {
+                    copyConfirmedForImageAgent = false;
                     generatorContext = data.generator_context || {};
                     copyCards = normalizeCopyCards(data.cards);
                     versions = copyCards.map((card) => card.copy_text);
                     titles = copyCards.map((card) => card.title);
-                    titleOptions = normalizeTitleOptions(data.title_options || titles.map((title) => ({ title, source: '正文版本' })));
+                    titleOptions = normalizeTitleOptions(data.title_options || titles.map((title) => ({ title, source: '正文版本' }))).slice(0, 5);
                     titlePoolTouchedByUser = false;
                     rerankTitleOptionsForRecommendation(true);
                     selectedVersion = 0;
@@ -3151,15 +3204,18 @@
                     document.getElementById('graphicBundleList').innerHTML = '';
                     document.getElementById('assetTaskArea').style.display = 'none';
                     document.getElementById('assetTaskList').innerHTML = '';
+                    const imageStage = document.getElementById('imageAgentStage');
+                    if (imageStage) imageStage.style.display = 'none';
+                    imageAgentAnalysis = null;
+                    selectedImageAgentPlanId = '';
                     window.latestCreativeAssets = [];
                     window.latestGraphicBundles = [];
                     window.latestGeneratedImages = [];
                     if (copyCards.length > 0) {
                         await checkCompliance(getSelectedContent());
-                        await refreshCoverRecommendations();
-                        await refreshImageAgentPlans();
                         await persistStrategySelection('generate_copy', true);
                     }
+                    updateAgentProgress('title');
                     document.getElementById('loading').style.display = 'none';
                     document.getElementById('generateBtn').disabled = false;
                     return true;
@@ -3180,8 +3236,12 @@
             renderTitlePool();
             renderCopyCards();
             checkCompliance(getSelectedContent());
-            refreshCoverRecommendations();
-            refreshImageAgentPlans();
+            if (copyConfirmedForImageAgent) {
+                copyConfirmedForImageAgent = false;
+                const imageStage = document.getElementById('imageAgentStage');
+                if (imageStage) imageStage.style.display = 'none';
+            }
+            updateAgentProgress('copy');
             scheduleStrategyPersistence('select_version');
         }
         
@@ -3277,7 +3337,27 @@
             }
         }
 
+        async function confirmCopyForImageAgent() {
+            if (!versions || versions.length === 0) {
+                alert('请先让文案 Agent 生成文案');
+                return;
+            }
+            copyConfirmedForImageAgent = true;
+            updateAgentProgress('image');
+            await persistStrategySelection('confirm_copy_for_image_agent', true);
+            const imageStage = document.getElementById('imageAgentStage');
+            if (imageStage) {
+                imageStage.style.display = 'block';
+                imageStage.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            await refreshImageAgentPlans();
+        }
+
         async function generateCreativePack() {
+            if (!copyConfirmedForImageAgent) {
+                alert('请先确认文案，再进入图片 Agent');
+                return;
+            }
             if (!selectedImageAgentPlanId) {
                 const ok = await refreshImageAgentPlans();
                 if (!selectedImageAgentPlanId) {
@@ -3355,9 +3435,9 @@
         }
 
         async function generateGraphicArticleBundle() {
-            if (!versions || versions.length === 0) {
-                const ok = await generateCopy();
-                if (!ok) return;
+            if (!versions || versions.length === 0 || !copyConfirmedForImageAgent) {
+                alert('请先确认文案，再进入图片 Agent');
+                return;
             }
             if (!selectedImageAgentPlanId) {
                 await refreshImageAgentPlans();
@@ -3525,9 +3605,9 @@
         }
 
         async function startAssetGenerationTask() {
-            if (!versions || versions.length === 0) {
-                const ok = await generateCopy();
-                if (!ok) return;
+            if (!versions || versions.length === 0 || !copyConfirmedForImageAgent) {
+                alert('请先确认文案，再进入图片 Agent');
+                return;
             }
             if (!selectedImageAgentPlanId) {
                 await refreshImageAgentPlans();
@@ -3796,6 +3876,8 @@
             if (innerSelect) innerSelect.value = initialSavedStrategy.selected_inner_style_type;
         }
         refreshAssetStyleTypeHelp();
+        renderTopicHashtags();
+        updateAgentProgress('analyze');
         renderStrategyRecommendationBar();
         renderTaskAgentBrief();
         refreshViralOperationTips();
