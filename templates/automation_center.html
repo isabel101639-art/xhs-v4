@@ -227,12 +227,12 @@
             border: 1px solid rgba(239, 78, 69, 0.14);
             border-radius: 16px;
             background: linear-gradient(180deg, #fff 0%, #fffaf8 100%);
-            padding: 18px;
+            padding: 0;
             box-shadow: 0 14px 32px rgba(209, 92, 69, 0.08);
-            min-height: 420px;
+            min-height: 520px;
             display: flex;
             flex-direction: column;
-            gap: 14px;
+            overflow: hidden;
         }
 
         .idea-preview-top {
@@ -240,6 +240,33 @@
             align-items: flex-start;
             justify-content: space-between;
             gap: 12px;
+            padding: 18px 20px 0;
+        }
+
+        .idea-product-band {
+            background: linear-gradient(135deg, #fff0ee 0%, #fff8f5 100%);
+            border-bottom: 1px solid #f3ddd7;
+            padding: 16px 20px;
+        }
+
+        .idea-product-name {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border-radius: 999px;
+            background: #fff;
+            color: #ef334d;
+            font-weight: 800;
+            font-size: 15px;
+            padding: 8px 12px;
+            box-shadow: 0 8px 18px rgba(239, 78, 69, 0.10);
+        }
+
+        .idea-product-intent {
+            color: #6b4f4a;
+            font-size: 13px;
+            line-height: 1.6;
+            margin-top: 10px;
         }
 
         .idea-preview-title {
@@ -248,6 +275,14 @@
             line-height: 1.45;
             color: #20242d;
             margin-top: 8px;
+        }
+
+        .idea-card-body {
+            padding: 0 20px 20px;
+            display: flex;
+            flex: 1;
+            flex-direction: column;
+            gap: 14px;
         }
 
         .idea-preview-meta {
@@ -306,21 +341,22 @@
 
         .idea-link-row {
             display: flex;
-            flex-wrap: wrap;
+            flex-direction: column;
             gap: 8px;
         }
 
         .idea-link-btn {
             display: inline-flex;
             align-items: center;
-            border-radius: 999px;
+            border-radius: 10px;
             border: 1px solid rgba(239, 78, 69, 0.20);
             background: #fff;
             color: var(--accent);
             font-size: 12px;
             font-weight: 700;
-            padding: 6px 10px;
+            padding: 8px 10px;
             text-decoration: none;
+            max-width: 100%;
         }
 
         .idea-card-actions {
@@ -5601,13 +5637,50 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             };
         }
 
+        function normalizeIdeaType(typeText) {
+            const text = String(typeText || '').replace(/^类型\d+[:：]?\s*/, '').replace(/^\d+\./, '').trim();
+            if (!text) return '内容执行型';
+            if (text.includes('产品实拍')) return '产品实拍型';
+            if (text.includes('并发症') || text.includes('合集')) return '产品合集实拍型';
+            if (text.includes('大字报')) return '大字报互动型';
+            if (text.includes('医疗行业背景') || text.includes('深度科普')) return '深度科普型';
+            if (text.includes('横向测评') || text.includes('测评')) return '横向测评型';
+            if (text.includes('备忘录') || text.includes('清单')) return '备忘录清单型';
+            if (text.includes('医院') || text.includes('体检中心')) return '实拍记录型';
+            if (text.includes('报告解读')) return '报告解读型';
+            if (text.includes('图表')) return '图表说明型';
+            return text.slice(0, 24);
+        }
+
+        function resolveIdeaProductProfile(item) {
+            const text = [
+                item.soft_insertion || '',
+                item.recommended_product_label || '',
+                item.topic_title || '',
+                item.keywords || '',
+                item.angle || '',
+            ].join(' ');
+            if (/FS|FibroScan|福波看|肝弹|弹性/.test(text)) {
+                return {
+                    label: 'FibroScan福波看',
+                    icon: 'bi-activity',
+                    intent: '帮助用户理解肝脏健康筛查、肝纤维化检测和复查报告，建立科学体检与长期监测意识。'
+                };
+            }
+            return {
+                label: '复方鳖甲软肝片',
+                icon: 'bi-capsule',
+                intent: '告诉用户肝硬化/肝纤维化双抗治疗为什么需要长期坚持，怎么在合规前提下自然理解软肝片。'
+            };
+        }
+
         function compactText(text, maxLength = 96) {
             const clean = stripIdeaNoise(text).replace(/\s+/g, ' ').trim();
             if (!clean) return '';
             return clean.length > maxLength ? `${clean.slice(0, maxLength)}...` : clean;
         }
 
-        function ideaMeaningfulLines(text, limit = 3) {
+        function ideaMeaningfulLines(text, limit = 4, maxLength = 92) {
             const clean = stripIdeaNoise(text);
             const lines = clean
                 .split('\n')
@@ -5625,26 +5698,99 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
                     unique.push(line);
                 }
             });
-            return unique.slice(0, limit).map((line) => compactText(line, 86));
+            return unique.slice(0, limit).map((line) => compactText(line, maxLength));
+        }
+
+        function normalizeIdeaTags(keywords) {
+            return String(keywords || '')
+                .replace(/带话题/g, '')
+                .split(/[,\s，、/]+/)
+                .map((word) => word.trim().replace(/^#+/, ''))
+                .filter((word) => word && !['搜索词', '话题'].includes(word))
+                .slice(0, 10)
+                .map((word) => word.startsWith('#') ? word : `#${word}`);
+        }
+
+        function deriveWritingAngle(item, typeLabel) {
+            const title = splitIdeaTitle(item.topic_title || '').topic;
+            if (typeLabel.includes('产品实拍')) {
+                if (/肝硬化|肝纤维化/.test(title)) {
+                    return '肝硬化逆转者（F3→F2/F1）、长期稳定患者、乙肝/酒精性肝硬化患者、家属视角或资深病友，以真实复查变化讲科学用药。';
+                }
+                return '真实使用者、家属或职场健康管理视角，用生活化场景讲清为什么需要持续管理。';
+            }
+            if (typeLabel.includes('产品合集')) {
+                return '多药/多方案对比视角，客观说明不同方案适合什么人，避免贬低其他产品。';
+            }
+            if (typeLabel.includes('大字报')) {
+                return '用强问题或反常识切入，引发用户共鸣和评论区讨论，正文再补充判断逻辑。';
+            }
+            if (typeLabel.includes('深度科普')) {
+                return '医疗行业背景、学习笔记或指南解读视角，用权威资料把治疗/检查逻辑讲明白。';
+            }
+            if (typeLabel.includes('测评')) {
+                return '亲测、横评或选项对比视角，把选择标准、适合人群和注意事项说清楚。';
+            }
+            if (typeLabel.includes('备忘录') || typeLabel.includes('清单')) {
+                return '可收藏清单视角，把用户最容易漏掉的步骤、指标和注意事项整理成行动表。';
+            }
+            if (typeLabel.includes('报告解读')) {
+                return '晒检查报告并解读关键指标，圈出用户最关心的变化和下一步建议。';
+            }
+            if (typeLabel.includes('图表')) {
+                return '图表化说明视角，把复杂指标、检查项目或方案差异做成一眼能看懂的对照。';
+            }
+            if (typeLabel.includes('实拍')) {
+                return '医院/体检中心真实场景视角，降低用户对检查流程的陌生感和焦虑感。';
+            }
+            return compactText(item.recommended_copy_route_why || item.angle || '围绕用户搜索需求，用真人口吻讲清问题、判断依据和下一步动作。', 140);
+        }
+
+        function deriveWritingNotes(item, typeLabel) {
+            const source = item.asset_brief || item.angle || '';
+            const lines = ideaMeaningfulLines(source, 4, 110);
+            if (lines.length) return lines;
+            if (typeLabel.includes('产品实拍')) {
+                return ['产品实拍 + 复查报告', '封面用产品或复查材料实拍', '标题正文避免直接写完整药品名，用模糊指代降低限流风险'];
+            }
+            return ['按当前笔记类型重写为真人口吻', '保留原方案的合规要求和执行重点', '发布前避免照搬 AI 句式，手动调整成个人经验表达'];
+        }
+
+        function deriveWritingExample(item) {
+            const clean = stripIdeaNoise(item.copy_prompt || item.asset_brief || '');
+            const lines = clean.split('\n').map((line) => line.trim()).filter(Boolean);
+            const preferred = lines.filter((line) => !/^#/.test(line) && !/^封面图[:：]/.test(line));
+            return compactText((preferred.slice(0, 5).join(' ') || clean), 190);
+        }
+
+        function shortLinkText(link, index) {
+            try {
+                const url = new URL(link);
+                const host = url.hostname.replace(/^www\./, '');
+                const path = url.pathname.split('/').filter(Boolean).slice(-1)[0] || '';
+                return `参考${index + 1}｜${host}${path ? `/${path.slice(0, 8)}` : ''}`;
+            } catch (error) {
+                return `参考${index + 1}`;
+            }
         }
 
         function buildIdeaPreview(item) {
             const title = splitIdeaTitle(item.topic_title || '');
-            const keywords = String(item.keywords || '')
-                .split(/[,\s，、/]+/)
-                .map((word) => word.trim())
-                .filter((word) => word && !['带话题', '搜索词'].includes(word))
-                .slice(0, 5);
-            const corePoints = ideaMeaningfulLines(item.angle || item.asset_brief || item.copy_prompt, 3);
-            const angle = compactText(item.recommended_copy_route_why || item.angle || item.asset_brief, 110);
-            const contentRef = compactText(item.copy_prompt || item.asset_brief || item.compliance_note, 110);
-            const links = (item.source_links_list || []).slice(0, 4);
+            const typeLabel = normalizeIdeaType(title.format || item.content_type || '');
+            const product = resolveIdeaProductProfile(item);
+            const tags = normalizeIdeaTags(item.keywords || title.topic);
+            const notes = deriveWritingNotes(item, typeLabel);
+            const angle = deriveWritingAngle(item, typeLabel);
+            const example = deriveWritingExample(item);
+            const links = (item.source_links_list || []).slice(0, 6);
             return {
                 title,
-                keywords,
-                corePoints,
+                typeLabel,
+                product,
+                tags,
+                notes,
                 angle,
-                contentRef,
+                example,
                 links,
             };
         }
@@ -5682,72 +5828,80 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             return common;
         }
 
-        function renderIdeaCard(item) {
+        function renderIdeaCard(item, index = 0) {
             const preview = buildIdeaPreview(item);
             return `
                 <div class="idea-preview-card">
+                    <div class="idea-product-band">
+                        <div class="idea-product-name">
+                            <i class="bi ${preview.product.icon}"></i>
+                            ${escapeHtml(preview.product.label)}
+                        </div>
+                        <div class="idea-product-intent">${escapeHtml(preview.product.intent)}</div>
+                    </div>
                     <div class="idea-preview-top">
                         <label class="d-flex align-items-center gap-2 subtle">
                             <input type="checkbox" class="idea-select form-check-input" value="${item.id}">
                             选中
                         </label>
-                        <span class="badge ${ideaStatusClass(item.status)}">${escapeHtml(item.status_label || item.status)}</span>
+                        <div class="d-flex gap-2 align-items-center flex-wrap justify-content-end">
+                            <span class="idea-pill idea-pill-neutral">话题${index + 1}</span>
+                            <span class="badge ${ideaStatusClass(item.status)}">${escapeHtml(item.status_label || item.status)}</span>
+                        </div>
                     </div>
-                    <div>
+                    <div class="idea-card-body">
                         <div class="idea-preview-meta">
-                            <span class="idea-pill">${escapeHtml(item.soft_insertion || item.recommended_product_label || '内容话题')}</span>
-                            <span class="idea-pill idea-pill-neutral">${escapeHtml(preview.title.format || item.content_type || '内容执行')}</span>
+                            <span class="idea-pill">${escapeHtml(preview.typeLabel)}</span>
                             <span class="idea-pill idea-pill-green">${item.quota || 30} 个名额</span>
                         </div>
                         <div class="idea-preview-title">${escapeHtml(preview.title.topic)}</div>
-                    </div>
-                    <div class="idea-preview-section">
-                        <div class="idea-preview-label">核心关键点</div>
-                        <ul class="idea-preview-points">
-                            ${(preview.corePoints.length ? preview.corePoints : ['围绕搜索需求做可执行的小红书内容，重点兼顾真实感、合规和收藏价值。']).map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
-                        </ul>
-                    </div>
-                    <div class="idea-preview-section">
-                        <div class="idea-preview-label">撰写角度</div>
-                        <div class="idea-preview-text">${escapeHtml(preview.angle || item.recommended_copy_route_label || '先用用户能看懂的表达讲清问题，再给出具体执行建议。')}</div>
-                    </div>
-                    <div class="idea-preview-section">
-                        <div class="idea-preview-label">内容参考</div>
-                        <div class="idea-preview-text">${escapeHtml(preview.contentRef || '参考原始执行方案，但发布前建议按真人口吻重新组织。')}</div>
-                    </div>
-                    <div class="idea-preview-section">
-                        <div class="idea-preview-label">Agent 推荐</div>
-                        <div class="idea-preview-meta">
-                            ${item.recommended_goal_label ? `<span class="idea-pill">${escapeHtml(item.recommended_goal_label)}</span>` : ''}
-                            ${item.recommended_copy_route_label ? `<span class="idea-pill idea-pill-neutral">${escapeHtml(item.recommended_copy_route_label)}</span>` : ''}
-                            ${item.recommended_image_route_label ? `<span class="idea-pill idea-pill-neutral">${escapeHtml(item.recommended_image_route_label)}</span>` : ''}
-                            ${item.template_agent_label ? `<span class="idea-pill idea-pill-neutral">${escapeHtml(item.template_agent_label)}</span>` : ''}
+                        <div class="idea-preview-section">
+                            <div class="idea-preview-label">话题标签</div>
+                            <div class="idea-preview-meta">
+                                ${(preview.tags.length ? preview.tags : ['#待优化']).map((word) => `<span class="idea-pill idea-pill-neutral">${escapeHtml(word)}</span>`).join('')}
+                            </div>
                         </div>
-                    </div>
-                    <div class="idea-preview-section">
-                        <div class="idea-preview-label">关键词</div>
-                        <div class="idea-preview-meta">
-                            ${(preview.keywords.length ? preview.keywords : ['待优化']).map((word) => `<span class="idea-pill idea-pill-neutral">${escapeHtml(word)}</span>`).join('')}
+                        <div class="idea-preview-section">
+                            <div class="idea-preview-label">撰写角度</div>
+                            <div class="idea-preview-text">${escapeHtml(preview.angle)}</div>
                         </div>
-                    </div>
-                    <div class="idea-preview-section">
-                        <div class="idea-preview-label">爆款链接</div>
-                        <div class="idea-link-row">
-                            ${preview.links.map((link, index) => `<a class="idea-link-btn" href="${escapeHtml(link)}" target="_blank" rel="noreferrer">爆款${index + 1}</a>`).join('') || '<span class="subtle">暂无爆款链接</span>'}
-                            ${(item.source_link_count || 0) > preview.links.length ? `<span class="subtle">另有 ${(item.source_link_count || 0) - preview.links.length} 条</span>` : ''}
+                        <div class="idea-preview-section">
+                            <div class="idea-preview-label">撰写说明</div>
+                            <ul class="idea-preview-points">
+                                ${preview.notes.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
+                            </ul>
                         </div>
-                    </div>
-                    <details class="idea-card-details">
-                        <summary>展开原始执行说明</summary>
-                        <div class="idea-detail-block">${escapeHtml([
-                            item.angle ? `策划判断：\n${item.angle}` : '',
-                            item.asset_brief ? `执行建议：\n${item.asset_brief}` : '',
-                            item.copy_prompt ? `文案参考：\n${item.copy_prompt}` : '',
-                            item.compliance_note ? `合规提醒：\n${item.compliance_note}` : '',
-                        ].filter(Boolean).join('\n\n'))}</div>
-                    </details>
-                    <div class="idea-card-actions">
-                        ${renderIdeaActionButtons(item)}
+                        <div class="idea-preview-section">
+                            <div class="idea-preview-label">撰写示例</div>
+                            <div class="idea-preview-text">${escapeHtml(preview.example || '发布前按真人经历重新组织，不直接照搬原始说明。')}</div>
+                        </div>
+                        <div class="idea-preview-section">
+                            <div class="idea-preview-label">Agent 推荐</div>
+                            <div class="idea-preview-meta">
+                                ${item.recommended_goal_label ? `<span class="idea-pill">${escapeHtml(item.recommended_goal_label)}</span>` : ''}
+                                ${item.recommended_copy_route_label ? `<span class="idea-pill idea-pill-neutral">${escapeHtml(item.recommended_copy_route_label)}</span>` : ''}
+                                ${item.recommended_image_route_label ? `<span class="idea-pill idea-pill-neutral">${escapeHtml(item.recommended_image_route_label)}</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="idea-preview-section">
+                            <div class="idea-preview-label">爆款笔记链接</div>
+                            <div class="idea-link-row">
+                                ${preview.links.map((link, linkIndex) => `<a class="idea-link-btn" href="${escapeHtml(link)}" target="_blank" rel="noreferrer"><i class="bi bi-link-45deg"></i>${escapeHtml(shortLinkText(link, linkIndex))}</a>`).join('') || '<span class="subtle">暂无爆款链接</span>'}
+                                ${(item.source_link_count || 0) > preview.links.length ? `<span class="subtle">另有 ${(item.source_link_count || 0) - preview.links.length} 条，展开原始说明可查看完整链接</span>` : ''}
+                            </div>
+                        </div>
+                        <details class="idea-card-details">
+                            <summary>展开原始执行说明</summary>
+                            <div class="idea-detail-block">${escapeHtml([
+                                item.angle ? `策划判断：\n${item.angle}` : '',
+                                item.asset_brief ? `执行建议：\n${item.asset_brief}` : '',
+                                item.copy_prompt ? `文案参考：\n${item.copy_prompt}` : '',
+                                item.compliance_note ? `合规提醒：\n${item.compliance_note}` : '',
+                            ].filter(Boolean).join('\n\n'))}</div>
+                        </details>
+                        <div class="idea-card-actions">
+                            ${renderIdeaActionButtons(item)}
+                        </div>
                     </div>
                 </div>
             `;
@@ -5766,7 +5920,7 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             const selectAll = document.getElementById('selectAllIdeas');
             if (selectAll) selectAll.checked = false;
             const items = data.items || [];
-            grid.innerHTML = items.map(renderIdeaCard).join('') || '<div class="text-center text-muted">暂无候选话题</div>';
+            grid.innerHTML = items.map((item, index) => renderIdeaCard(item, index)).join('') || '<div class="text-center text-muted">暂无候选话题</div>';
             const visibleSummary = document.getElementById('ideaVisibleSummary');
             if (visibleSummary) {
                 const withLinks = items.filter((item) => (item.source_link_count || 0) > 0).length;
