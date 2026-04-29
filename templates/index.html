@@ -591,6 +591,9 @@
                         </div>
                         <div class="info-box tag-box"><strong>关键词：</strong><br>{{ topic.keywords or '暂无' }}</div>
                         <div class="info-box guide-box"><strong>撰写方向：</strong><br>{{ topic.direction or '暂无' }}</div>
+                        {% if topic.reference_content %}
+                        <div class="info-box guide-box"><strong>Agent 内容参考：</strong><br><span style="white-space: pre-line;">{{ topic.reference_content }}</span></div>
+                        {% endif %}
                         {% if topic.persona_title or topic.recommended_goal %}
                         <div class="info-box guide-box"><strong>系统建议：</strong><br>适合 {{ topic.persona_title or '通用人设' }} ｜ {{ topic.recommended_goal or '均衡输出' }}</div>
                         {% endif %}
@@ -651,6 +654,9 @@
                         </div>
                         <div class="info-box tag-box"><strong>关键词：</strong><br>{{ topic.keywords or '暂无' }}</div>
                         <div class="info-box guide-box"><strong>撰写方向：</strong><br>{{ topic.direction or '暂无' }}</div>
+                        {% if topic.reference_content %}
+                        <div class="info-box guide-box"><strong>Agent 内容参考：</strong><br><span style="white-space: pre-line;">{{ topic.reference_content }}</span></div>
+                        {% endif %}
                         {% if topic.persona_title or topic.recommended_goal %}
                         <div class="info-box guide-box"><strong>系统建议：</strong><br>适合 {{ topic.persona_title or '通用人设' }} ｜ {{ topic.recommended_goal or '均衡输出' }}</div>
                         {% endif %}
