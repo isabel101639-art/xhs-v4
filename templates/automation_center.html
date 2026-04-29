@@ -1957,6 +1957,36 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
 
         <div id="section-idea-pool" class="panel p-4">
             <div class="section-title">候选话题池</div>
+            <div class="detail-card mb-3">
+                <div class="section-title mb-2">候选话题快速导入</div>
+                <div class="subtle mb-3">如果候选话题池还是空的，可以直接在这里上传执行方案 Excel，或粘贴 JSON / 表格文本，不用再来回跳后台页面。</div>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label subtle">导入到活动</label>
+                        <select id="ideaQuickImportActivityId" class="form-select">
+                            {% for activity in activities %}
+                            <option value="{{ activity.id }}">{{ activity.name }} - {{ activity.title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label subtle">文件上传</label>
+                        <input id="ideaQuickImportFile" type="file" class="form-control" accept=".csv,.tsv,.txt,.xlsx">
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end gap-2">
+                        <button class="btn btn-outline-primary" type="button" onclick="previewIdeaQuickImport()">预览导入</button>
+                        <button class="btn btn-accent" type="button" onclick="importIdeaQuickBatch()">确认导入</button>
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label subtle">或粘贴 JSON / 表格文本</label>
+                        <textarea id="ideaQuickImportPayload" rows="7" class="form-control" placeholder='可直接粘贴我生成的 first_month_topic_import_payload.json 内容，或粘贴 Excel / 表格文本。'></textarea>
+                    </div>
+                    <div class="col-md-12">
+                        <div id="ideaQuickImportMsg" class="subtle mb-2"></div>
+                        <pre id="ideaQuickImportPreview" class="json-box">导入预览会显示在这里</pre>
+                    </div>
+                </div>
+            </div>
             <div class="row g-3 mb-3">
                 <div class="col-md-3">
                     <label class="form-label subtle">状态筛选</label>
@@ -5524,6 +5554,87 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             `).join('') || '<tr><td colspan="10" class="text-center text-muted">暂无候选话题</td></tr>';
             renderIdeaLaunchPacks(data.items || []);
             renderIdeaTemplateBuckets(data.items || []);
+        }
+
+        async function previewIdeaQuickImport() {
+            const rawPayload = document.getElementById('ideaQuickImportPayload').value.trim();
+            const file = document.getElementById('ideaQuickImportFile').files?.[0];
+            const activityId = parseInt(document.getElementById('ideaQuickImportActivityId').value || '0', 10) || 0;
+            if (!rawPayload && !file) {
+                document.getElementById('ideaQuickImportMsg').textContent = '请先粘贴候选话题数据或选择文件';
+                return;
+            }
+            let res;
+            if (file) {
+                const form = new FormData();
+                form.append('file', file);
+                form.append('activity_id', String(activityId));
+                form.append('target_type', 'topic_idea');
+                res = await fetch('/api/topics/import_preview', {
+                    method: 'POST',
+                    body: form
+                });
+            } else {
+                res = await fetch('/api/topics/import_preview', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        raw_payload: rawPayload,
+                        activity_id: activityId,
+                        target_type: 'topic_idea',
+                    })
+                });
+            }
+            const data = await res.json();
+            document.getElementById('ideaQuickImportMsg').textContent = data.message || '已处理';
+            document.getElementById('ideaQuickImportPreview').textContent = data.success
+                ? JSON.stringify(data.preview || {}, null, 2)
+                : (data.message || '导入预览失败');
+        }
+
+        async function importIdeaQuickBatch() {
+            const rawPayload = document.getElementById('ideaQuickImportPayload').value.trim();
+            const file = document.getElementById('ideaQuickImportFile').files?.[0];
+            const activityId = parseInt(document.getElementById('ideaQuickImportActivityId').value || '0', 10) || 0;
+            if (!rawPayload && !file) {
+                document.getElementById('ideaQuickImportMsg').textContent = '请先粘贴候选话题数据或选择文件';
+                return;
+            }
+            const confirmed = window.confirm('确认把这批数据导入为候选话题吗？');
+            if (!confirmed) return;
+            let res;
+            if (file) {
+                const form = new FormData();
+                form.append('file', file);
+                form.append('activity_id', String(activityId));
+                form.append('target_type', 'topic_idea');
+                res = await fetch('/api/topics/import', {
+                    method: 'POST',
+                    body: form
+                });
+            } else {
+                res = await fetch('/api/topics/import', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        raw_payload: rawPayload,
+                        activity_id: activityId,
+                        target_type: 'topic_idea',
+                    })
+                });
+            }
+            const data = await res.json();
+            document.getElementById('ideaQuickImportMsg').textContent = data.message || '已处理';
+            document.getElementById('ideaQuickImportPreview').textContent = data.success
+                ? JSON.stringify(data.result || {}, null, 2)
+                : (data.message || '候选话题导入失败');
+            if (data.success) {
+                const factorySelect = document.getElementById('ideaActivityId');
+                if (factorySelect) factorySelect.value = String(activityId);
+                document.getElementById('ideaQuickImportFile').value = '';
+                loadOverview();
+                loadIdeas();
+            }
         }
 
         async function importTrends() {
