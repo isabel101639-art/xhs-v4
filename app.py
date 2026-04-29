@@ -701,9 +701,21 @@ def _load_json_value(raw_value, default):
 def _normalize_nav_items(items):
     normalized = []
     required_by_url = {
+        '/': {'label': '话题广场', 'url': '/', 'icon': 'bi-collection', 'target': '_self'},
         '/automation_center': {'label': '自动化中心', 'url': '/automation_center', 'icon': 'bi-lightning-charge', 'target': '_self'},
         '/activity': {'label': '活动列表', 'url': '/activity', 'icon': 'bi-calendar-event', 'target': '_self'},
         '/admin': {'label': '后台管理', 'url': '/admin', 'icon': 'bi-gear', 'target': '_self'},
+    }
+    nav_priority = {
+        '/': 0,
+        '/liver-science': 1,
+        '/hot-topics': 2,
+        '/my_registration': 3,
+        '/data_analysis': 4,
+        '/image-library': 5,
+        '/automation_center': 6,
+        '/activity': 7,
+        '/admin': 8,
     }
     if not isinstance(items, list):
         items = []
@@ -730,10 +742,21 @@ def _normalize_nav_items(items):
     if not normalized:
         return [dict(item) for item in DEFAULT_SITE_NAV_ITEMS]
 
+    deduped = []
+    seen_urls = set()
+    for item in normalized:
+        url = item['url']
+        if url in seen_urls:
+            continue
+        deduped.append(item)
+        seen_urls.add(url)
+    normalized = deduped
+
     existing_urls = {item['url'] for item in normalized}
     for url, item in required_by_url.items():
         if url not in existing_urls:
             normalized.append(dict(item))
+    normalized.sort(key=lambda item: nav_priority.get(item['url'], 999))
     return normalized[:8]
 
 
