@@ -5715,52 +5715,155 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             const title = splitIdeaTitle(item.topic_title || '').topic;
             if (typeLabel.includes('产品实拍')) {
                 if (/肝硬化|肝纤维化/.test(title)) {
-                    return '肝硬化逆转者（F3→F2/F1）、长期稳定患者、乙肝/酒精性肝硬化患者、家属视角或资深病友，以真实复查变化讲科学用药。';
+                    return '不要讲“药有多好”，先讲一个患者/家属拿到复查结果时的情绪转折，用真实变化承接科学用药。';
                 }
-                return '真实使用者、家属或职场健康管理视角，用生活化场景讲清为什么需要持续管理。';
+                return '从真实生活场景切入，先让用户觉得“这像我会遇到的问题”，再自然带到长期管理。';
             }
             if (typeLabel.includes('产品合集')) {
-                return '多药/多方案对比视角，客观说明不同方案适合什么人，避免贬低其他产品。';
+                return '用“怎么选”而不是“哪个好”切入，把不同方案适用人群讲清楚，避免变成硬广或拉踩。';
             }
             if (typeLabel.includes('大字报')) {
-                return '用强问题或反常识切入，引发用户共鸣和评论区讨论，正文再补充判断逻辑。';
+                return '先用一个强问题或反常识句让用户停下来，正文只回答一个关键矛盾，别把所有知识点塞进去。';
             }
             if (typeLabel.includes('深度科普')) {
-                return '医疗行业背景、学习笔记或指南解读视角，用权威资料把治疗/检查逻辑讲明白。';
+                return '把文献和指南翻译成人话，重点不是堆专业词，而是告诉用户“为什么这一步值得重视”。';
             }
             if (typeLabel.includes('测评')) {
-                return '亲测、横评或选项对比视角，把选择标准、适合人群和注意事项说清楚。';
+                return '用横评框架制造收藏价值：先给选择标准，再给适合人群，最后给避坑提醒。';
             }
             if (typeLabel.includes('备忘录') || typeLabel.includes('清单')) {
-                return '可收藏清单视角，把用户最容易漏掉的步骤、指标和注意事项整理成行动表。';
+                return '直接做成用户能截图保存的行动清单，只保留“下一步怎么做”和“哪些别漏”。';
             }
             if (typeLabel.includes('报告解读')) {
-                return '晒检查报告并解读关键指标，圈出用户最关心的变化和下一步建议。';
+                return '抓住用户看到报告时的焦虑，先讲“先看哪一项”，再讲变化趋势和下一步。';
             }
             if (typeLabel.includes('图表')) {
-                return '图表化说明视角，把复杂指标、检查项目或方案差异做成一眼能看懂的对照。';
+                return '用图表降低理解成本，一张图只解决一个判断问题，不做百科式大合集。';
             }
             if (typeLabel.includes('实拍')) {
-                return '医院/体检中心真实场景视角，降低用户对检查流程的陌生感和焦虑感。';
+                return '用真实场景降低陌生感，让用户先知道流程和体验，再理解为什么值得做。';
             }
             return compactText(item.recommended_copy_route_why || item.angle || '围绕用户搜索需求，用真人口吻讲清问题、判断依据和下一步动作。', 140);
         }
 
-        function deriveWritingNotes(item, typeLabel) {
-            const source = item.asset_brief || item.angle || '';
-            const lines = ideaMeaningfulLines(source, 4, 110);
-            if (lines.length) return lines;
+        function buildViralHooks(item, typeLabel) {
+            const topic = splitIdeaTitle(item.topic_title || '').topic;
+            const base = topic.replace(/[？?。！!]+$/g, '');
             if (typeLabel.includes('产品实拍')) {
-                return ['产品实拍 + 复查报告', '封面用产品或复查材料实拍', '标题正文避免直接写完整药品名，用模糊指代降低限流风险'];
+                return [
+                    `${base}，我真正信是在复查那天`,
+                    `医生说数值稳住后，我才懂这件事不能急`,
+                    `肝硬化这几年，我最后只坚持了这几件事`,
+                ];
             }
-            return ['按当前笔记类型重写为真人口吻', '保留原方案的合规要求和执行重点', '发布前避免照搬 AI 句式，手动调整成个人经验表达'];
+            if (typeLabel.includes('产品合集') || typeLabel.includes('测评')) {
+                return [
+                    `${base}怎么选？先别只看名字`,
+                    `我把常见方案按适合人群重新排了一遍`,
+                    `别跟风，先看自己属于哪一种情况`,
+                ];
+            }
+            if (typeLabel.includes('大字报')) {
+                return [
+                    `${base}，你第一反应可能就错了`,
+                    `这件事别再按老经验判断`,
+                    `如果是你，会先选哪一步？`,
+                ];
+            }
+            if (typeLabel.includes('报告解读') || /FibroScan|体检|检查|报告|肝弹/.test(`${topic} ${item.keywords || ''}`)) {
+                return [
+                    `看到这项检查，先别自己吓自己`,
+                    `${base}，真正要先看的是这几项`,
+                    `报告不是越查越慌，关键是会不会读`,
+                ];
+            }
+            if (typeLabel.includes('备忘录') || typeLabel.includes('清单')) {
+                return [
+                    `${base}先存这份清单`,
+                    `别漏这几项，很多人第一次都会忽略`,
+                    `我会按这个顺序来，不容易乱`,
+                ];
+            }
+            return [
+                `${base}，先别急着下结论`,
+                `很多人卡住，是因为第一步就想复杂了`,
+                `这件事我会先看这 3 个判断点`,
+            ];
+        }
+
+        function buildViralStructure(item, typeLabel) {
+            if (typeLabel.includes('产品实拍')) {
+                return ['开头：拿到复查结果的真实瞬间', '中段：以前的担心 + 坚持过程 + 关键变化', '结尾：提醒遵医嘱、定期复查，评论区承接具体产品问题'];
+            }
+            if (typeLabel.includes('产品合集') || typeLabel.includes('测评')) {
+                return ['开头：用户最纠结的选择问题', '中段：按适合人群/使用场景做对比', '结尾：强调问医生，不做绝对推荐'];
+            }
+            if (typeLabel.includes('大字报')) {
+                return ['封面：只放一个冲突问题', '正文：先说常见误区，再给正确判断', '结尾：抛问题带评论，不要写成科普论文'];
+            }
+            if (typeLabel.includes('深度科普')) {
+                return ['开头：把专业问题翻译成用户痛点', '中段：用 2-3 个证据讲逻辑', '结尾：给行动建议，不堆文献名'];
+            }
+            if (typeLabel.includes('报告解读')) {
+                return ['开头：看到报告先别慌', '中段：圈出关键指标 + 解释变化趋势', '结尾：列下一步复查/咨询问题'];
+            }
+            if (typeLabel.includes('备忘录') || typeLabel.includes('清单')) {
+                return ['开头：直接给“照着做”价值', '中段：按优先级列清单', '结尾：提醒哪些情况要问医生'];
+            }
+            return ['开头：先抓一个具体场景或问题', '中段：讲清判断逻辑和执行步骤', '结尾：留一个用户愿意回复的问题'];
+        }
+
+        function buildKeepDropList(item, typeLabel) {
+            const keep = [];
+            const drop = [];
+            if ((item.source_link_count || 0) > 0) keep.push('保留爆款链接的标题节奏和封面结构');
+            if (/FibroScan|体检|报告|检查|肝弹/.test(`${item.topic_title || ''} ${item.keywords || ''}`)) keep.push('保留“指标/报告怎么读”的实用价值');
+            if (/肝硬化|肝纤维化|软肝片/.test(`${item.topic_title || ''} ${item.keywords || ''}`)) keep.push('保留真实复查、长期坚持、遵医嘱这些可信元素');
+            if (!keep.length) keep.push('保留用户最想解决的一个核心问题');
+            drop.push('删掉大段合规说明和内部执行口径');
+            drop.push('不要直接照搬 Excel 里的长句和药品说明书口吻');
+            if (!typeLabel.includes('产品合集')) drop.push('标题正文避免直接硬写完整产品名');
+            return { keep: keep.slice(0, 3), drop: drop.slice(0, 3) };
+        }
+
+        function buildViralAgentPlan(item, typeLabel) {
+            const title = splitIdeaTitle(item.topic_title || '').topic;
+            const titleText = `${title} ${item.keywords || ''} ${item.angle || ''}`;
+            let score = 68;
+            if ((item.source_link_count || 0) >= 3) score += 8;
+            if (/怎么办|怎么选|吃什么|必做|报告|检查|体检|FibroScan/.test(titleText)) score += 8;
+            if (/大字报|清单|报告解读|测评|实拍/.test(typeLabel)) score += 6;
+            if (/产品名|说明书|合规/.test(titleText)) score -= 4;
+            score = Math.max(55, Math.min(score, 92));
+            const risk = [];
+            if (/复方|软肝片|药|治疗|肝硬化/.test(titleText)) {
+                risk.push('医疗药品内容不要承诺疗效，不要引导购买');
+            }
+            if (/产品/.test(item.asset_brief || '') && !typeLabel.includes('产品合集')) {
+                risk.push('产品露出放图或评论区承接，正文先讲经历和判断');
+            }
+            if (!risk.length) risk.push('避免百科式堆信息，一篇只解决一个问题');
+            return {
+                score,
+                hookReason: deriveWritingAngle(item, typeLabel),
+                hooks: buildViralHooks(item, typeLabel),
+                structure: buildViralStructure(item, typeLabel),
+                keepDrop: buildKeepDropList(item, typeLabel),
+                risk,
+            };
+        }
+
+        function deriveWritingNotes(item, typeLabel) {
+            const plan = buildViralAgentPlan(item, typeLabel);
+            if (typeLabel.includes('产品实拍')) {
+                return ['用真实复查/长期坚持做信任锚点', '正文先讲人和经历，再讲方法', '产品只做自然承接，不做硬推'];
+            }
+            return plan.structure;
         }
 
         function deriveWritingExample(item) {
-            const clean = stripIdeaNoise(item.copy_prompt || item.asset_brief || '');
-            const lines = clean.split('\n').map((line) => line.trim()).filter(Boolean);
-            const preferred = lines.filter((line) => !/^#/.test(line) && !/^封面图[:：]/.test(line));
-            return compactText((preferred.slice(0, 5).join(' ') || clean), 190);
+            const typeLabel = normalizeIdeaType(splitIdeaTitle(item.topic_title || '').format || item.content_type || '');
+            return buildViralHooks(item, typeLabel)[0];
         }
 
         function shortLinkText(link, index) {
@@ -5782,6 +5885,7 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             const notes = deriveWritingNotes(item, typeLabel);
             const angle = deriveWritingAngle(item, typeLabel);
             const example = deriveWritingExample(item);
+            const viralPlan = buildViralAgentPlan(item, typeLabel);
             const links = (item.source_links_list || []).slice(0, 6);
             return {
                 title,
@@ -5791,6 +5895,7 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
                 notes,
                 angle,
                 example,
+                viralPlan,
                 links,
             };
         }
@@ -5862,18 +5967,46 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
                             </div>
                         </div>
                         <div class="idea-preview-section">
-                            <div class="idea-preview-label">撰写角度</div>
-                            <div class="idea-preview-text">${escapeHtml(preview.angle)}</div>
+                            <div class="idea-preview-label">爆款 Agent 判断</div>
+                            <div class="idea-preview-text">
+                                <strong>爆款潜力：${preview.viralPlan.score}/100</strong><br>
+                                ${escapeHtml(preview.viralPlan.hookReason)}
+                            </div>
                         </div>
                         <div class="idea-preview-section">
-                            <div class="idea-preview-label">撰写说明</div>
+                            <div class="idea-preview-label">标题钩子</div>
                             <ul class="idea-preview-points">
-                                ${preview.notes.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
+                                ${preview.viralPlan.hooks.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
                             </ul>
                         </div>
                         <div class="idea-preview-section">
-                            <div class="idea-preview-label">撰写示例</div>
-                            <div class="idea-preview-text">${escapeHtml(preview.example || '发布前按真人经历重新组织，不直接照搬原始说明。')}</div>
+                            <div class="idea-preview-label">内容结构</div>
+                            <ul class="idea-preview-points">
+                                ${preview.viralPlan.structure.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
+                            </ul>
+                        </div>
+                        <div class="idea-preview-section">
+                            <div class="idea-preview-label">保留 / 舍弃</div>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <div class="subtle mb-1">保留</div>
+                                    <ul class="idea-preview-points">
+                                        ${preview.viralPlan.keepDrop.keep.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="subtle mb-1">舍弃</div>
+                                    <ul class="idea-preview-points">
+                                        ${preview.viralPlan.keepDrop.drop.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="idea-preview-section">
+                            <div class="idea-preview-label">风险提醒</div>
+                            <ul class="idea-preview-points">
+                                ${preview.viralPlan.risk.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
+                            </ul>
                         </div>
                         <div class="idea-preview-section">
                             <div class="idea-preview-label">Agent 推荐</div>
