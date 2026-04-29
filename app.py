@@ -11334,12 +11334,12 @@ def _resolve_copywriter_api_key(api_url='', model=''):
     return (COPYWRITER_API_KEY or OPENAI_API_KEY or DEEPSEEK_API_KEY or DOUBAO_API_KEY or YUANBAO_API_KEY or HUNYUAN_API_KEY or '').strip()
 
 
-def _build_copywriter_runtime_entry(api_url='', model='', *, source='runtime_config'):
+def _build_copywriter_runtime_entry(api_url='', model='', *, source='runtime_config', api_key=''):
     provider = _infer_copywriter_provider(api_url, model)
     normalized_url = _normalize_copywriter_api_url(api_url, provider=provider, model=model)
     normalized_model = (model or '').strip() or _default_copywriter_model(provider=provider, api_url=normalized_url)
-    api_key = _resolve_copywriter_api_key(normalized_url, normalized_model)
-    if not normalized_url or not normalized_model or not api_key:
+    resolved_api_key = (api_key or '').strip() or _resolve_copywriter_api_key(normalized_url, normalized_model)
+    if not normalized_url or not normalized_model or not resolved_api_key:
         return {}
     provider_label = {
         'deepseek': f'DeepSeek：{normalized_model}',
@@ -11353,7 +11353,7 @@ def _build_copywriter_runtime_entry(api_url='', model='', *, source='runtime_con
     return {
         'configured': True,
         'provider': provider,
-        'api_key': api_key,
+        'api_key': resolved_api_key,
         'api_url': normalized_url,
         'model': normalized_model,
         'label': provider_label,
@@ -11366,17 +11366,20 @@ def _copywriter_runtime_candidates(payload=None):
     runtime_config = _automation_runtime_config()
     payload = payload or {}
     primary_url = (payload.get('copywriter_api_url') or runtime_config.get('copywriter_api_url') or '').strip()
+    primary_key = (payload.get('copywriter_api_key') or runtime_config.get('copywriter_api_key') or '').strip()
     primary_model = (payload.get('copywriter_model') or runtime_config.get('copywriter_model') or '').strip()
     backup_url = (payload.get('copywriter_backup_api_url') or runtime_config.get('copywriter_backup_api_url') or '').strip()
+    backup_key = (payload.get('copywriter_backup_api_key') or runtime_config.get('copywriter_backup_api_key') or '').strip()
     backup_model = (payload.get('copywriter_backup_model') or runtime_config.get('copywriter_backup_model') or '').strip()
     third_url = (payload.get('copywriter_third_api_url') or runtime_config.get('copywriter_third_api_url') or '').strip()
+    third_key = (payload.get('copywriter_third_api_key') or runtime_config.get('copywriter_third_api_key') or '').strip()
     third_model = (payload.get('copywriter_third_model') or runtime_config.get('copywriter_third_model') or '').strip()
 
     candidates = []
     seen = set()
 
-    def append_candidate(api_url, model, source):
-        entry = _build_copywriter_runtime_entry(api_url, model, source=source)
+    def append_candidate(api_url, model, source, api_key=''):
+        entry = _build_copywriter_runtime_entry(api_url, model, source=source, api_key=api_key)
         if not entry:
             return
         dedupe_key = (entry['api_url'], entry['model'])
@@ -11385,9 +11388,9 @@ def _copywriter_runtime_candidates(payload=None):
         seen.add(dedupe_key)
         candidates.append(entry)
 
-    append_candidate(primary_url, primary_model, 'primary')
-    append_candidate(backup_url, backup_model, 'backup')
-    append_candidate(third_url, third_model, 'third')
+    append_candidate(primary_url, primary_model, 'primary', primary_key)
+    append_candidate(backup_url, backup_model, 'backup', backup_key)
+    append_candidate(third_url, third_model, 'third', third_key)
     append_candidate(
         COPYWRITER_API_URL,
         COPYWRITER_MODEL or primary_model or _default_copywriter_model(api_url=COPYWRITER_API_URL or primary_url),

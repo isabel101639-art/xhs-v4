@@ -637,10 +637,25 @@ def register_automation_dashboard_routes(app, helpers):
                 1,
             ), 100)
             next_config['copywriter_api_url'] = (data.get('copywriter_api_url') or current.get('copywriter_api_url') or '').strip()[:500]
+            next_config['copywriter_api_key'] = (
+                (data.get('copywriter_api_key') or '').strip()
+                or current.get('copywriter_api_key')
+                or ''
+            )[:500]
             next_config['copywriter_model'] = (data.get('copywriter_model') or current.get('copywriter_model') or '').strip()[:100]
             next_config['copywriter_backup_api_url'] = (data.get('copywriter_backup_api_url') or current.get('copywriter_backup_api_url') or '').strip()[:500]
+            next_config['copywriter_backup_api_key'] = (
+                (data.get('copywriter_backup_api_key') or '').strip()
+                or current.get('copywriter_backup_api_key')
+                or ''
+            )[:500]
             next_config['copywriter_backup_model'] = (data.get('copywriter_backup_model') or current.get('copywriter_backup_model') or '').strip()[:100]
             next_config['copywriter_third_api_url'] = (data.get('copywriter_third_api_url') or current.get('copywriter_third_api_url') or '').strip()[:500]
+            next_config['copywriter_third_api_key'] = (
+                (data.get('copywriter_third_api_key') or '').strip()
+                or current.get('copywriter_third_api_key')
+                or ''
+            )[:500]
             next_config['copywriter_third_model'] = (data.get('copywriter_third_model') or current.get('copywriter_third_model') or '').strip()[:100]
             next_config['image_provider'] = (data.get('image_provider') or current['image_provider']).strip()[:50]
             next_config['image_api_base'] = (data.get('image_api_base') or current['image_api_base']).strip()[:500]
@@ -658,17 +673,29 @@ def register_automation_dashboard_routes(app, helpers):
                 setting = Settings(key='automation_runtime_config', value='{}')
                 db.session.add(setting)
             setting.value = helpers['json'].dumps(next_config, ensure_ascii=False)
-            log_operation('save', 'automation_runtime_config', message='更新自动化运维配置', detail=next_config)
+            safe_detail = dict(next_config)
+            for secret_key in ['copywriter_api_key', 'copywriter_backup_api_key', 'copywriter_third_api_key']:
+                if safe_detail.get(secret_key):
+                    safe_detail[secret_key] = '<configured>'
+            log_operation('save', 'automation_runtime_config', message='更新自动化运维配置', detail=safe_detail)
             db.session.commit()
 
         runtime_config = hotword_runtime_settings()
         creator_runtime_config = creator_sync_runtime_settings()
         runtime_config.update(creator_runtime_config)
+        safe_runtime_config = dict(runtime_config)
+        copywriter_key_flags = {
+            'copywriter_api_key_configured': bool(safe_runtime_config.get('copywriter_api_key')),
+            'copywriter_backup_api_key_configured': bool(safe_runtime_config.get('copywriter_backup_api_key')),
+            'copywriter_third_api_key_configured': bool(safe_runtime_config.get('copywriter_third_api_key')),
+        }
+        for secret_key in ['copywriter_api_key', 'copywriter_backup_api_key', 'copywriter_third_api_key']:
+            safe_runtime_config[secret_key] = ''
         capabilities = image_provider_capabilities()
         copywriter = copywriter_capabilities()
         return jsonify({
             'success': True,
-            'config': runtime_config,
+            'config': safe_runtime_config,
             'capabilities': capabilities,
             'copywriter': copywriter,
             'provider_options': image_provider_options(),
@@ -681,6 +708,7 @@ def register_automation_dashboard_routes(app, helpers):
                 'api_key_managed_by_env': True,
                 'api_key_configured': capabilities.get('api_key_configured', False),
                 'copywriter_key_configured': copywriter.get('api_key_configured', False),
+                **copywriter_key_flags,
             }
         })
 
