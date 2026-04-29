@@ -1405,6 +1405,7 @@ def register_public_routes(app, helpers):
             activities = Activity.query.order_by(Activity.created_at.desc()).all()
             if activities:
                 activity = activities[0]
+        activities = Activity.query.order_by(Activity.created_at.desc(), Activity.id.desc()).all()
 
         public_context = build_public_context()
         site_config = dict(public_context.get('site_config') or {})
@@ -1440,6 +1441,7 @@ def register_public_routes(app, helpers):
         return render_template(
             'index.html',
             activity=activity,
+            activities=activities,
             primary_topics=primary_topics,
             secondary_topics=secondary_topics,
             first_available_topic=first_available_topic,
