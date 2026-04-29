@@ -5746,43 +5746,88 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             return compactText(item.recommended_copy_route_why || item.angle || '围绕用户搜索需求，用真人口吻讲清问题、判断依据和下一步动作。', 140);
         }
 
-        function buildViralHooks(item, typeLabel) {
+        function pickHookGroup(groups, seed) {
+            const list = groups.filter((group) => Array.isArray(group) && group.length);
+            if (!list.length) return [];
+            return list[Math.abs(seed) % list.length];
+        }
+
+        function buildViralHooks(item, typeLabel, index = 0) {
             const topic = splitIdeaTitle(item.topic_title || '').topic;
             const base = topic.replace(/[？?。！!]+$/g, '');
+            const seed = Number(item.id || 0) + index;
+            const text = `${topic} ${item.keywords || ''} ${item.angle || ''} ${item.asset_brief || ''}`;
+            const isScan = /FibroScan|FS|福波看|肝弹|弹性|体检|检查|报告/.test(text);
+            const isDrug = /复方|鳖甲|软肝片|肝硬化|肝纤维化|药|治疗|抗纤维化/.test(text);
             if (typeLabel.includes('产品实拍')) {
-                return [
-                    `${base}，我真正信是在复查那天`,
-                    `医生说数值稳住后，我才懂这件事不能急`,
-                    `肝硬化这几年，我最后只坚持了这几件事`,
-                ];
+                return pickHookGroup([
+                    [`不是看到药盒就信，是复查数值让我停住`, `医生让我坚持时，我先看了这个变化`, `肝硬化那几年，我最后只坚持这几件事`],
+                    [`家里人问${base}时，我没有先讲药`, `复查单出来后，我才明白坚持不是口号`, `这类笔记别拍得像广告，先拍真实生活`],
+                    [`同样是用药记录，为什么这篇更容易被收藏`, `我会从一次复查讲起，而不是从产品名讲起`, `把“长期管理”讲成一个普通家庭能听懂的故事`],
+                ], seed);
             }
             if (typeLabel.includes('产品合集') || typeLabel.includes('测评')) {
-                return [
-                    `${base}怎么选？先别只看名字`,
-                    `我把常见方案按适合人群重新排了一遍`,
-                    `别跟风，先看自己属于哪一种情况`,
-                ];
+                return pickHookGroup([
+                    [`${base}怎么选？先别只看名字`, `我把常见方案按适合人群重新排了一遍`, `别跟风，先看自己属于哪一种情况`],
+                    [`不是谁贵谁好，先分清自己是哪类问题`, `肝纤维化相关方案，我会先看这 3 个标准`, `把“能不能长期坚持”放到选择前面`],
+                    [`这类产品合集别做成排名榜`, `先讲适用人群，再讲为什么不适合盲选`, `用户真正想问的是：我这种情况该怎么判断`],
+                ], seed);
             }
             if (typeLabel.includes('大字报')) {
-                return [
-                    `${base}，你第一反应可能就错了`,
-                    `这件事别再按老经验判断`,
-                    `如果是你，会先选哪一步？`,
-                ];
+                return pickHookGroup([
+                    [`${base}，你第一反应可能就错了`, `这件事别再按老经验判断`, `如果是你，会先选哪一步？`],
+                    [`肝健康这件事，很多人卡在第一个判断`, `别急着问“严不严重”，先看这个信号`, `评论区最容易吵起来的问题，就放封面上`],
+                    [`这不是吓人，是很多人真的会漏`, `体检报告出来后，先别只盯异常箭头`, `你会先复查，还是先到处搜答案？`],
+                ], seed);
             }
-            if (typeLabel.includes('报告解读') || /FibroScan|体检|检查|报告|肝弹/.test(`${topic} ${item.keywords || ''}`)) {
-                return [
-                    `看到这项检查，先别自己吓自己`,
-                    `${base}，真正要先看的是这几项`,
-                    `报告不是越查越慌，关键是会不会读`,
-                ];
+            if (typeLabel.includes('报告解读')) {
+                return pickHookGroup([
+                    [`FibroScan报告别只盯一个数字`, `这几个数值先圈出来，再判断下一步`, `看到肝弹结果，先看趋势再焦虑`],
+                    [`报告上有异常，不等于你已经很严重`, `我会先看这 3 行，再决定要不要复查`, `把肝弹报告翻译成人话，其实先看顺序`],
+                    [`同样一张报告，为什么有人越看越慌`, `关键不是查了多少项，是你会不会读变化`, `这类报告解读，封面先给“看哪项”`],
+                ], seed);
             }
             if (typeLabel.includes('备忘录') || typeLabel.includes('清单')) {
-                return [
-                    `${base}先存这份清单`,
-                    `别漏这几项，很多人第一次都会忽略`,
-                    `我会按这个顺序来，不容易乱`,
-                ];
+                return pickHookGroup([
+                    [`${base}先存这份清单`, `别漏这几项，很多人第一次都会忽略`, `我会按这个顺序来，不容易乱`],
+                    [`体检前别只买套餐，先把这几项问清楚`, `30岁以后做肝健康筛查，我会先看这份清单`, `少花冤枉钱的关键，是知道哪些该优先`],
+                    [`复查前这张备忘录，比临时搜索更有用`, `不是项目越多越好，先把核心问题查明白`, `给家里人安排体检，我会先核对这几项`],
+                ], seed);
+            }
+            if (typeLabel.includes('图表')) {
+                return pickHookGroup([
+                    [`体检项目一张图看懂：哪些先做，哪些再说`, `我把必查和可选分开了，别再乱买套餐`, `这张表先看完，再决定要不要加项`],
+                    [`肝健康筛查别靠猜，一张图讲清顺序`, `把报告指标放进图里，用户才知道下一步`, `图表型笔记最怕全塞满，只留一个判断问题`],
+                    [`看不懂检查名？先按风险和场景分层`, `这张图的重点不是多专业，是让人敢去查`, `体检清单别做百科，做成选择路线图`],
+                ], seed);
+            }
+            if (typeLabel.includes('实拍记录')) {
+                return pickHookGroup([
+                    [`真实去做这项检查，最怕漏的不是流程`, `体检当天我会先确认这几个问题`, `把医院流程拍清楚，用户才敢照着做`],
+                    [`第一次做肝弹检查，很多人其实卡在这一步`, `现场实拍不要只拍机器，要拍用户最担心的地方`, `流程讲明白，比堆专业名词更容易收藏`],
+                    [`体检中心这一趟，我会重点拍 3 个画面`, `用户想看的不是环境，是到底怎么查`, `把陌生检查拍熟悉，报名率会更高`],
+                ], seed);
+            }
+            if (typeLabel.includes('深度科普')) {
+                return pickHookGroup([
+                    [`指南里真正提醒的，不是多查几项`, `把专业判断翻译成人话，用户才会收藏`, `${base}，别写成教科书`],
+                    [`这项检查不是越多越好，关键看适合谁`, `为什么医生总让定期复查？重点在趋势`, `深度科普要先回答“和我有什么关系”`],
+                    [`临床证据可以讲，但第一句要讲用户痛点`, `别用术语压人，先说这一步为什么重要`, `专业内容想爆，封面必须是一个具体问题`],
+                ], seed);
+            }
+            if (isScan) {
+                return pickHookGroup([
+                    [`看到${base}，先别自己吓自己`, `真正要先看的是这几项，不是所有异常都一样`, `报告不是越查越慌，关键是会不会读`],
+                    [`体检项目太多，我会先把肝脏这几项拎出来`, `FibroScan到底看什么？别只记一个名字`, `筛查不是制造焦虑，是帮你知道下一步`],
+                    [`30岁后做体检，肝健康别只看转氨酶`, `这项检查很多人听过，但不知道什么时候该做`, `报告出来后，先问这 2 个问题`],
+                ], seed);
+            }
+            if (isDrug) {
+                return pickHookGroup([
+                    [`肝硬化吃药这件事，别一上来就问“哪种最强”`, `抗纤维化不是吃一阵就结束`, `真正难的是长期管理，不是记住一个药名`],
+                    [`软肝片相关内容别硬推，先讲为什么要坚持`, `用户想看的不是说明书，是复查和生活怎么配合`, `把治疗问题讲成家庭能执行的清单`],
+                    [`肝纤维化管理，很多人输在太急`, `别把产品写成主角，先把人的担心讲清楚`, `医生反复提醒的长期复查，才是这篇的钩子`],
+                ], seed);
             }
             return [
                 `${base}，先别急着下结论`,
@@ -5813,20 +5858,7 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             return ['开头：先抓一个具体场景或问题', '中段：讲清判断逻辑和执行步骤', '结尾：留一个用户愿意回复的问题'];
         }
 
-        function buildKeepDropList(item, typeLabel) {
-            const keep = [];
-            const drop = [];
-            if ((item.source_link_count || 0) > 0) keep.push('保留爆款链接的标题节奏和封面结构');
-            if (/FibroScan|体检|报告|检查|肝弹/.test(`${item.topic_title || ''} ${item.keywords || ''}`)) keep.push('保留“指标/报告怎么读”的实用价值');
-            if (/肝硬化|肝纤维化|软肝片/.test(`${item.topic_title || ''} ${item.keywords || ''}`)) keep.push('保留真实复查、长期坚持、遵医嘱这些可信元素');
-            if (!keep.length) keep.push('保留用户最想解决的一个核心问题');
-            drop.push('删掉大段合规说明和内部执行口径');
-            drop.push('不要直接照搬 Excel 里的长句和药品说明书口吻');
-            if (!typeLabel.includes('产品合集')) drop.push('标题正文避免直接硬写完整产品名');
-            return { keep: keep.slice(0, 3), drop: drop.slice(0, 3) };
-        }
-
-        function buildViralAgentPlan(item, typeLabel) {
+        function buildViralAgentPlan(item, typeLabel, index = 0) {
             const title = splitIdeaTitle(item.topic_title || '').topic;
             const titleText = `${title} ${item.keywords || ''} ${item.angle || ''}`;
             let score = 68;
@@ -5846,9 +5878,8 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             return {
                 score,
                 hookReason: deriveWritingAngle(item, typeLabel),
-                hooks: buildViralHooks(item, typeLabel),
+                hooks: buildViralHooks(item, typeLabel, index),
                 structure: buildViralStructure(item, typeLabel),
-                keepDrop: buildKeepDropList(item, typeLabel),
                 risk,
             };
         }
@@ -5877,7 +5908,7 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             }
         }
 
-        function buildIdeaPreview(item) {
+        function buildIdeaPreview(item, index = 0) {
             const title = splitIdeaTitle(item.topic_title || '');
             const typeLabel = normalizeIdeaType(title.format || item.content_type || '');
             const product = resolveIdeaProductProfile(item);
@@ -5885,7 +5916,7 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             const notes = deriveWritingNotes(item, typeLabel);
             const angle = deriveWritingAngle(item, typeLabel);
             const example = deriveWritingExample(item);
-            const viralPlan = buildViralAgentPlan(item, typeLabel);
+            const viralPlan = buildViralAgentPlan(item, typeLabel, index);
             const links = (item.source_links_list || []).slice(0, 6);
             return {
                 title,
@@ -5934,7 +5965,7 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
         }
 
         function renderIdeaCard(item, index = 0) {
-            const preview = buildIdeaPreview(item);
+            const preview = buildIdeaPreview(item, index);
             return `
                 <div class="idea-preview-card">
                     <div class="idea-product-band">
@@ -5974,7 +6005,7 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
                             </div>
                         </div>
                         <div class="idea-preview-section">
-                            <div class="idea-preview-label">标题钩子</div>
+                            <div class="idea-preview-label">标题钩子（Agent 生成）</div>
                             <ul class="idea-preview-points">
                                 ${preview.viralPlan.hooks.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
                             </ul>
@@ -5984,23 +6015,6 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
                             <ul class="idea-preview-points">
                                 ${preview.viralPlan.structure.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
                             </ul>
-                        </div>
-                        <div class="idea-preview-section">
-                            <div class="idea-preview-label">保留 / 舍弃</div>
-                            <div class="row g-2">
-                                <div class="col-md-6">
-                                    <div class="subtle mb-1">保留</div>
-                                    <ul class="idea-preview-points">
-                                        ${preview.viralPlan.keepDrop.keep.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
-                                    </ul>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="subtle mb-1">舍弃</div>
-                                    <ul class="idea-preview-points">
-                                        ${preview.viralPlan.keepDrop.drop.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
-                                    </ul>
-                                </div>
-                            </div>
                         </div>
                         <div class="idea-preview-section">
                             <div class="idea-preview-label">风险提醒</div>
