@@ -581,7 +581,7 @@
                             {% if topic.filled >= topic.quota %}
                             <span class="quota-badge quota-full">已报满</span>
                             {% else %}
-                            <span class="quota-badge quota-active-primary">报名中</span>
+                            <span class="quota-badge quota-active-primary">可重复报名</span>
                             {% endif %}
                         </div>
                         <div class="topic-title">{{ topic.topic_name }}</div>
@@ -607,11 +607,11 @@
                         </div>
                         {% endif %}
                         <div class="topic-footer">
-                            <span>名额：{{ topic.filled }}/{{ topic.quota }}</span>
+                            <span>名额：{{ topic.filled }}/{{ topic.quota }}，可重复报名</span>
                             {% if topic.filled < topic.quota %}
                             <a href="/topic/{{ topic.id }}" class="btn-register btn-register-primary">
                                 <i class="bi bi-pencil-square"></i>
-                                一键报名
+                                继续报名
                             </a>
                             {% else %}
                             <button class="btn btn-secondary btn-sm" disabled>已报满</button>
@@ -641,7 +641,7 @@
                             {% if topic.filled >= topic.quota %}
                             <span class="quota-badge quota-full">已报满</span>
                             {% else %}
-                            <span class="quota-badge quota-active-secondary">报名中</span>
+                            <span class="quota-badge quota-active-secondary">可重复报名</span>
                             {% endif %}
                         </div>
                         <div class="topic-title">{{ topic.topic_name }}</div>
@@ -667,11 +667,11 @@
                         </div>
                         {% endif %}
                         <div class="topic-footer">
-                            <span>名额：{{ topic.filled }}/{{ topic.quota }}</span>
+                            <span>名额：{{ topic.filled }}/{{ topic.quota }}，可重复报名</span>
                             {% if topic.filled < topic.quota %}
                             <a href="/topic/{{ topic.id }}" class="btn-register btn-register-secondary">
                                 <i class="bi bi-pencil-square"></i>
-                                一键报名
+                                继续报名
                             </a>
                             {% else %}
                             <button class="btn btn-secondary btn-sm" disabled>已报满</button>

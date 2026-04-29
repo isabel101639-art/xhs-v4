@@ -1767,13 +1767,6 @@ def register_public_routes(app, helpers):
         if topic.filled >= topic.quota:
             return jsonify({'success': False, 'message': '名额已满'})
 
-        existing = Registration.query.filter_by(
-            topic_id=data.get('topic_id'),
-            xhs_account=data.get('xhs_account')
-        ).first()
-        if existing:
-            return jsonify({'success': False, 'message': '您已报名此话题'})
-
         reg = Registration(
             topic_id=data.get('topic_id'),
             group_num=data.get('group_num'),
