@@ -712,10 +712,10 @@ def _normalize_nav_items(items):
         '/hot-topics': 2,
         '/my_registration': 3,
         '/data_analysis': 4,
-        '/image-library': 5,
-        '/automation_center': 6,
-        '/activity': 7,
-        '/admin': 8,
+        '/automation_center': 5,
+        '/activity': 6,
+        '/admin': 7,
+        '/image-library': 8,
     }
     if not isinstance(items, list):
         items = []
