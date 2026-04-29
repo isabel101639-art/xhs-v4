@@ -2699,12 +2699,11 @@ def _split_corpus_tags(raw_tags):
 
 
 def _split_reference_links(raw_links=''):
-    items = []
-    for part in re.split(r'[\n\r\t ,，;；]+', raw_links or ''):
-        link = (part or '').strip()
-        if not link or 'http' not in link:
-            continue
-        items.append(link)
+    text = str(raw_links or '')
+    items = [
+        item.strip().rstrip('。；;，,、）)]】》>')
+        for item in re.findall(r'https?://[^\s<>"\'，；;、]+', text)
+    ]
     deduped = []
     seen = set()
     for link in items:
@@ -4034,7 +4033,7 @@ def _metric_source_summary_text(metric_sources, preferred_keys=None):
 
 def _serialize_topic_idea(idea):
     source_note_id_list = _split_keywords(idea.source_note_ids or '')
-    source_links_list = _split_keywords(idea.source_links or '')
+    source_links_list = _split_reference_links(idea.source_links or '')
     topic_stub = SimpleNamespace(
         topic_name=idea.topic_title or '',
         keywords=idea.keywords or '',
@@ -4531,6 +4530,93 @@ def _build_topic_import_rows_from_workbook_sheet(ws):
     return normalized_rows
 
 
+def _build_topic_import_rows_from_simple_sheet(ws):
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return []
+    header_index = None
+    for idx, row in enumerate(rows):
+        cells = [str(cell or '').strip() for cell in row]
+        joined = ' '.join(cells)
+        if '话题' in joined and '笔记类型' in joined and '爆款笔记链接' in joined:
+            header_index = idx
+            break
+    if header_index is None:
+        return []
+
+    header_row = [str(cell or '').strip() for cell in rows[header_index]]
+    def find_col(names, default=0):
+        for idx, header in enumerate(header_row):
+            if any(name in header for name in names):
+                return idx
+        return default
+
+    topic_col = find_col(['话题'], 1)
+    type_col = find_col(['笔记类型'], 2)
+    angle_col = find_col(['撰写角度'], 3)
+    writing_col = find_col(['撰写说明'], 4)
+    sample_col = find_col(['撰写示例'], 5)
+    keyword_col = find_col(['关键词'], 6)
+    link_col = find_col(['爆款笔记链接', '参考链接', '笔记链接'], 7)
+
+    intro = ''
+    for row in rows[:header_index]:
+        cells = [str(cell or '').strip() for cell in row if str(cell or '').strip()]
+        if cells:
+            intro = cells[0]
+            break
+    product_hint = '软肝片' if '软肝片' in intro or '鳖甲' in intro else _sheet_product_hint(ws.title)
+    group_label = intro[:80] if intro else _sheet_topic_group_label(ws.title)
+    normalized_rows = []
+    current = None
+
+    def cell(cells, idx):
+        return cells[idx] if idx < len(cells) else ''
+
+    def flush_current():
+        if not current:
+            return
+        links = _split_reference_links(current.pop('_links_raw', ''))
+        current['reference_link'] = '\n'.join(links)
+        normalized_rows.append(current)
+
+    for row in rows[header_index + 1:]:
+        cells = [str(cell or '').strip() for cell in row]
+        if not any(cells):
+            continue
+        topic = cell(cells, topic_col)
+        note_type = cell(cells, type_col)
+        raw_links = cell(cells, link_col)
+        if topic:
+            flush_current()
+            topic_core = _topic_core_from_search_text(topic)
+            type_label = _topic_core_from_search_text(note_type) or '内容执行'
+            keywords = _keywords_from_tags_and_topic(topic_core, cell(cells, keyword_col))
+            angle = cell(cells, angle_col)
+            writing = cell(cells, writing_col)
+            sample = cell(cells, sample_col)
+            current = {
+                'topic_title': f'{topic_core}｜{type_label}'.strip('｜')[:200],
+                'keywords': keywords,
+                'direction': '\n'.join(filter(None, [angle, writing])).strip(),
+                'persona': angle[:80],
+                'content_type': type_label[:50],
+                'copy_prompt': sample,
+                'reference_link': '',
+                'reference_content': sample,
+                'asset_brief': writing,
+                'compliance_note': COMPLIANCE_BASELINE,
+                'quota': _default_topic_quota(),
+                'group_num': group_label or '批量导入',
+                'soft_insertion': product_hint,
+                '_links_raw': raw_links,
+            }
+        elif current and raw_links:
+            current['_links_raw'] = '\n'.join(filter(None, [current.get('_links_raw', ''), raw_links]))
+    flush_current()
+    return normalized_rows
+
+
 def _parse_topic_import_file(filename='', file_bytes=b''):
     lower_name = (filename or '').lower()
     if lower_name.endswith('.xlsx') or lower_name.endswith('.xlsm'):
@@ -4539,7 +4625,8 @@ def _parse_topic_import_file(filename='', file_bytes=b''):
         workbook = load_workbook(io.BytesIO(file_bytes), data_only=True)
         all_rows = []
         for ws in workbook.worksheets:
-            all_rows.extend(_build_topic_import_rows_from_workbook_sheet(ws))
+            simple_rows = _build_topic_import_rows_from_simple_sheet(ws)
+            all_rows.extend(simple_rows or _build_topic_import_rows_from_workbook_sheet(ws))
         return all_rows
     try:
         raw_text = file_bytes.decode('utf-8')

@@ -5761,51 +5761,51 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             const isDrug = /复方|鳖甲|软肝片|肝硬化|肝纤维化|药|治疗|抗纤维化/.test(text);
             if (typeLabel.includes('产品实拍')) {
                 return pickHookGroup([
-                    [`不是看到药盒就信，是复查数值让我停住`, `医生让我坚持时，我先看了这个变化`, `肝硬化那几年，我最后只坚持这几件事`],
-                    [`家里人问${base}时，我没有先讲药`, `复查单出来后，我才明白坚持不是口号`, `这类笔记别拍得像广告，先拍真实生活`],
-                    [`同样是用药记录，为什么这篇更容易被收藏`, `我会从一次复查讲起，而不是从产品名讲起`, `把“长期管理”讲成一个普通家庭能听懂的故事`],
+                    [`肝硬化用药这件事，我是看复查结果才踏实的`, `医生让我坚持复查时，我最先关注这几个变化`, `这几年我才明白：稳定比一时见效更重要`],
+                    [`家里人问${base}，我会先说复查单`, `不是拍药盒就有说服力，关键是前后变化`, `真实用药记录要先讲人，再讲方法`],
+                    [`从17.8到复查稳定，我做对了这几步`, `如果重新开始治疗，我会先问医生这几个问题`, `别把产品写成主角，把坚持过程讲清楚`],
                 ], seed);
             }
             if (typeLabel.includes('产品合集') || typeLabel.includes('测评')) {
                 return pickHookGroup([
-                    [`${base}怎么选？先别只看名字`, `我把常见方案按适合人群重新排了一遍`, `别跟风，先看自己属于哪一种情况`],
-                    [`不是谁贵谁好，先分清自己是哪类问题`, `肝纤维化相关方案，我会先看这 3 个标准`, `把“能不能长期坚持”放到选择前面`],
-                    [`这类产品合集别做成排名榜`, `先讲适用人群，再讲为什么不适合盲选`, `用户真正想问的是：我这种情况该怎么判断`],
+                    [`${base}怎么选？先看自己是哪类情况`, `我把常见方案按“适合谁”重新分了一遍`, `别只看名字，先看复查目标和医生建议`],
+                    [`不是越贵越适合，先分清这几个判断点`, `肝纤维化相关方案，我会先看这 3 个标准`, `能不能长期坚持，比短期冲动更关键`],
+                    [`这类合集不要做排行榜，要做选择清单`, `先讲适用人群，再讲哪些情况别盲选`, `用户真正想问的是：我这种情况怎么判断`],
                 ], seed);
             }
             if (typeLabel.includes('大字报')) {
                 return pickHookGroup([
-                    [`${base}，你第一反应可能就错了`, `这件事别再按老经验判断`, `如果是你，会先选哪一步？`],
-                    [`肝健康这件事，很多人卡在第一个判断`, `别急着问“严不严重”，先看这个信号`, `评论区最容易吵起来的问题，就放封面上`],
-                    [`这不是吓人，是很多人真的会漏`, `体检报告出来后，先别只盯异常箭头`, `你会先复查，还是先到处搜答案？`],
+                    [`${base}，先别急着自己吓自己`, `体检报告出来后，很多人第一眼看错了`, `如果是你，会先复查还是先到处搜答案？`],
+                    [`肝健康这件事，别只问“严不严重”`, `报告有箭头不等于已经很糟，先看这一项`, `封面只问一个问题：这项异常要不要复查？`],
+                    [`这项很多人体检都会漏看`, `别只盯转氨酶，肝脏筛查还要看这些`, `你会先看套餐价格，还是先看该查什么？`],
                 ], seed);
             }
             if (typeLabel.includes('报告解读')) {
                 return pickHookGroup([
-                    [`FibroScan报告别只盯一个数字`, `这几个数值先圈出来，再判断下一步`, `看到肝弹结果，先看趋势再焦虑`],
-                    [`报告上有异常，不等于你已经很严重`, `我会先看这 3 行，再决定要不要复查`, `把肝弹报告翻译成人话，其实先看顺序`],
-                    [`同样一张报告，为什么有人越看越慌`, `关键不是查了多少项，是你会不会读变化`, `这类报告解读，封面先给“看哪项”`],
+                    [`FibroScan报告别只盯一个数字`, `这几个数值先圈出来，再判断下一步`, `看到肝弹结果，先看趋势再问医生`],
+                    [`报告上有异常，不代表一定很严重`, `我会先看这 3 行，再决定要不要复查`, `肝弹报告不会读？先按这个顺序看`],
+                    [`同一张报告，为什么有人越看越慌`, `关键不是查了多少项，是有没有看变化`, `报告解读型封面，先告诉用户看哪一项`],
                 ], seed);
             }
             if (typeLabel.includes('备忘录') || typeLabel.includes('清单')) {
                 return pickHookGroup([
-                    [`${base}先存这份清单`, `别漏这几项，很多人第一次都会忽略`, `我会按这个顺序来，不容易乱`],
+                    [`${base}，先存这份清单`, `别漏这几项，很多人第一次都会忽略`, `按这个顺序查，比临时搜索更清楚`],
                     [`体检前别只买套餐，先把这几项问清楚`, `30岁以后做肝健康筛查，我会先看这份清单`, `少花冤枉钱的关键，是知道哪些该优先`],
                     [`复查前这张备忘录，比临时搜索更有用`, `不是项目越多越好，先把核心问题查明白`, `给家里人安排体检，我会先核对这几项`],
                 ], seed);
             }
             if (typeLabel.includes('图表')) {
                 return pickHookGroup([
-                    [`体检项目一张图看懂：哪些先做，哪些再说`, `我把必查和可选分开了，别再乱买套餐`, `这张表先看完，再决定要不要加项`],
-                    [`肝健康筛查别靠猜，一张图讲清顺序`, `把报告指标放进图里，用户才知道下一步`, `图表型笔记最怕全塞满，只留一个判断问题`],
-                    [`看不懂检查名？先按风险和场景分层`, `这张图的重点不是多专业，是让人敢去查`, `体检清单别做百科，做成选择路线图`],
+                    [`体检项目一张图看懂：先查什么，后查什么`, `我把必查和可选分开了，别再乱买套餐`, `这张表看完，再决定要不要加项`],
+                    [`肝健康筛查别靠猜，一张图讲清顺序`, `把报告指标放进图里，用户才知道下一步`, `图表型笔记别塞满，一张图只讲一个判断`],
+                    [`看不懂检查名？先按风险和场景分层`, `这张图的重点不是专业词，是让人知道怎么查`, `体检清单别做百科，做成选择路线图`],
                 ], seed);
             }
             if (typeLabel.includes('实拍记录')) {
                 return pickHookGroup([
-                    [`真实去做这项检查，最怕漏的不是流程`, `体检当天我会先确认这几个问题`, `把医院流程拍清楚，用户才敢照着做`],
-                    [`第一次做肝弹检查，很多人其实卡在这一步`, `现场实拍不要只拍机器，要拍用户最担心的地方`, `流程讲明白，比堆专业名词更容易收藏`],
-                    [`体检中心这一趟，我会重点拍 3 个画面`, `用户想看的不是环境，是到底怎么查`, `把陌生检查拍熟悉，报名率会更高`],
+                    [`真实去做这项检查，我最想提前知道这几步`, `体检当天先确认这几个问题，少跑冤枉路`, `把检查流程拍清楚，第一次做也不慌`],
+                    [`第一次做肝弹检查，很多人卡在预约和流程`, `现场实拍不要只拍机器，要拍用户最担心的地方`, `流程讲明白，比堆专业名词更容易收藏`],
+                    [`体检中心这一趟，我会重点拍 3 个画面`, `用户想看的不是环境，是到底怎么查`, `把陌生检查拍熟悉，用户才愿意继续看`],
                 ], seed);
             }
             if (typeLabel.includes('深度科普')) {
@@ -5817,7 +5817,7 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             }
             if (isScan) {
                 return pickHookGroup([
-                    [`看到${base}，先别自己吓自己`, `真正要先看的是这几项，不是所有异常都一样`, `报告不是越查越慌，关键是会不会读`],
+                    [`看到${base}，先别自己吓自己`, `真正要先看的是这几项，不是所有异常都一样`, `报告不是越查越慌，关键是看懂顺序`],
                     [`体检项目太多，我会先把肝脏这几项拎出来`, `FibroScan到底看什么？别只记一个名字`, `筛查不是制造焦虑，是帮你知道下一步`],
                     [`30岁后做体检，肝健康别只看转氨酶`, `这项检查很多人听过，但不知道什么时候该做`, `报告出来后，先问这 2 个问题`],
                 ], seed);
@@ -5834,6 +5834,35 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
                 `很多人卡住，是因为第一步就想复杂了`,
                 `这件事我会先看这 3 个判断点`,
             ];
+        }
+
+        function buildRiskReminders(item, typeLabel) {
+            const text = `${item.topic_title || ''} ${item.keywords || ''} ${item.angle || ''} ${item.asset_brief || ''}`;
+            if (/复方|鳖甲|软肝片|药|治疗|肝硬化/.test(text)) {
+                if (typeLabel.includes('产品实拍')) {
+                    return ['不要写“治好/逆转/根治”，用“遵医嘱、复查变化、长期管理”表达。', '产品露出放在图片或经历里自然出现，正文不要变成药品说明书。'];
+                }
+                if (typeLabel.includes('产品合集') || typeLabel.includes('测评')) {
+                    return ['不要做药品排名或替代医生建议，只讲适用场景和咨询医生的问题。', '避免暗示购买转化，重点放在复查、随访和规范治疗。'];
+                }
+                return ['医疗药品内容不要承诺疗效，不要引导购买。', '涉及用药剂量、停药、换药时，必须提示遵医嘱。'];
+            }
+            if (typeLabel.includes('报告解读')) {
+                return ['不要替用户下诊断结论，只教“先看哪些指标”和“什么时候问医生”。', '避免制造焦虑，异常值要结合病史、复查和医生判断。'];
+            }
+            if (typeLabel.includes('实拍记录')) {
+                return ['实拍里不要出现他人隐私、完整姓名、病历号和机构敏感信息。', '流程体验可以讲，检查结果判断要回到医生解读。'];
+            }
+            if (typeLabel.includes('图表')) {
+                return ['图表只做筛查路径，不写成诊断标准。', '不要把所有项目都说成“必须做”，按人群和风险分层表达。'];
+            }
+            if (typeLabel.includes('大字报')) {
+                return ['强钩子不能变成恐吓式标题，避免“再不查就晚了”这类表达。', '评论互动可以做，但不要诱导用户自诊。'];
+            }
+            if (typeLabel.includes('备忘录') || typeLabel.includes('清单')) {
+                return ['清单是辅助准备，不替代医生面诊。', '不要把套餐项目写成人人必做，保留“按风险选择”的口径。'];
+            }
+            return ['避免百科式堆信息，一篇只解决一个问题。'];
         }
 
         function buildViralStructure(item, typeLabel) {
@@ -5867,20 +5896,12 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             if (/大字报|清单|报告解读|测评|实拍/.test(typeLabel)) score += 6;
             if (/产品名|说明书|合规/.test(titleText)) score -= 4;
             score = Math.max(55, Math.min(score, 92));
-            const risk = [];
-            if (/复方|软肝片|药|治疗|肝硬化/.test(titleText)) {
-                risk.push('医疗药品内容不要承诺疗效，不要引导购买');
-            }
-            if (/产品/.test(item.asset_brief || '') && !typeLabel.includes('产品合集')) {
-                risk.push('产品露出放图或评论区承接，正文先讲经历和判断');
-            }
-            if (!risk.length) risk.push('避免百科式堆信息，一篇只解决一个问题');
             return {
                 score,
                 hookReason: deriveWritingAngle(item, typeLabel),
                 hooks: buildViralHooks(item, typeLabel, index),
                 structure: buildViralStructure(item, typeLabel),
-                risk,
+                risk: buildRiskReminders(item, typeLabel),
             };
         }
 
@@ -5917,7 +5938,7 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             const angle = deriveWritingAngle(item, typeLabel);
             const example = deriveWritingExample(item);
             const viralPlan = buildViralAgentPlan(item, typeLabel, index);
-            const links = (item.source_links_list || []).slice(0, 6);
+            const links = (item.source_links_list || []).slice(0, 5);
             return {
                 title,
                 typeLabel,
@@ -6498,22 +6519,38 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
         }
 
         async function publishIdea(id) {
+            const msg = document.getElementById('ideaMsg');
             const payload = {
                 activity_id: parseInt(document.getElementById('ideaActivityId').value, 10),
                 quota: parseInt(document.getElementById('ideaQuota').value, 10)
             };
-            const res = await fetch(`/api/topic_ideas/${id}/publish`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
-            });
-            const data = await res.json();
-            if (data.message) {
-                document.getElementById('ideaMsg').textContent = data.message;
-            }
-            if (data.success) {
+            if (msg) msg.textContent = '正在发布到活动...';
+            try {
+                const res = await fetch(`/api/topic_ideas/${id}/publish`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const raw = await res.text();
+                let data = {};
+                try {
+                    data = raw ? JSON.parse(raw) : {};
+                } catch (error) {
+                    throw new Error(`接口返回不是 JSON：${raw.slice(0, 120) || res.status}`);
+                }
+                const message = data.message || (data.success ? '已发布到活动题库' : '发布失败');
+                if (msg) msg.textContent = message;
+                if (!res.ok || !data.success) {
+                    window.alert(message);
+                    return;
+                }
+                window.alert(message);
                 loadOverview();
                 loadIdeas();
+            } catch (error) {
+                const message = `发布失败：${error.message || error}`;
+                if (msg) msg.textContent = message;
+                window.alert(message);
             }
         }
 
