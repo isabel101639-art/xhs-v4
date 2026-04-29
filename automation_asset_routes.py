@@ -275,6 +275,7 @@ def register_automation_asset_routes(app, helpers):
             return guard
 
         library_type = (request.args.get('library_type') or '').strip()
+        library_types_raw = (request.args.get('library_types') or '').strip()
         style_type_key_raw = (request.args.get('style_type_key') or '').strip()
         pool_status = (request.args.get('pool_status') or '').strip()
         source_provider = (request.args.get('source_provider') or '').strip()
@@ -285,7 +286,13 @@ def register_automation_asset_routes(app, helpers):
         limit = min(max(safe_int(request.args.get('limit'), 30), 1), 100)
 
         query = AssetLibrary.query
-        if library_type:
+        if library_types_raw:
+            library_types = [item.strip() for item in library_types_raw.split(',') if item.strip()]
+            if len(library_types) == 1:
+                query = query.filter_by(library_type=library_types[0])
+            elif library_types:
+                query = query.filter(AssetLibrary.library_type.in_(library_types))
+        elif library_type:
             query = query.filter_by(library_type=library_type)
         if style_type_key_raw:
             style_type_keys = [item.strip() for item in style_type_key_raw.split(',') if item.strip()]
@@ -312,10 +319,19 @@ def register_automation_asset_routes(app, helpers):
                 (AssetLibrary.product_indication.contains(keyword))
             )
 
-        items = query.order_by(AssetLibrary.created_at.desc(), AssetLibrary.id.desc()).limit(limit).all()
+        items = query.order_by(AssetLibrary.created_at.desc(), AssetLibrary.id.desc()).all()
+        serialized_items = [serialize_asset_library_item(item) for item in items]
+        serialized_items.sort(
+            key=lambda item: (
+                item.get('asset_sort_rank') or 0,
+                item.get('created_at') or '',
+                item.get('id') or 0,
+            ),
+            reverse=True,
+        )
         return jsonify({
             'success': True,
-            'items': [serialize_asset_library_item(item) for item in items]
+            'items': serialized_items[:limit]
         })
 
     @app.route('/api/admin/assets/library', methods=['POST'])

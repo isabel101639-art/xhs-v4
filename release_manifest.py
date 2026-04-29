@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 
 
@@ -65,7 +66,30 @@ CURRENT_RELEASE_UI_MARKERS = {
 CURRENT_RELEASE_FINGERPRINT = 'copy-quality+image-decision+task-workspace+data-funnel+trend-csv+release-gate'
 
 
+def _resolve_release_commit_sha():
+    env_sha = (os.environ.get('RELEASE_COMMIT_SHA') or '').strip()
+    if env_sha:
+        return env_sha[:12], 'env'
+
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    git_dir = os.path.join(base_dir, '.git')
+    head_path = os.path.join(git_dir, 'HEAD')
+    try:
+        with open(head_path, 'r', encoding='utf-8') as fp:
+            head_value = fp.read().strip()
+        if head_value.startswith('ref: '):
+            ref_path = os.path.join(git_dir, head_value.replace('ref: ', '', 1))
+            with open(ref_path, 'r', encoding='utf-8') as ref_fp:
+                return ref_fp.read().strip()[:12], 'git'
+        if head_value:
+            return head_value[:12], 'git'
+    except OSError:
+        return '', ''
+    return '', ''
+
+
 def build_release_manifest_payload(include_generated_at=True):
+    commit_sha, commit_source = _resolve_release_commit_sha()
     payload = {
         'release_version': CURRENT_RELEASE_VERSION,
         'release_date': CURRENT_RELEASE_DATE,
@@ -84,6 +108,8 @@ def build_release_manifest_payload(include_generated_at=True):
         ],
         'ui_markers': {key: list(value) for key, value in CURRENT_RELEASE_UI_MARKERS.items()},
         'release_fingerprint': CURRENT_RELEASE_FINGERPRINT,
+        'release_commit_sha': commit_sha,
+        'release_commit_source': commit_source,
     }
     if include_generated_at:
         payload['generated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')

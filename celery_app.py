@@ -472,6 +472,7 @@ def sync_creator_accounts_job(data_source_task_id):
 @celery.task(name='jobs.assets.generate')
 def generate_asset_images_job(asset_task_id):
     from app import (
+        _annotate_generated_asset_results,
         _image_provider_capabilities,
         _resolve_image_provider_api_key,
         _build_asset_provider_request_preview,
@@ -692,6 +693,16 @@ def generate_asset_images_job(asset_task_id):
             style_preset=task.style_preset or '',
             title_hint=task.title_hint or '',
         )
+
+    results = _annotate_generated_asset_results(
+        results,
+        generation_mode=task.generation_mode or 'smart_bundle',
+        cover_style_type=task.cover_style_type or '',
+        inner_style_type=task.inner_style_type or '',
+        style_preset=task.style_preset or '',
+        provider=actual_provider,
+        image_count=task.image_count or len(results) or 1,
+    )
 
     for item in results:
         tags = ','.join(filter(None, [topic.topic_name if topic else '', item.get('type') or '', task.style_preset or '']))

@@ -342,6 +342,7 @@ def main():
         'base_url': base_url,
         'local_release_version': LOCAL_RELEASE_MANIFEST.get('release_version'),
         'local_release_fingerprint': LOCAL_RELEASE_MANIFEST.get('release_fingerprint'),
+        'local_release_commit_sha': LOCAL_RELEASE_MANIFEST.get('release_commit_sha'),
         'mode': {
             'skip_ui_checks': bool(args.skip_ui_checks),
             'require_current_release': bool(args.require_current_release),
