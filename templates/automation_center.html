@@ -217,6 +217,140 @@
             font-size: 14px;
         }
 
+        .idea-preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+            gap: 16px;
+        }
+
+        .idea-preview-card {
+            border: 1px solid rgba(239, 78, 69, 0.14);
+            border-radius: 16px;
+            background: linear-gradient(180deg, #fff 0%, #fffaf8 100%);
+            padding: 18px;
+            box-shadow: 0 14px 32px rgba(209, 92, 69, 0.08);
+            min-height: 420px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .idea-preview-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .idea-preview-title {
+            font-size: 17px;
+            font-weight: 800;
+            line-height: 1.45;
+            color: #20242d;
+            margin-top: 8px;
+        }
+
+        .idea-preview-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .idea-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            border-radius: 999px;
+            padding: 5px 10px;
+            background: #fff3ef;
+            color: #a13a31;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .idea-pill-neutral {
+            background: #f4f6f8;
+            color: #4b5563;
+        }
+
+        .idea-pill-green {
+            background: #e9f7ef;
+            color: #1e7b43;
+        }
+
+        .idea-preview-section {
+            border-top: 1px solid #f2e6e1;
+            padding-top: 12px;
+        }
+
+        .idea-preview-label {
+            color: #8a4c42;
+            font-size: 12px;
+            font-weight: 800;
+            margin-bottom: 6px;
+        }
+
+        .idea-preview-text {
+            color: #3f4652;
+            font-size: 14px;
+            line-height: 1.7;
+        }
+
+        .idea-preview-points {
+            margin: 0;
+            padding-left: 18px;
+            color: #3f4652;
+            font-size: 14px;
+            line-height: 1.7;
+        }
+
+        .idea-link-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .idea-link-btn {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            border: 1px solid rgba(239, 78, 69, 0.20);
+            background: #fff;
+            color: var(--accent);
+            font-size: 12px;
+            font-weight: 700;
+            padding: 6px 10px;
+            text-decoration: none;
+        }
+
+        .idea-card-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: auto;
+        }
+
+        .idea-card-details summary {
+            color: var(--accent);
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .idea-detail-block {
+            white-space: pre-wrap;
+            color: #6b7280;
+            font-size: 13px;
+            line-height: 1.7;
+            max-height: 220px;
+            overflow: auto;
+            margin-top: 10px;
+            border: 1px solid #f0e4df;
+            border-radius: 12px;
+            background: #fff;
+            padding: 12px;
+        }
+
         .chip {
             display: inline-flex;
             align-items: center;
@@ -2016,25 +2150,14 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
                     <button class="btn btn-outline-danger" onclick="loadIdeas()">刷新候选话题</button>
                 </div>
             </div>
-            <div class="table-wrap">
-                <table class="table data-table align-middle">
-                    <thead>
-                        <tr>
-                            <th><input type="checkbox" id="selectAllIdeas" onchange="toggleAllIdeas(this.checked)"></th>
-                            <th>状态</th>
-                            <th>话题 / 来源</th>
-                            <th>类型 / 人设</th>
-                            <th>名额</th>
-                            <th>热度</th>
-                            <th>策划判断</th>
-                            <th>执行建议</th>
-                            <th>文案提示词</th>
-                            <th>操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="ideaTableBody"></tbody>
-                </table>
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                <label class="form-check-label subtle d-flex align-items-center gap-2">
+                    <input type="checkbox" id="selectAllIdeas" class="form-check-input" onchange="toggleAllIdeas(this.checked)">
+                    全选当前可见候选话题
+                </label>
+                <div id="ideaVisibleSummary" class="subtle">加载后会显示当前候选话题数量和上线准备情况。</div>
             </div>
+            <div id="ideaCardGrid" class="idea-preview-grid"></div>
             <div id="section-launch-pack" class="detail-card mt-3">
                 <div class="section-title mb-2">首发推荐包</div>
                 <div id="ideaLaunchPackWrap" class="mini-note">加载候选话题后，这里会按软肝片 / FibroScan 和内容打法给出第一批建议发布组合。</div>
@@ -5460,6 +5583,176 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             `;
         }
 
+        function stripIdeaNoise(text) {
+            return String(text || '')
+                .replace(/\r/g, '\n')
+                .replace(/特别注意（合规说明）/g, '')
+                .replace(/重要！/g, '')
+                .replace(/^\s*[\d一二三四五六七八九十]+[\.、）)]\s*/gm, '')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+        }
+
+        function splitIdeaTitle(title) {
+            const parts = String(title || '').split('｜').map((item) => item.trim()).filter(Boolean);
+            return {
+                topic: parts[0] || title || '未命名话题',
+                format: parts.slice(1).join('｜') || ''
+            };
+        }
+
+        function compactText(text, maxLength = 96) {
+            const clean = stripIdeaNoise(text).replace(/\s+/g, ' ').trim();
+            if (!clean) return '';
+            return clean.length > maxLength ? `${clean.slice(0, maxLength)}...` : clean;
+        }
+
+        function ideaMeaningfulLines(text, limit = 3) {
+            const clean = stripIdeaNoise(text);
+            const lines = clean
+                .split('\n')
+                .map((line) => line.replace(/^[\-•·\s]+/, '').trim())
+                .filter((line) => {
+                    if (!line || line.length < 6) return false;
+                    if (/^(http|#|✅|❌|⚠️)/.test(line)) return false;
+                    if (line.includes('小红书会封杀AI') || line.includes('不要用AI写后直接复制')) return false;
+                    return true;
+                });
+            const unique = [];
+            lines.forEach((line) => {
+                const normalized = line.replace(/\s+/g, '');
+                if (!unique.some((item) => item.replace(/\s+/g, '').slice(0, 20) === normalized.slice(0, 20))) {
+                    unique.push(line);
+                }
+            });
+            return unique.slice(0, limit).map((line) => compactText(line, 86));
+        }
+
+        function buildIdeaPreview(item) {
+            const title = splitIdeaTitle(item.topic_title || '');
+            const keywords = String(item.keywords || '')
+                .split(/[,\s，、/]+/)
+                .map((word) => word.trim())
+                .filter((word) => word && !['带话题', '搜索词'].includes(word))
+                .slice(0, 5);
+            const corePoints = ideaMeaningfulLines(item.angle || item.asset_brief || item.copy_prompt, 3);
+            const angle = compactText(item.recommended_copy_route_why || item.angle || item.asset_brief, 110);
+            const contentRef = compactText(item.copy_prompt || item.asset_brief || item.compliance_note, 110);
+            const links = (item.source_links_list || []).slice(0, 4);
+            return {
+                title,
+                keywords,
+                corePoints,
+                angle,
+                contentRef,
+                links,
+            };
+        }
+
+        function renderIdeaActionButtons(item) {
+            const common = `
+                <button class="btn btn-sm btn-outline-primary" onclick="prefillAssetJobFromIdea(${item.id})">预填图片方案</button>
+            `;
+            if (item.status === 'pending_review' || item.status === 'rejected' || item.status === 'draft') {
+                return `${common}
+                    <button class="btn btn-sm btn-outline-primary" onclick="changeIdeaQuota(${item.id}, ${item.quota || 30})">调整名额</button>
+                    <button class="btn btn-sm btn-outline-success" onclick="reviewIdea(${item.id}, 'approve')">通过审核</button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="reviewIdea(${item.id}, 'reject')">驳回</button>
+                `;
+            }
+            if (item.status === 'approved') {
+                return `${common}
+                    <button class="btn btn-sm btn-outline-primary" onclick="changeIdeaQuota(${item.id}, ${item.quota || 30})">调整名额</button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="publishIdea(${item.id})">发布到活动</button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="reviewIdea(${item.id}, 'reject')">改为驳回</button>
+                `;
+            }
+            if (item.status === 'published') {
+                return `${common}
+                    <button class="btn btn-sm btn-outline-danger" disabled>已发布</button>
+                    <button class="btn btn-sm btn-outline-dark" onclick="reviewIdea(${item.id}, 'archive')">归档</button>
+                `;
+            }
+            if (item.status === 'archived') {
+                return `
+                    <button class="btn btn-sm btn-outline-dark" disabled>已归档</button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="reviewIdea(${item.id}, 'reset')">退回待审核</button>
+                `;
+            }
+            return common;
+        }
+
+        function renderIdeaCard(item) {
+            const preview = buildIdeaPreview(item);
+            return `
+                <div class="idea-preview-card">
+                    <div class="idea-preview-top">
+                        <label class="d-flex align-items-center gap-2 subtle">
+                            <input type="checkbox" class="idea-select form-check-input" value="${item.id}">
+                            选中
+                        </label>
+                        <span class="badge ${ideaStatusClass(item.status)}">${escapeHtml(item.status_label || item.status)}</span>
+                    </div>
+                    <div>
+                        <div class="idea-preview-meta">
+                            <span class="idea-pill">${escapeHtml(item.soft_insertion || item.recommended_product_label || '内容话题')}</span>
+                            <span class="idea-pill idea-pill-neutral">${escapeHtml(preview.title.format || item.content_type || '内容执行')}</span>
+                            <span class="idea-pill idea-pill-green">${item.quota || 30} 个名额</span>
+                        </div>
+                        <div class="idea-preview-title">${escapeHtml(preview.title.topic)}</div>
+                    </div>
+                    <div class="idea-preview-section">
+                        <div class="idea-preview-label">核心关键点</div>
+                        <ul class="idea-preview-points">
+                            ${(preview.corePoints.length ? preview.corePoints : ['围绕搜索需求做可执行的小红书内容，重点兼顾真实感、合规和收藏价值。']).map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
+                        </ul>
+                    </div>
+                    <div class="idea-preview-section">
+                        <div class="idea-preview-label">撰写角度</div>
+                        <div class="idea-preview-text">${escapeHtml(preview.angle || item.recommended_copy_route_label || '先用用户能看懂的表达讲清问题，再给出具体执行建议。')}</div>
+                    </div>
+                    <div class="idea-preview-section">
+                        <div class="idea-preview-label">内容参考</div>
+                        <div class="idea-preview-text">${escapeHtml(preview.contentRef || '参考原始执行方案，但发布前建议按真人口吻重新组织。')}</div>
+                    </div>
+                    <div class="idea-preview-section">
+                        <div class="idea-preview-label">Agent 推荐</div>
+                        <div class="idea-preview-meta">
+                            ${item.recommended_goal_label ? `<span class="idea-pill">${escapeHtml(item.recommended_goal_label)}</span>` : ''}
+                            ${item.recommended_copy_route_label ? `<span class="idea-pill idea-pill-neutral">${escapeHtml(item.recommended_copy_route_label)}</span>` : ''}
+                            ${item.recommended_image_route_label ? `<span class="idea-pill idea-pill-neutral">${escapeHtml(item.recommended_image_route_label)}</span>` : ''}
+                            ${item.template_agent_label ? `<span class="idea-pill idea-pill-neutral">${escapeHtml(item.template_agent_label)}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="idea-preview-section">
+                        <div class="idea-preview-label">关键词</div>
+                        <div class="idea-preview-meta">
+                            ${(preview.keywords.length ? preview.keywords : ['待优化']).map((word) => `<span class="idea-pill idea-pill-neutral">${escapeHtml(word)}</span>`).join('')}
+                        </div>
+                    </div>
+                    <div class="idea-preview-section">
+                        <div class="idea-preview-label">爆款链接</div>
+                        <div class="idea-link-row">
+                            ${preview.links.map((link, index) => `<a class="idea-link-btn" href="${escapeHtml(link)}" target="_blank" rel="noreferrer">爆款${index + 1}</a>`).join('') || '<span class="subtle">暂无爆款链接</span>'}
+                            ${(item.source_link_count || 0) > preview.links.length ? `<span class="subtle">另有 ${(item.source_link_count || 0) - preview.links.length} 条</span>` : ''}
+                        </div>
+                    </div>
+                    <details class="idea-card-details">
+                        <summary>展开原始执行说明</summary>
+                        <div class="idea-detail-block">${escapeHtml([
+                            item.angle ? `策划判断：\n${item.angle}` : '',
+                            item.asset_brief ? `执行建议：\n${item.asset_brief}` : '',
+                            item.copy_prompt ? `文案参考：\n${item.copy_prompt}` : '',
+                            item.compliance_note ? `合规提醒：\n${item.compliance_note}` : '',
+                        ].filter(Boolean).join('\n\n'))}</div>
+                    </details>
+                    <div class="idea-card-actions">
+                        ${renderIdeaActionButtons(item)}
+                    </div>
+                </div>
+            `;
+        }
+
         async function loadIdeas() {
             const params = new URLSearchParams();
             const status = document.getElementById('ideaStatusFilter')?.value;
@@ -5468,98 +5761,18 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             if (activityId) params.set('activity_id', activityId);
             const res = await fetch(`/api/topic_ideas?${params.toString()}`);
             const data = await res.json();
-            const body = document.getElementById('ideaTableBody');
+            const grid = document.getElementById('ideaCardGrid');
             ideaCache = Object.fromEntries((data.items || []).map((item) => [item.id, item]));
             const selectAll = document.getElementById('selectAllIdeas');
             if (selectAll) selectAll.checked = false;
-            body.innerHTML = (data.items || []).map((item) => `
-                <tr>
-                    <td><input type="checkbox" class="idea-select" value="${item.id}"></td>
-                    <td>
-                        <span class="badge ${ideaStatusClass(item.status)}">${escapeHtml(item.status_label || item.status)}</span>
-                        ${item.review_note ? `<div class="subtle mt-2">${escapeHtml(item.review_note)}</div>` : ''}
-                    </td>
-                    <td>
-                        <strong>${escapeHtml(item.topic_title)}</strong>
-                        <div class="subtle">${escapeHtml(item.keywords || '')}</div>
-                        <div class="subtle">创建于 ${escapeHtml(item.created_at || '-')}</div>
-                        ${(item.source_note_count || item.source_link_count) ? `<div class="subtle mt-1">来源热点 ${item.source_note_count || 0} 条 ｜ 参考链接 ${item.source_link_count || 0} 条</div>` : '<div class="subtle mt-1">来源：系统策划/人工补充</div>'}
-                        ${(item.source_links_list || []).length ? `
-                            <details class="mt-2">
-                                <summary>查看参考爆款</summary>
-                                <div class="subtle mt-2">
-                                    ${(item.source_links_list || []).slice(0, 3).map((link) => `
-                                        <div><a href="${escapeHtml(link)}" target="_blank" rel="noreferrer">${escapeHtml(link)}</a></div>
-                                    `).join('')}
-                                </div>
-                            </details>
-                        ` : ''}
-                    </td>
-                    <td>
-                        <div>${escapeHtml(item.content_type || '-')}</div>
-                        <div class="subtle">${escapeHtml(item.persona || '-')}</div>
-                        ${(item.recommended_goal_label || item.recommended_copy_skill_label) ? `
-                            <div class="subtle mt-2">系统建议：${escapeHtml(item.recommended_goal_label || '-')} ｜ ${escapeHtml(item.recommended_copy_skill_label || '-')}</div>
-                        ` : ''}
-                        ${item.cover_title ? `<div class="subtle mt-2">封面建议：${escapeHtml(item.cover_title)}</div>` : ''}
-                    </td>
-                    <td>${item.quota || 30}人</td>
-                    <td>${item.hot_value || 0}</td>
-                    <td>
-                        <div class="subtle" style="white-space: pre-wrap;">${escapeHtml(item.angle || '-')}</div>
-                        <div class="subtle mt-2">软植入：${escapeHtml(item.soft_insertion || '-')}</div>
-                        ${item.compliance_note ? `
-                            <details class="mt-2">
-                                <summary>查看合规提醒</summary>
-                                <div class="subtle mt-2" style="white-space: pre-wrap;">${escapeHtml(item.compliance_note || '')}</div>
-                            </details>
-                        ` : ''}
-                    </td>
-                    <td>
-                        <div class="subtle" style="white-space: pre-wrap;">${escapeHtml(item.asset_brief || '-')}</div>
-                        ${item.recommended_copy_route_label ? `<div class="subtle mt-2">文案路线：${escapeHtml(item.recommended_copy_route_label)}</div>` : ''}
-                        ${item.recommended_image_route_label ? `<div class="subtle">图片路线：${escapeHtml(item.recommended_image_route_label)}</div>` : ''}
-                        ${item.template_agent_label ? `<div class="subtle mt-2">图片模板：${escapeHtml(item.template_agent_label)}${item.template_agent_description ? ` ｜ ${escapeHtml(item.template_agent_description)}` : ''}</div>` : ''}
-                        ${(item.image_skill_label || item.cover_style_label || item.inner_style_label) ? `
-                            <div class="d-flex gap-2 flex-wrap mt-2">
-                                ${item.image_skill_label ? `<span class="badge bg-info-subtle text-dark">图片打法：${escapeHtml(item.image_skill_label)}</span>` : ''}
-                                ${item.cover_style_label ? `<span class="badge bg-light text-dark">封面：${escapeHtml(item.cover_style_label)}</span>` : ''}
-                                ${item.inner_style_label ? `<span class="badge bg-light text-secondary">内页：${escapeHtml(item.inner_style_label)}</span>` : ''}
-                            </div>
-                        ` : ''}
-                        ${item.published_topic_id ? `<div class="subtle mt-2">已发布到话题 ID：${item.published_topic_id}</div>` : ''}
-                    </td>
-                    <td>
-                        <details>
-                            <summary>查看提示词</summary>
-                            <div class="subtle mt-2" style="white-space: pre-wrap;">${escapeHtml(item.copy_prompt || '')}</div>
-                        </details>
-                    </td>
-                    <td>
-                        <div class="d-flex flex-column gap-2">
-                            <button class="btn btn-sm btn-outline-primary" onclick="prefillAssetJobFromIdea(${item.id})">预填图片方案</button>
-                            ${(item.status === 'pending_review' || item.status === 'rejected' || item.status === 'draft') ? `
-                                <button class="btn btn-sm btn-outline-primary" onclick="changeIdeaQuota(${item.id}, ${item.quota || 30})">调整名额</button>
-                                <button class="btn btn-sm btn-outline-success" onclick="reviewIdea(${item.id}, 'approve')">通过审核</button>
-                                <button class="btn btn-sm btn-outline-secondary" onclick="reviewIdea(${item.id}, 'reject')">驳回</button>
-                            ` : ''}
-                            ${item.status === 'approved' ? `
-                                <button class="btn btn-sm btn-outline-primary" onclick="changeIdeaQuota(${item.id}, ${item.quota || 30})">调整名额</button>
-                                <button class="btn btn-sm btn-outline-danger" onclick="publishIdea(${item.id})">发布到活动</button>
-                                <button class="btn btn-sm btn-outline-secondary" onclick="reviewIdea(${item.id}, 'reject')">改为驳回</button>
-                            ` : ''}
-                            ${item.status === 'published' ? `
-                                <button class="btn btn-sm btn-outline-danger" disabled>已发布</button>
-                                <button class="btn btn-sm btn-outline-dark" onclick="reviewIdea(${item.id}, 'archive')">归档</button>
-                            ` : ''}
-                            ${item.status === 'archived' ? `
-                                <button class="btn btn-sm btn-outline-dark" disabled>已归档</button>
-                                <button class="btn btn-sm btn-outline-secondary" onclick="reviewIdea(${item.id}, 'reset')">退回待审核</button>
-                            ` : ''}
-                        </div>
-                    </td>
-                </tr>
-            `).join('') || '<tr><td colspan="10" class="text-center text-muted">暂无候选话题</td></tr>';
+            const items = data.items || [];
+            grid.innerHTML = items.map(renderIdeaCard).join('') || '<div class="text-center text-muted">暂无候选话题</div>';
+            const visibleSummary = document.getElementById('ideaVisibleSummary');
+            if (visibleSummary) {
+                const withLinks = items.filter((item) => (item.source_link_count || 0) > 0).length;
+                const readyCount = items.filter((item) => ['approved', 'published'].includes(item.status)).length;
+                visibleSummary.textContent = `当前可见 ${items.length} 条 ｜ 带爆款链接 ${withLinks} 条 ｜ 已通过/已发布 ${readyCount} 条`;
+            }
             renderIdeaLaunchPacks(data.items || []);
             renderIdeaTemplateBuckets(data.items || []);
         }
