@@ -285,7 +285,10 @@
                 <div class="card mt-3">
                     <div class="card-body">
                         <h6 class="mb-3">批量导入话题</h6>
-                        <div class="text-muted small mb-3">支持三种格式：1. JSON 数组；2. CSV / 表格文本；3. 每行一条，按“话题名称|关键词|撰写方向|人设|内容类型|文案提示词|参考链接|名额|组别”粘贴。</div>
+                        <div class="text-muted small mb-3">
+                            推荐顺序：<strong>先上传 Excel</strong>；如果线上文件上传不稳定，再改用我生成的话题导入 JSON。
+                            支持三种格式：1. JSON 数组 / `{"items":[]}`；2. CSV / 表格文本；3. 每行一条，按“话题名称|关键词|撰写方向|人设|内容类型|文案提示词|参考链接|名额|组别”粘贴。
+                        </div>
                         <div class="row g-3">
                             <div class="col-md-4">
                                 <label class="form-label">所属活动</label>
@@ -315,14 +318,21 @@
                             <div class="col-md-12">
                                 <label class="form-label">上传 CSV / XLSX 文件</label>
                                 <input id="topicImportFile" type="file" class="form-control mb-3" accept=".csv,.tsv,.txt,.xlsx">
+                                <div class="text-muted small">如果你拿到的是飞书导出的执行方案表，优先直接传 `.xlsx`。</div>
                             </div>
                             <div class="col-md-12">
                                 <label class="form-label">粘贴话题数据</label>
                                 <textarea id="topicImportPayload" class="form-control" rows="10" placeholder='示例：&#10;体检报告里的肝弹指标怎么看|体检,报告,FibroScan|把不会看报告的人最容易误判的点讲清楚|体检复盘博主|检查解读型|重点讲清楚先看什么再看什么|https://example.com/note|30|第一组'></textarea>
+                                <div class="text-muted small mt-2">如果 Excel 上传失败，就把我生成的 `first_month_topic_import_payload.json` 内容整段贴到这里，再点“导入预览”。</div>
                             </div>
                             <div class="col-md-12">
                                 <div id="topicImportMsg" class="text-muted small mb-2"></div>
                                 <pre id="topicImportPreview" style="white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 260px; overflow: auto;">导入预览会显示在这里</pre>
+                            </div>
+                            <div class="col-md-12">
+                                <div class="text-muted small">
+                                    导入完成后，请去 <strong>自动化中心 → 候选话题池</strong> 查看；如果还是空，先确认导入目标是否选成了“候选话题”。
+                                </div>
                             </div>
                         </div>
                     </div>
