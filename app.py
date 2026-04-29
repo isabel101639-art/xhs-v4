@@ -2714,6 +2714,25 @@ def _split_reference_links(raw_links=''):
     return deduped[:30]
 
 
+def _compact_reference_links_for_topic(raw_links='', limit=5, max_length=500):
+    compacted = []
+    for link in _split_reference_links(raw_links):
+        normalized = canonicalize_xhs_post_url(link) or normalize_tracking_url(link) or link
+        if normalized not in compacted:
+            compacted.append(normalized)
+        if len(compacted) >= limit:
+            break
+    selected = []
+    current_length = 0
+    for link in compacted:
+        projected = current_length + len(link) + (1 if selected else 0)
+        if projected > max_length:
+            break
+        selected.append(link)
+        current_length = projected
+    return '\n'.join(selected)
+
+
 def _hotword_scope_preset_meta(scope_key=''):
     key = (scope_key or '').strip()
     for item in HOTWORD_SCOPE_PRESETS:
@@ -4786,7 +4805,7 @@ def _import_topic_rows(rows, *, activity_id=0, target_type='topic_idea'):
             existing.keywords = row['keywords']
             existing.direction = row['direction']
             existing.reference_content = row['reference_content'] or row['asset_brief']
-            existing.reference_link = row['reference_link']
+            existing.reference_link = _compact_reference_links_for_topic(row['reference_link'])
             existing.writing_example = row['copy_prompt']
             existing.quota = row['quota']
             existing.group_num = row['group_num'] or '批量导入'
@@ -17850,7 +17869,7 @@ def publish_topic_idea(idea_id):
             f'合规提醒：{idea.compliance_note}',
         ])),
         reference_content=idea.asset_brief,
-        reference_link=idea.source_links,
+        reference_link=_compact_reference_links_for_topic(idea.source_links),
         writing_example=idea.copy_prompt,
         quota=quota,
         group_num=(data.get('group_num') or '自动化选题').strip(),
@@ -17922,7 +17941,7 @@ def publish_topic_ideas_batch():
                 f'合规提醒：{idea.compliance_note}',
             ])),
             reference_content=idea.asset_brief,
-            reference_link=idea.source_links,
+            reference_link=_compact_reference_links_for_topic(idea.source_links),
             writing_example=idea.copy_prompt,
             quota=_normalize_quota(idea.quota, default=_default_topic_quota()),
             group_num='自动化选题',
