@@ -23,6 +23,7 @@
                 radial-gradient(circle at top right, rgba(239, 78, 69, 0.10), transparent 28%),
                 linear-gradient(180deg, #fff8f5 0%, #fffdfc 100%);
             color: #22242b;
+            scroll-behavior: smooth;
         }
 
         .navbar {
@@ -228,6 +229,44 @@
             border: 1px solid rgba(239, 78, 69, 0.10);
         }
 
+        .quick-nav {
+            position: sticky;
+            top: 12px;
+            z-index: 20;
+            border-radius: 18px;
+            border: 1px solid rgba(239, 78, 69, 0.12);
+            background: rgba(255, 255, 255, 0.96);
+            box-shadow: 0 12px 28px rgba(209, 92, 69, 0.10);
+            padding: 14px 16px;
+            margin-bottom: 18px;
+            backdrop-filter: blur(12px);
+        }
+
+        .quick-nav-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .quick-nav-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(239, 78, 69, 0.12);
+            background: #fff8f5;
+            color: #6b3d37;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .quick-nav-link:hover {
+            color: #6b3d37;
+            background: #fff1ec;
+        }
+
         .btn-accent {
             background: var(--accent);
             color: white;
@@ -337,6 +376,20 @@
             <div id="releaseManifestMsg" class="subtle mt-2">页面版本标记和后端 release manifest 已经绑定，发版后可以直接用脚本或肉眼确认是否已切到当前版本。</div>
         </div>
         <script id="releaseManifestPayload" type="application/json">{{ (release_manifest or {})|tojson }}</script>
+
+        <div class="quick-nav">
+            <div class="subtle mb-2">快速导航</div>
+            <div class="quick-nav-row">
+                <a class="quick-nav-link" href="#section-hotwords">热点导入</a>
+                <a class="quick-nav-link" href="#section-corpus-create">参考链接转语料</a>
+                <a class="quick-nav-link" href="#section-idea-factory">80话题工厂</a>
+                <a class="quick-nav-link" href="#section-corpus-library">语料库</a>
+                <a class="quick-nav-link" href="#section-idea-pool">候选话题池</a>
+                <a class="quick-nav-link" href="#section-launch-pack">首发推荐包</a>
+                <a class="quick-nav-link" href="#section-asset-center">图片任务中心</a>
+                <a class="quick-nav-link" href="#section-worker-jobs">Worker任务</a>
+            </div>
+        </div>
 
         <div id="systemAlertWrap" class="status-alert mb-4">
             <strong>系统提示</strong>
@@ -750,7 +803,7 @@
 
         <div class="row g-4">
             <div class="col-lg-6">
-                <div class="panel p-4 h-100">
+                <div id="section-hotwords" class="panel p-4 h-100">
                     <div class="section-title">热点导入</div>
                     <div class="subtle mb-3">支持三种格式：1. JSON数组；2. 每行一条，按“关键词|标题|链接|点赞|收藏|评论|曝光量|作者|摘要”粘贴；3. 直接粘 CSV / 表格文本，表头可用“关键词,标题,链接,点赞量,收藏量,评论量,阅读量,作者,摘要,发布时间”。</div>
 
@@ -807,7 +860,7 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             </div>
 
             <div class="col-lg-6">
-                <div class="panel p-4 h-100">
+                <div id="section-corpus-create" class="panel p-4 h-100">
                     <div class="section-title">热点响应解析沙盒</div>
                     <div class="subtle mb-3">把第三方接口返回的原始 JSON 粘进来，按当前模板和结果路径直接预览标准化结果，不会入库。</div>
 
@@ -910,7 +963,7 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             </div>
         </div>
 
-        <div class="panel p-4 my-4">
+        <div id="section-idea-factory" class="panel p-4 my-4">
             <div class="section-title">80 话题工厂</div>
             <div class="row g-3 align-items-end">
                 <div class="col-md-4">
@@ -946,7 +999,7 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             <div id="ideaMsg" class="subtle mt-2"></div>
         </div>
 
-        <div class="panel p-4 mb-4">
+        <div id="section-topic-reference" class="panel p-4 mb-4">
             <div class="section-title">按话题参考链接沉淀模板语料</div>
             <div class="row g-3 align-items-end">
                 <div class="col-md-4">
@@ -971,7 +1024,7 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             <div id="topicReferenceMsg" class="subtle mt-2">会把 topic 里的 `reference_link + writing_example + direction` 转成模板语料，供一键生成文案复用。</div>
         </div>
 
-        <div class="panel p-4 mb-4">
+        <div id="section-worker-jobs" class="panel p-4 mb-4">
             <div class="section-title">Worker 任务</div>
             <div class="d-flex gap-2 flex-wrap">
                 <button class="btn btn-outline-primary" onclick="runWorkerPing()">检测 Worker</button>
@@ -985,7 +1038,7 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             </div>
         </div>
 
-        <div class="panel p-4 mb-4">
+        <div id="section-asset-center" class="panel p-4 mb-4">
             <div class="section-title">部署助手</div>
             <div class="d-flex gap-2 flex-wrap mb-3">
                 <button class="btn btn-outline-primary" onclick="loadDeploymentHelper()">刷新部署助手</button>
@@ -994,7 +1047,7 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             <div id="deploymentHelperWrap" class="mini-note">点击“刷新部署助手”查看 Web / Worker / Beat / Crawler 的启动命令、缺失环境变量和建议部署顺序。</div>
         </div>
 
-        <div class="panel p-4 mb-4">
+        <div id="section-corpus-library" class="panel p-4 mb-4">
             <div class="section-title">关键里程碑</div>
             <div class="d-flex gap-2 flex-wrap mb-3">
                 <button class="btn btn-outline-primary" onclick="loadDiagnostics()">刷新里程碑</button>
@@ -1901,7 +1954,7 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             </div>
         </div>
 
-        <div class="panel p-4">
+        <div id="section-idea-pool" class="panel p-4">
             <div class="section-title">候选话题池</div>
             <div class="row g-3 mb-3">
                 <div class="col-md-3">
@@ -1943,7 +1996,7 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
                     <tbody id="ideaTableBody"></tbody>
                 </table>
             </div>
-            <div class="detail-card mt-3">
+            <div id="section-launch-pack" class="detail-card mt-3">
                 <div class="section-title mb-2">首发推荐包</div>
                 <div id="ideaLaunchPackWrap" class="mini-note">加载候选话题后，这里会按软肝片 / FibroScan 和内容打法给出第一批建议发布组合。</div>
             </div>

@@ -316,8 +316,8 @@ DEFAULT_SITE_NAV_ITEMS = [
     {'label': '我的任务', 'url': '/my_registration', 'icon': 'bi-person-check', 'target': '_self'},
     {'label': '数据分析', 'url': '/data_analysis', 'icon': 'bi-bar-chart', 'target': '_self'},
     {'label': '自动化中心', 'url': '/automation_center', 'icon': 'bi-lightning-charge', 'target': '_self'},
-    {'label': '活动管理', 'url': '/activity', 'icon': 'bi-calendar-event', 'target': '_self'},
-    {'label': '后台', 'url': '/admin', 'icon': 'bi-gear', 'target': '_self'},
+    {'label': '活动列表', 'url': '/activity', 'icon': 'bi-calendar-event', 'target': '_self'},
+    {'label': '后台管理', 'url': '/admin', 'icon': 'bi-gear', 'target': '_self'},
 ]
 
 DEFAULT_SITE_THEME = {
@@ -700,6 +700,11 @@ def _load_json_value(raw_value, default):
 
 def _normalize_nav_items(items):
     normalized = []
+    required_by_url = {
+        '/automation_center': {'label': '自动化中心', 'url': '/automation_center', 'icon': 'bi-lightning-charge', 'target': '_self'},
+        '/activity': {'label': '活动列表', 'url': '/activity', 'icon': 'bi-calendar-event', 'target': '_self'},
+        '/admin': {'label': '后台管理', 'url': '/admin', 'icon': 'bi-gear', 'target': '_self'},
+    }
     if not isinstance(items, list):
         items = []
     for raw_item in items[:8]:
@@ -709,13 +714,27 @@ def _normalize_nav_items(items):
         url = (raw_item.get('url') or '').strip()
         if not label or not url:
             continue
-        normalized.append({
+        item = {
             'label': label[:20],
             'url': url[:300],
             'icon': (raw_item.get('icon') or '').strip()[:50],
             'target': '_blank' if (raw_item.get('target') or '').strip() == '_blank' else '_self',
-        })
-    return normalized or [dict(item) for item in DEFAULT_SITE_NAV_ITEMS]
+        }
+        if item['url'] == '/activity':
+            item['label'] = '活动列表'
+        elif item['url'] == '/admin':
+            item['label'] = '后台管理'
+        elif item['url'] == '/automation_center':
+            item['label'] = '自动化中心'
+        normalized.append(item)
+    if not normalized:
+        return [dict(item) for item in DEFAULT_SITE_NAV_ITEMS]
+
+    existing_urls = {item['url'] for item in normalized}
+    for url, item in required_by_url.items():
+        if url not in existing_urls:
+            normalized.append(dict(item))
+    return normalized[:8]
 
 
 def _serialize_site_theme(theme):
