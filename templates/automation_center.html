@@ -1982,6 +1982,14 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
                         <textarea id="ideaQuickImportPayload" rows="7" class="form-control" placeholder='可直接粘贴我生成的 first_month_topic_import_payload.json 内容，或粘贴 Excel / 表格文本。'></textarea>
                     </div>
                     <div class="col-md-12">
+                        <div class="form-check">
+                            <input id="ideaQuickImportSyncCorpus" class="form-check-input" type="checkbox" checked>
+                            <label class="form-check-label subtle" for="ideaQuickImportSyncCorpus">
+                                导入后自动把当前活动参考链接同步到语料库
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-12">
                         <div id="ideaQuickImportMsg" class="subtle mb-2"></div>
                         <pre id="ideaQuickImportPreview" class="json-box">导入预览会显示在这里</pre>
                     </div>
@@ -5596,6 +5604,7 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
             const rawPayload = document.getElementById('ideaQuickImportPayload').value.trim();
             const file = document.getElementById('ideaQuickImportFile').files?.[0];
             const activityId = parseInt(document.getElementById('ideaQuickImportActivityId').value || '0', 10) || 0;
+            const syncCorpus = !!document.getElementById('ideaQuickImportSyncCorpus')?.checked;
             if (!rawPayload && !file) {
                 document.getElementById('ideaQuickImportMsg').textContent = '请先粘贴候选话题数据或选择文件';
                 return;
@@ -5632,7 +5641,20 @@ FibroScan,很多人把FibroScan看偏了,https://example.com/note1,321,118,26,88
                 const factorySelect = document.getElementById('ideaActivityId');
                 if (factorySelect) factorySelect.value = String(activityId);
                 document.getElementById('ideaQuickImportFile').value = '';
+                if (syncCorpus && activityId) {
+                    document.getElementById('ideaQuickImportMsg').textContent = '候选话题已导入，正在同步参考链接到语料库...';
+                    const corpusRes = await fetch(`/api/activities/${activityId}/import_reference_corpus`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({})
+                    });
+                    const corpusData = await corpusRes.json();
+                    document.getElementById('ideaQuickImportMsg').textContent = corpusData.success
+                        ? `${data.message || '候选话题已导入'} ｜ ${corpusData.message || '参考链接语料已同步'}`
+                        : `${data.message || '候选话题已导入'} ｜ 参考链接同步失败：${corpusData.message || '请稍后手动补同步'}`;
+                }
                 loadOverview();
+                loadCorpus();
                 loadIdeas();
             }
         }
