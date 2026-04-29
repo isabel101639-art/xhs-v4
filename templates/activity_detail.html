@@ -33,6 +33,12 @@
                 {{ '已发布' if activity.status == 'published' else ('已归档' if activity.status == 'archived' else '草稿') }}
             </span>
         </div>
+        <div class="d-flex gap-2 flex-wrap mb-4">
+            <a href="/data_analysis" class="btn btn-outline-primary btn-sm">查看数据看板</a>
+            <a href="/api/weekly_report/{{ activity.id }}" class="btn btn-outline-danger btn-sm">周报</a>
+            <a href="/api/monthly_report/{{ activity.id }}" class="btn btn-outline-secondary btn-sm">月报</a>
+            <a href="/api/review_report/{{ activity.id }}" class="btn btn-outline-dark btn-sm">复盘</a>
+        </div>
         
         <div class="row mt-4">
             {% for topic in activity.topics %}
