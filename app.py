@@ -8731,6 +8731,8 @@ def _build_generate_copy_corpus_block(corpus_entries, product_hint=''):
 def _local_copy_scene_line(scene_text='', lead_keyword=''):
     text = (scene_text or '').strip()
     keyword = lead_keyword or '这件事'
+    if any(token in keyword for token in ['解酒', '护肝', '熬夜', '应酬']):
+        return f'以前每次熬夜应酬后，我第一反应都是找“{keyword}”，后来才发现最该先补的是判断顺序。'
     if any(token in text for token in ['体检', '异常', '提醒']):
         return f'那次其实也没什么明显不舒服，就是体检单一出来，我对“{keyword}”一下子紧张起来了。'
     if any(token in text for token in ['报告', '解读', '指标', '复查']):
@@ -8774,6 +8776,12 @@ def _local_copy_action_lines(lead_keyword='', scene_text=''):
             '我后来不再只盯体重，而是先把饭点、活动量和复查节奏定下来，这样反而更容易坚持。',
             '很多人一着急就开始极端节食，但我自己的体感是，先把能长期做下去的动作留住更重要。',
             '真正有用的不是今天多狠，而是接下来一个月你能不能把吃饭、运动和复查都接上。',
+        ]
+    if any(token in keyword for token in ['解酒', '护肝', '熬夜', '应酬']):
+        return [
+            '我现在会先区分：是偶尔一次应酬后的恢复，还是长期作息和饮酒习惯已经在拖后腿。',
+            '别把“护肝”写成万能方法，正文更适合讲清楚少喝酒、补睡眠、看指标和必要时咨询医生这几步。',
+            '这类笔记最容易爆的点不是夸一个方法神，而是把“哪些别做、哪些先做”讲得很具体。',
         ]
     if any(token in scene for token in ['家属', '陪伴', '照护']):
         return [
@@ -8831,7 +8839,29 @@ def _build_local_copy_body_sections(
     focus_line = f'如果只想先抓一个重点，我会先把“{prompt_focus}”这一层讲明白。' if prompt_focus else ''
     route_key = (route_key or '').strip()
     sections = []
-    if route_key == 'report_emotion':
+    if any(token in keyword for token in ['解酒', '护肝', '熬夜', '应酬']):
+        variants = [
+            [
+                '我以前也会搜各种解酒护肝小方法，后来才发现，最容易误导人的就是把“舒服一点”和“真的护肝”混在一起。',
+                '偶尔一次应酬后，我现在会先补水、早点睡、别继续熬；如果是长期喝酒或者指标异常，就不会再指望一个小妙招解决。',
+                '真正该做的是把频率降下来，把作息补回来，再看需不需要查肝功能或问医生。',
+                '所以这类内容我不会写成万能方法，只会把“哪些别做、哪些先做”讲清楚。',
+            ],
+            [
+                '有段时间我应酬后第二天醒来，第一反应就是找“护肝小妙招”，好像做点什么就能把前一天抵消掉。',
+                '后来我才反应过来，身体不是靠临时补救管理的，真正该看的反而是最近喝酒频率、睡眠和体检指标。',
+                '如果已经经常不舒服，或者报告里有异常，我会更愿意先去问清楚原因，而不是继续自己试方法。',
+                '这也是我现在写这类内容的底线：讲真实恢复顺序，不把偏方包装成答案。',
+            ],
+            [
+                '应酬后我现在会先记住三件事：别继续熬、别乱叠加各种偏方、别把一次不舒服当成可以忽略的小事。',
+                '能做的顺序其实很简单：先休息补水，观察身体反应，下一次把饮酒量降下来。',
+                '如果最近总是乏、胀、指标不稳，就该把肝功能或相关检查安排上，而不是继续靠经验猜。',
+                '这份清单适合直接收藏，真正用的时候按顺序看，比临时到处搜更稳。',
+            ],
+        ]
+        sections = variants[index % len(variants)]
+    elif route_key == 'report_emotion':
         sections = [
             scene_line,
             '那一下最容易把人带偏的，不是报告本身，而是看到一个名词就先往严重了想。',
@@ -8918,9 +8948,13 @@ def _build_local_copy_body_sections(
     seen = set()
     for row in sections:
         text = (row or '').strip()
+        normalized_text = text.replace('先说结论：', '').replace('说实话：', '').replace('真实经历：', '').strip()
         if not text or text in seen:
             continue
+        if normalized_text in seen:
+            continue
         seen.add(text)
+        seen.add(normalized_text)
         compact.append(text)
         if len(compact) >= 6:
             break
@@ -12894,6 +12928,7 @@ def _build_title_option_pool(cards, title_skill_profile, topic, keywords='', cop
     topic_text = ' '.join([(topic.topic_name or '').strip(), (keywords or '').strip()])
     report_like = bool(re.search(r'体检|检查|报告|指标|FibroScan|福波看|肝弹|转氨酶', topic_text, re.I))
     fibroscan_like = bool(re.search(r'FibroScan|福波看|肝弹', topic_text, re.I))
+    hangover_like = bool(re.search(r'解酒|护肝|熬夜|应酬|喝酒', topic_text, re.I))
     route_key = (selected_copy_route or {}).get('id', '') if isinstance(selected_copy_route, dict) else ''
     if copy_goal == 'viral_title':
         goal_title_templates = [
@@ -12934,6 +12969,14 @@ def _build_title_option_pool(cards, title_skill_profile, topic, keywords='', cop
             '体检单上这项，我以前也总看不懂',
             '看到FibroScan先别百度，我现在只看这3步',
             '报告里写了FibroScan，我后来先问了这3句',
+        ] + goal_title_templates
+    if hangover_like:
+        goal_title_templates = [
+            '别再把解酒当护肝了',
+            '应酬后护肝，我现在先做这3件事',
+            '喝完酒第二天，先别乱补',
+            '护肝小妙招，最怕用错方向',
+            '熬夜应酬后，我不再只找偏方',
         ] + goal_title_templates
     if route_key == 'report_emotion':
         goal_title_templates = [
