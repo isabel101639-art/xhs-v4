@@ -715,7 +715,6 @@ def _normalize_nav_items(items):
         '/automation_center': 5,
         '/activity': 6,
         '/admin': 7,
-        '/image-library': 8,
     }
     if not isinstance(items, list):
         items = []
