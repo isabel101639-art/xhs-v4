@@ -2733,6 +2733,127 @@ def _compact_reference_links_for_topic(raw_links='', limit=5, max_length=500):
     return '\n'.join(selected)
 
 
+def _clean_topic_piece(text='', limit=80):
+    value = re.sub(r'^\s*\d+[\.、）)]\s*', '', str(text or '').strip())
+    value = re.sub(r'\s+', ' ', value)
+    return value[:limit]
+
+
+def _split_idea_topic_title(title=''):
+    parts = [part.strip() for part in str(title or '').split('｜') if part and part.strip()]
+    topic = _clean_topic_piece(parts[0] if parts else title, 80) or '肝健康话题'
+    type_label = _clean_topic_piece(parts[1] if len(parts) > 1 else '', 50)
+    return topic, type_label
+
+
+def _normalize_public_topic_type(type_text=''):
+    text = _clean_topic_piece(type_text, 60)
+    if '产品实拍' in text:
+        return '产品实拍型'
+    if '合集' in text or '并发症' in text or '测评' in text:
+        return '对比测评型'
+    if '大字报' in text:
+        return '大字报互动型'
+    if '报告解读' in text:
+        return '报告解读型'
+    if '备忘录' in text or '清单' in text:
+        return '清单收藏型'
+    if '图表' in text:
+        return '图表说明型'
+    if '医院' in text or '体检中心' in text or '实拍' in text:
+        return '实拍记录型'
+    if '医疗行业' in text or '深度科普' in text:
+        return '深度科普型'
+    return text or '内容执行型'
+
+
+def _public_topic_keywords(raw_keywords='', topic_name='', limit=6):
+    values = []
+    for item in re.split(r'[#,\n，、/ ]+', str(raw_keywords or '')):
+        word = item.strip()
+        if not word or word in {'带话题', '话题', '搜索词'}:
+            continue
+        if len(word) > 18:
+            continue
+        if word not in values:
+            values.append(word)
+        if len(values) >= limit:
+            break
+    if topic_name and topic_name not in values:
+        values.insert(0, topic_name[:18])
+    return ','.join(values[:limit])[:500]
+
+
+def _topic_idea_public_strategy(idea):
+    topic_core, title_type = _split_idea_topic_title(idea.topic_title or '')
+    type_label = _normalize_public_topic_type(title_type or idea.content_type or '')
+    text = ' '.join([
+        idea.topic_title or '',
+        idea.keywords or '',
+        idea.angle or '',
+        idea.asset_brief or '',
+        idea.soft_insertion or '',
+    ])
+    product = 'FibroScan福波看' if re.search(r'FibroScan|FS|福波看|肝弹|弹性|体检|检查|报告', text, re.I) else '复方鳖甲软肝片'
+    display_title = f'{topic_core}｜{type_label}'[:200]
+
+    if type_label == '产品实拍型':
+        direction = '用真实复查/长期管理场景切入，先讲人的经历和变化，再自然承接产品；不要写成药品说明书。'
+        key_points = ['真实复查或家庭用药场景', '长期坚持和遵医嘱', '产品只做自然露出']
+        angle = '适合患者/家属/资深病友视角，用“为什么愿意坚持”建立信任。'
+        hooks = ['复查结果出来后，我才真正踏实', '肝硬化用药这件事，别只看药名', '这几年我才明白：稳定比一时见效更重要']
+    elif type_label == '大字报互动型':
+        direction = '用一个强问题做封面，正文只回答一个关键判断，适合拉停留和评论互动。'
+        key_points = ['封面只放一个冲突问题', '正文先破误区再给判断', '结尾抛一个用户愿意回复的问题']
+        angle = '适合把体检焦虑、报告异常、要不要复查这类问题讲得更直观。'
+        hooks = ['体检报告出来后，很多人第一眼看错了', '别只盯转氨酶，肝脏筛查还要看这些', '这项异常到底要不要复查？']
+    elif type_label == '报告解读型':
+        direction = '抓住用户看到报告时的焦虑，先告诉“看哪几项”，再解释趋势和下一步。'
+        key_points = ['圈出关键指标', '解释变化趋势', '提醒异常结果问医生']
+        angle = '适合报告截图、指标圈重点、检查结果解读。'
+        hooks = ['FibroScan报告别只盯一个数字', '肝弹报告不会读？先按这个顺序看', '报告有异常，不代表一定很严重']
+    elif type_label == '图表说明型':
+        direction = '把复杂项目做成一张选择图，只解决“先查什么、后查什么”的问题。'
+        key_points = ['必查/可选分层', '按人群风险选择', '一张图只讲一个判断']
+        angle = '适合收藏型图表、体检项目路线图、报告指标说明。'
+        hooks = ['体检项目一张图看懂：先查什么，后查什么', '别再乱买套餐，先看这张筛查路线图', '看不懂检查名？先按风险分层']
+    elif type_label == '实拍记录型':
+        direction = '用真实体检/检查流程降低陌生感，重点拍流程、注意事项和用户最担心的地方。'
+        key_points = ['预约到检查流程', '现场注意事项', '隐私信息打码']
+        angle = '适合体检中心、医院流程、检查体验实拍。'
+        hooks = ['第一次做肝弹检查，我最想提前知道这几步', '体检当天先确认这几个问题，少跑冤枉路', '把检查流程拍清楚，第一次做也不慌']
+    elif type_label == '清单收藏型':
+        direction = '直接做成用户能截图保存的行动清单，突出下一步怎么做和哪些项目别漏。'
+        key_points = ['检查前准备', '核心项目优先级', '复查/咨询医生问题']
+        angle = '适合备忘录、攻略、家庭体检清单。'
+        hooks = ['这份体检清单先存下来', '不是项目越多越好，先把核心问题查明白', '给家里人安排体检，我会先核对这几项']
+    else:
+        direction = '把专业信息翻译成用户能执行的判断，一篇只解决一个核心问题。'
+        key_points = ['先讲用户痛点', '再讲判断逻辑', '最后给下一步动作']
+        angle = '适合专业科普、检查项目解释和长期健康管理。'
+        hooks = ['这项检查不是越多越好，关键看适合谁', '把专业判断翻译成人话，用户才会收藏', '先别急着下结论，先看这几个判断点']
+
+    if product == '复方鳖甲软肝片':
+        risk = '风险提醒：不承诺疗效，不引导购买，用“遵医嘱、复查变化、长期管理”表达。'
+    else:
+        risk = '风险提醒：不替用户下诊断结论，检查结果需结合病史、复查和医生判断。'
+
+    reference_content = '\n'.join([
+        f'核心关键点：{"；".join(key_points)}',
+        f'撰写角度：{angle}',
+        f'标题参考：{" / ".join(hooks[:3])}',
+        risk,
+    ])
+    return {
+        'topic_name': display_title,
+        'keywords': _public_topic_keywords(idea.keywords or '', topic_core),
+        'direction': direction,
+        'reference_content': reference_content,
+        'writing_example': '\n'.join(hooks[:3]),
+        'group_num': product,
+    }
+
+
 def _hotword_scope_preset_meta(scope_key=''):
     key = (scope_key or '').strip()
     for item in HOTWORD_SCOPE_PRESETS:
@@ -17844,8 +17965,21 @@ def publish_topic_idea(idea_id):
 
     data = request.json or {}
     idea = TopicIdea.query.get_or_404(idea_id)
+    public_payload = _topic_idea_public_strategy(idea)
     if idea.status == 'published' and idea.published_topic_id:
-        return jsonify({'success': False, 'message': '该候选话题已发布过'})
+        topic = Topic.query.get(idea.published_topic_id)
+        if topic:
+            topic.topic_name = public_payload['topic_name']
+            topic.keywords = public_payload['keywords']
+            topic.direction = public_payload['direction']
+            topic.reference_content = public_payload['reference_content']
+            topic.reference_link = _compact_reference_links_for_topic(idea.source_links)
+            topic.writing_example = public_payload['writing_example']
+            topic.group_num = public_payload['group_num']
+            topic.quota = _normalize_quota(data.get('quota'), default=idea.quota or topic.quota or _default_topic_quota())
+            db.session.commit()
+            return jsonify({'success': True, 'message': '已同步优化后的活动话题'})
+        return jsonify({'success': False, 'message': '该候选话题已发布过，但未找到正式话题'})
     if idea.status not in {'approved', 'published'}:
         return jsonify({'success': False, 'message': '请先审核通过再发布到活动'})
 
@@ -17859,20 +17993,14 @@ def publish_topic_idea(idea_id):
 
     topic = Topic(
         activity_id=activity_id,
-        topic_name=idea.topic_title,
-        keywords=idea.keywords,
-        direction='\n'.join(filter(None, [
-            idea.angle,
-            f'推荐内容形式：{idea.content_type}',
-            f'推荐人设：{idea.persona}',
-            f'软植入建议：{idea.soft_insertion}',
-            f'合规提醒：{idea.compliance_note}',
-        ])),
-        reference_content=idea.asset_brief,
+        topic_name=public_payload['topic_name'],
+        keywords=public_payload['keywords'],
+        direction=public_payload['direction'],
+        reference_content=public_payload['reference_content'],
         reference_link=_compact_reference_links_for_topic(idea.source_links),
-        writing_example=idea.copy_prompt,
+        writing_example=public_payload['writing_example'],
         quota=quota,
-        group_num=(data.get('group_num') or '自动化选题').strip(),
+        group_num=(data.get('group_num') or public_payload['group_num'] or '自动化选题').strip(),
         pool_status='formal',
         source_type='topic_idea',
         source_ref_id=idea.id,
@@ -17929,22 +18057,17 @@ def publish_topic_ideas_batch():
             skipped.append({'id': idea.id, 'title': idea.topic_title, 'reason': '已发布过'})
             continue
 
+        public_payload = _topic_idea_public_strategy(idea)
         topic = Topic(
             activity_id=activity_id,
-            topic_name=idea.topic_title,
-            keywords=idea.keywords,
-            direction='\n'.join(filter(None, [
-                idea.angle,
-                f'推荐内容形式：{idea.content_type}',
-                f'推荐人设：{idea.persona}',
-                f'软植入建议：{idea.soft_insertion}',
-                f'合规提醒：{idea.compliance_note}',
-            ])),
-            reference_content=idea.asset_brief,
+            topic_name=public_payload['topic_name'],
+            keywords=public_payload['keywords'],
+            direction=public_payload['direction'],
+            reference_content=public_payload['reference_content'],
             reference_link=_compact_reference_links_for_topic(idea.source_links),
-            writing_example=idea.copy_prompt,
+            writing_example=public_payload['writing_example'],
             quota=_normalize_quota(idea.quota, default=_default_topic_quota()),
-            group_num='自动化选题',
+            group_num=public_payload['group_num'] or '自动化选题',
             pool_status='formal',
             source_type='topic_idea',
             source_ref_id=idea.id,
