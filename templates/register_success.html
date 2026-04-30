@@ -3144,13 +3144,38 @@
 
             try {
                 const fastMode = true;
-                const res = await fetch('/api/generate_copy', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
+                const payload = {
+                    registration_id: {{ registration.id }},
+                    user_prompt: document.getElementById('userPrompt').value.trim(),
+                    fast_mode: fastMode,
+                    persona_key: document.getElementById('copyPersona').value,
+                    custom_persona: document.getElementById('customPersona').value.trim(),
+                    scene_key: document.getElementById('copyScene').value,
+                    custom_scene: document.getElementById('customScene').value.trim(),
+                    direction_key: document.getElementById('copyDirection').value,
+                    custom_direction: document.getElementById('customDirection').value.trim(),
+                    product_key: document.getElementById('copyProduct').value,
+                    copy_goal: document.getElementById('copyGoal').value,
+                    copy_skill: document.getElementById('copySkill').value,
+                    title_skill: document.getElementById('titleSkill').value,
+                    agent_copy_route_id: '',
+                    agent_image_route_id: '',
+                };
+                const data = await requestGenerateCopy(payload);
+
+                if (data.success) {
+                    applyGeneratedCopyData(data);
+                    return true;
+                }
+                throw new Error(data.message || '主模型生成失败');
+            } catch (e) {
+                try {
+                    const fallbackPayload = {
                         registration_id: {{ registration.id }},
                         user_prompt: document.getElementById('userPrompt').value.trim(),
-                        fast_mode: fastMode,
+                        fast_mode: true,
+                        local_only: true,
+                        force_local_agent: true,
                         persona_key: document.getElementById('copyPersona').value,
                         custom_persona: document.getElementById('customPersona').value.trim(),
                         scene_key: document.getElementById('copyScene').value,
@@ -3163,55 +3188,77 @@
                         title_skill: document.getElementById('titleSkill').value,
                         agent_copy_route_id: '',
                         agent_image_route_id: '',
-                    })
-                });
-                const data = await res.json().catch(() => ({}));
-
-                if (data.success) {
-                    copyConfirmedForImageAgent = false;
-                    generatorContext = data.generator_context || {};
-                    copyCards = normalizeCopyCards(data.cards);
-                    versions = copyCards.map((card) => card.copy_text);
-                    titles = copyCards.map((card) => card.title);
-                    titleOptions = normalizeTitleOptions(data.title_options || titles.map((title) => ({ title, source: '正文版本' }))).slice(0, 5);
-                    titlePoolTouchedByUser = false;
-                    rerankTitleOptionsForRecommendation(true);
-                    selectedVersion = 0;
-                    selectedTitle = 0;
-                    renderCopySummary();
-                    renderTitlePool();
-                    renderCopyCards();
-                    document.getElementById('resultArea').style.display = 'block';
-                    document.getElementById('creativePackArea').style.display = 'none';
-                    document.getElementById('creativePackList').innerHTML = '';
-                    document.getElementById('graphicBundleArea').style.display = 'none';
-                    document.getElementById('graphicBundleList').innerHTML = '';
-                    document.getElementById('assetTaskArea').style.display = 'none';
-                    document.getElementById('assetTaskList').innerHTML = '';
-                    const imageStage = document.getElementById('imageAgentStage');
-                    if (imageStage) imageStage.style.display = 'none';
-                    imageAgentAnalysis = null;
-                    selectedImageAgentPlanId = '';
-                    window.latestCreativeAssets = [];
-                    window.latestGraphicBundles = [];
-                    window.latestGeneratedImages = [];
-                    if (copyCards.length > 0) {
-                        await checkCompliance(getSelectedContent());
-                        await persistStrategySelection('generate_copy', true);
+                    };
+                    const fallbackData = await requestGenerateCopy(fallbackPayload, 12000);
+                    if (fallbackData.success) {
+                        applyGeneratedCopyData(fallbackData);
+                        return true;
                     }
-                    updateAgentProgress('title');
-                    document.getElementById('loading').style.display = 'none';
-                    document.getElementById('generateBtn').disabled = false;
-                    return true;
+                    alert(fallbackData.message || '本地 Agent 兜底也失败，请刷新后重试');
+                } catch (fallbackError) {
+                    alert(`生成失败，请刷新后重试：${fallbackError && fallbackError.message ? fallbackError.message : '网络或服务异常'}`);
                 }
-                alert(data.message || `生成失败，请重试（HTTP ${res.status || '-'}）`);
-            } catch (e) {
-                alert(`生成失败，请重试：${e && e.message ? e.message : '网络或服务异常'}`);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('generateBtn').disabled = false;
             }
 
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('generateBtn').disabled = false;
             return false;
+        }
+
+        async function requestGenerateCopy(payload, timeoutMs = 18000) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                const res = await fetch('/api/generate_copy', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload),
+                    signal: controller.signal,
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok && !data.success) {
+                    throw new Error(data.message || `HTTP ${res.status}`);
+                }
+                return data;
+            } finally {
+                clearTimeout(timer);
+            }
+        }
+
+        async function applyGeneratedCopyData(data) {
+            copyConfirmedForImageAgent = false;
+            generatorContext = data.generator_context || {};
+            copyCards = normalizeCopyCards(data.cards);
+            versions = copyCards.map((card) => card.copy_text);
+            titles = copyCards.map((card) => card.title);
+            titleOptions = normalizeTitleOptions(data.title_options || titles.map((title) => ({ title, source: '正文版本' }))).slice(0, 5);
+            titlePoolTouchedByUser = false;
+            rerankTitleOptionsForRecommendation(true);
+            selectedVersion = 0;
+            selectedTitle = 0;
+            renderCopySummary();
+            renderTitlePool();
+            renderCopyCards();
+            document.getElementById('resultArea').style.display = 'block';
+            document.getElementById('creativePackArea').style.display = 'none';
+            document.getElementById('creativePackList').innerHTML = '';
+            document.getElementById('graphicBundleArea').style.display = 'none';
+            document.getElementById('graphicBundleList').innerHTML = '';
+            document.getElementById('assetTaskArea').style.display = 'none';
+            document.getElementById('assetTaskList').innerHTML = '';
+            const imageStage = document.getElementById('imageAgentStage');
+            if (imageStage) imageStage.style.display = 'none';
+            imageAgentAnalysis = null;
+            selectedImageAgentPlanId = '';
+            window.latestCreativeAssets = [];
+            window.latestGraphicBundles = [];
+            window.latestGeneratedImages = [];
+            if (copyCards.length > 0) {
+                await checkCompliance(getSelectedContent());
+                await persistStrategySelection('generate_copy', true);
+            }
+            updateAgentProgress('title');
         }
 
         function selectVersion(index) {

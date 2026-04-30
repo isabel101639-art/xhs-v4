@@ -14163,6 +14163,7 @@ def generate_copy():
     title_skill = (data.get('title_skill') or 'auto').strip()
     agent_copy_route_id = (data.get('agent_copy_route_id') or '').strip()
     agent_image_route_id = (data.get('agent_image_route_id') or '').strip()
+    local_only = bool(data.get('local_only') or data.get('force_local_agent'))
 
     reg = Registration.query.get(registration_id)
     if not reg:
@@ -14389,7 +14390,7 @@ def generate_copy():
     model_error_message = ''
     try:
         runtime = _copywriter_runtime_config()
-        if runtime.get('configured'):
+        if (not local_only) and runtime.get('configured'):
             generation_engine = runtime['provider']
             model_attempted = True
             if fast_mode:
@@ -14578,6 +14579,8 @@ def generate_copy():
                         rewritten_cards.append(_parse_generated_copy_card(version_text, defaults=defaults))
                     if len(rewritten_cards) >= output_count:
                         cards = rewritten_cards[:output_count]
+        elif local_only:
+            raise RuntimeError('local_agent_forced')
         else:
             raise RuntimeError('No API key')
     except Exception as exc:
