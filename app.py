@@ -11599,6 +11599,7 @@ def _extract_json_object(text):
 
 
 def _call_copywriter(messages, *, temperature=1.0, top_p=0.9, timeout=40, extra_payload=None, runtime_override=None):
+    timeout = max(min(timeout, 12), 3)
     if runtime_override:
         runtime_candidates = runtime_override if isinstance(runtime_override, list) else [runtime_override]
     else:
@@ -14177,6 +14178,7 @@ def generate_copy():
     import random
     import re
     import time
+    started_at = time.time()
 
     output_count = 3
     topic_text = (topic.topic_name or '').strip()
@@ -14398,7 +14400,7 @@ def generate_copy():
                     ],
                     temperature=1.08,
                     top_p=0.88,
-                    timeout=40,
+                    timeout=8,
                     extra_payload={
                         'presence_penalty': 0.65,
                         'frequency_penalty': 0.25,
@@ -14468,7 +14470,7 @@ def generate_copy():
                     ],
                     temperature=0.72,
                     top_p=0.82,
-                    timeout=35,
+                    timeout=8,
                 )
                 generation_runtime = planning_result.get('runtime') or generation_runtime
                 generation_engine = (generation_runtime or {}).get('provider') or generation_engine
@@ -14523,7 +14525,7 @@ def generate_copy():
                     ],
                     temperature=1.0,
                     top_p=0.9,
-                    timeout=40,
+                    timeout=8,
                     extra_payload={
                         'presence_penalty': 0.7,
                         'frequency_penalty': 0.3,
@@ -14561,7 +14563,7 @@ def generate_copy():
                         ],
                         temperature=1.02,
                         top_p=0.9,
-                        timeout=35,
+                        timeout=8,
                     )
                     generation_runtime = rewrite_result.get('runtime') or generation_runtime
                     generation_engine = (generation_runtime or {}).get('provider') or generation_engine
@@ -14581,6 +14583,12 @@ def generate_copy():
     except Exception as exc:
         model_error_message = str(exc)
         print(f"copywriter model error: {exc}")
+
+    if time.time() - started_at > 18:
+        cards = []
+        generation_engine = 'local_fallback'
+        agent_mode = 'fallback_after_model_error' if model_attempted else 'rule_based'
+        model_error_message = model_error_message or '模型调用超时，已切换本地 Agent'
 
     if len(cards) < output_count or any(not _copy_card_usable(card) for card in cards):
         generation_engine = 'local_fallback'
